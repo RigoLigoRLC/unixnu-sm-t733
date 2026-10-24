@@ -1,0 +1,662 @@
+diff --git a/package/UniXNUPkg/Library/UniXNULib/Internal.h b/package/UniXNUPkg/Library/UniXNULib/Internal.h
+index 71aa4b8..d38c80f 100644
+--- a/package/UniXNUPkg/Library/UniXNULib/Internal.h
++++ b/package/UniXNUPkg/Library/UniXNULib/Internal.h
+@@ -512,6 +512,7 @@ typedef struct {
+   UINTN                           MenuWidth;
+   UINTN                           FooterTop;
+   UINTN                           VisibleRows;
++  UINTN                           FirstVisible;     ///< Entry index drawn in the first visible row.
+   UINTN                           TextColumns;      ///< Text mode only.
+   UINTN                           TextRows;
+   CHAR16                          Info[96];         ///< Injection summary line.
+diff --git a/package/UniXNUPkg/Library/UniXNULib/Menu.c b/package/UniXNUPkg/Library/UniXNULib/Menu.c
+index 4f7fd52..f178505 100644
+--- a/package/UniXNUPkg/Library/UniXNULib/Menu.c
++++ b/package/UniXNUPkg/Library/UniXNULib/Menu.c
+@@ -20,6 +20,70 @@
+ #define SCAN_SUSPEND  0x0102
+ #endif
+ 
++// Samsung's T733 ButtonsDxe reports the power button as scan code 0x80.
++#define SCAN_SAMSUNG_POWER  0x0080
++
++// RecoveryPayloadDxe owns this NUL-terminated CHAR16[192] buffer.
++STATIC EFI_GUID  mRecoveryStatusGuid = {
++  0x71a8180b, 0xb15b, 0x470a, { 0x91, 0x88, 0x8c, 0xd4, 0xa8, 0x04, 0x44, 0x16 }
++};
++
++STATIC
++BOOLEAN
++IsConfirmKey (
++  IN CONST EFI_INPUT_KEY  *Key
++  )
++{
++  return (Key->UnicodeChar == CHAR_CARRIAGE_RETURN) ||
++         (Key->UnicodeChar == CHAR_LINEFEED) ||
++         (Key->UnicodeChar == L' ') ||
++         (Key->ScanCode == SCAN_RIGHT) ||
++         (Key->ScanCode == SCAN_SUSPEND) ||
++         ((Key->ScanCode == SCAN_SAMSUNG_POWER) && (Key->UnicodeChar == 0));
++}
++
++STATIC
++VOID
++DrawKeyValue (
++  IN UNIXNU_UI           *Ui,
++  IN CONST EFI_INPUT_KEY *Key
++  )
++{
++  CHAR16  Line[96];
++
++  UnicodeSPrint (
++    Line,
++    sizeof (Line),
++    L"Key scan=0x%04x char=0x%04x    Power/Enter: confirm",
++    (UINT32)Key->ScanCode,
++    (UINT32)Key->UnicodeChar
++    );
++  UniXNUUiDrawStatus (Ui, 1, Line);
++  UniXNULog ("menu: key scan=0x%04x char=0x%04x", (UINT32)Key->ScanCode, (UINT32)Key->UnicodeChar);
++}
++
++STATIC
++VOID
++DrawRecoveryStatus (
++  IN     UNIXNU_UI      *Ui,
++  IN OUT CHAR16         *Previous
++  )
++{
++  CHAR16  *Text;
++  CHAR16  Current[192];
++
++  if (EFI_ERROR (gBS->LocateProtocol (&mRecoveryStatusGuid, NULL, (VOID **)&Text))) {
++    StrCpyS (Current, ARRAY_SIZE (Current), L"Recovery status protocol not present");
++  } else {
++    StrnCpyS (Current, ARRAY_SIZE (Current), Text, ARRAY_SIZE (Current) - 1);
++  }
++
++  if (StrCmp (Previous, Current) != 0) {
++    StrCpyS (Previous, ARRAY_SIZE (Current), Current);
++    UniXNUUiDrawStatus (Ui, 2, Current);
++  }
++}
++
+ //
+ // Physical input = a SimpleTextIn instance that sits on a device path; the
+ // ConSplitter's virtual handle has none.
+@@ -83,6 +147,43 @@ DrawCountdown (
+   UniXNUUiDrawStatus (Ui, 0, Line);
+ }
+ 
++// The visible entry range follows selection; each card retains its original entry number.
++STATIC
++VOID
++DrawSelection (
++  IN UNIXNU_UI      *Ui,
++  IN UNIXNU_CONFIG  *Config,
++  IN UINTN          Selected,
++  IN UINTN          Previous,
++  IN BOOLEAN        Redraw
++  )
++{
++  UINTN  First;
++  UINTN  Index;
++
++  if (Ui->VisibleRows == 0) {
++    return;
++  }
++
++  First = Ui->FirstVisible;
++  if (Selected < First) {
++    First = Selected;
++  } else if (Selected - First >= Ui->VisibleRows) {
++    First = Selected - Ui->VisibleRows + 1;
++  }
++
++  First = MIN (First, Config->EntryCount - Ui->VisibleRows);
++  if (Redraw || (First != Ui->FirstVisible)) {
++    Ui->FirstVisible = First;
++    for (Index = First; Index < First + Ui->VisibleRows; Index++) {
++      UniXNUUiDrawEntry (Ui, Config, Index, Index == Selected);
++    }
++  } else {
++    UniXNUUiDrawEntry (Ui, Config, Previous, FALSE);
++    UniXNUUiDrawEntry (Ui, Config, Selected, TRUE);
++  }
++}
++
+ UINTN
+ UniXNUMenuRun (
+   IN UNIXNU_UI      *Ui,
+@@ -98,7 +199,6 @@ UniXNUMenuRun (
+   EFI_INPUT_KEY  Key;
+   UINTN          Selected;
+   UINTN          Previous;
+-  UINTN          Index;
+   BOOLEAN        HasInput;
+   BOOLEAN        UserActive;
+   INTN           RemainingMs;
+@@ -106,10 +206,14 @@ UniXNUMenuRun (
+   UINTN          RotateAccum;
+   INTN           LastShownSecond;
+   UINTN          Count;
++  BOOLEAN        Builtin;
++  CHAR16         RecoveryStatus[192];
+ 
+   Count    = Config->EntryCount;
+   Selected = Config->DefaultIndex;
+   HasInput = (CountInputDevices () > 0);
++  Builtin  = (Config->SourceLabel != NULL) && (StrCmp (Config->SourceLabel, L"built-in configuration") == 0);
++  RecoveryStatus[0] = L'\0';
+ 
+   if (!Countdown) {
+     RemainingMs = HasInput ? -1 : (INTN)Config->FallbackTimeout * 1000;
+@@ -125,20 +229,22 @@ UniXNUMenuRun (
+   }
+ 
+   UniXNUUiDrawFrame (Ui, Config);
+-  for (Index = 0; Index < Count; Index++) {
+-    UniXNUUiDrawEntry (Ui, Config, Index, Index == Selected);
+-  }
++  DrawSelection (Ui, Config, Selected, Selected, TRUE);
+ 
+   UniXNUUiDrawStatus (
+     Ui,
+     1,
+-    HasInput ? L"Up/Down: select    Enter: boot    1-9: boot entry    Esc: stop timer"
++    HasInput ? L"Up/Down: select    Power/Enter: boot    1-9: boot entry"
+              : L"No input device: the default entry boots when the timer ends"
+     );
+   if (Ui->Notice[0] != L'\0') {
+     UniXNUUiDrawStatus (Ui, 2, Ui->Notice);
+   }
+ 
++  if (Builtin) {
++    DrawRecoveryStatus (Ui, RecoveryStatus);
++  }
++
+   UniXNULog (
+     "menu: shown %u entries, default %u '%a', timeout %d ms, input %a, rotate %u ms",
+     (UINT32)Count,
+@@ -185,6 +291,10 @@ UniXNUMenuRun (
+ 
+     Previous = Selected;
+     if (Signaled == 0) {
++      if (Builtin) {
++        DrawRecoveryStatus (Ui, RecoveryStatus);
++      }
++
+       if (RemainingMs > 0) {
+         RemainingMs -= TICK_MS;
+         if (RemainingMs <= 0) {
+@@ -206,6 +316,8 @@ UniXNUMenuRun (
+         continue;
+       }
+ 
++      DrawKeyValue (Ui, &Key);
++
+       if (!UserActive) {
+         //
+         // The first key takes over: no more countdown or rotation, and the
+@@ -228,17 +340,14 @@ UniXNUMenuRun (
+         Selected = Key.UnicodeChar - L'1';
+         UniXNULog ("menu: key %c, booting %u", Key.UnicodeChar, (UINT32)Selected);
+         break;
+-      } else if ((Key.UnicodeChar == CHAR_CARRIAGE_RETURN) || (Key.UnicodeChar == CHAR_LINEFEED) ||
+-                 (Key.UnicodeChar == L' ') || (Key.ScanCode == SCAN_RIGHT) || (Key.ScanCode == SCAN_SUSPEND))
+-      {
++      } else if (IsConfirmKey (&Key)) {
+         UniXNULog ("menu: enter, booting %u", (UINT32)Selected);
+         break;
+       }
+     }
+ 
+     if (Selected != Previous) {
+-      UniXNUUiDrawEntry (Ui, Config, Previous, FALSE);
+-      UniXNUUiDrawEntry (Ui, Config, Selected, TRUE);
++      DrawSelection (Ui, Config, Selected, Previous, FALSE);
+     }
+   }
+ 
+@@ -299,6 +408,8 @@ UniXNUMenuConfirm (
+       continue;
+     }
+ 
++    DrawKeyValue (Ui, &Key);
++
+     if (Items > 0) {
+       if (Key.ScanCode == SCAN_UP) {
+         Shown = (Shown + Items - 1) % Items;
+@@ -311,7 +422,7 @@ UniXNUMenuConfirm (
+       }
+     }
+ 
+-    if ((Key.UnicodeChar == CHAR_CARRIAGE_RETURN) || (Key.UnicodeChar == CHAR_LINEFEED)) {
++    if (IsConfirmKey (&Key)) {
+       if (Items > 0) {
+         if (Shown + 1 == Items) {
+           return FALSE;
+diff --git a/package/UniXNUPkg/Library/UniXNULib/Ui.c b/package/UniXNUPkg/Library/UniXNULib/Ui.c
+index d4599b7..95b1ece 100644
+--- a/package/UniXNUPkg/Library/UniXNULib/Ui.c
++++ b/package/UniXNUPkg/Library/UniXNULib/Ui.c
+@@ -573,7 +573,7 @@ DrawEntryPortrait (
+   Fch   = UNIXNU_GLYPH_HEIGHT * Fs;
+   Pad   = Ch / 2;
+   X     = Ui->Margin;
+-  Y     = Ui->MenuTop + Index * Ui->RowHeight;
++  Y     = Ui->MenuTop + (Index - Ui->FirstVisible) * Ui->RowHeight;
+   Width = Ui->Width - 2 * Ui->Margin;
+   Bg    = Selected ? mAccent : mRow;
+ 
+@@ -711,6 +711,8 @@ UniXNUUiDrawFrame (
+   EFI_GRAPHICS_OUTPUT_BLT_PIXEL  *Buffer;
+   CHAR16                         Line[128];
+ 
++  Ui->FirstVisible = 0;
++
+   if (Ui->Mode == UniXNUUiText) {
+     gST->ConOut->EnableCursor (gST->ConOut, FALSE);
+     gST->ConOut->ClearScreen (gST->ConOut);
+@@ -825,7 +827,8 @@ UniXNUUiDrawEntry (
+   CONST CHAR16                   *Tag;
+   CHAR16                         Line[160];
+ 
+-  if (Index >= Ui->VisibleRows) {
++  if ((Index >= Config->EntryCount) || (Index < Ui->FirstVisible) ||
++      (Index - Ui->FirstVisible >= Ui->VisibleRows)) {
+     return;
+   }
+ 
+@@ -834,7 +837,7 @@ UniXNUUiDrawEntry (
+     UnicodeSPrint (Line, sizeof (Line), L" %c %u. %s  [%s]", Selected ? L'>' : L' ', (UINT32)Index + 1, Entry->Title, TypeTag (Entry));
+     TextPrintAt (
+       Ui,
+-      Ui->MenuTop + Index,
++      Ui->MenuTop + Index - Ui->FirstVisible,
+       Selected ? (EFI_WHITE | EFI_BACKGROUND_RED) : (EFI_LIGHTGRAY | EFI_BACKGROUND_BLACK),
+       Line
+       );
+@@ -852,7 +855,7 @@ UniXNUUiDrawEntry (
+ 
+   Cw  = UNIXNU_GLYPH_WIDTH * Ui->Scale;
+   Ch  = UNIXNU_GLYPH_HEIGHT * Ui->Scale;
+-  Y   = Ui->MenuTop + Index * Ui->RowHeight;
++  Y   = Ui->MenuTop + (Index - Ui->FirstVisible) * Ui->RowHeight;
+   Pad = (Ui->RowHeight - Ch) / 2;
+   Bg  = Selected ? mAccent : mRow;
+   Tag = TypeTag (Entry);
+diff --git a/scripts/unixnu/ipsw.py b/scripts/unixnu/ipsw.py
+index 2175be3..f4d813a 100644
+--- a/scripts/unixnu/ipsw.py
++++ b/scripts/unixnu/ipsw.py
+@@ -10,6 +10,7 @@ chip_id, board_id, and the components the steps use.
+ import hashlib
+ import io
+ import json
++import os
+ import plistlib
+ import struct
+ import subprocess
+@@ -139,31 +140,36 @@ class Ipsw:
+ 
+     def extract(self, component):
+         """Extract a component into the cache (skipped when it is there and matches its pin); returns its path."""
++        record_hashes = os.environ.get('UNIXNU_RECORD_HASHES', '1') != '0'
+         name, size, _ = self.info(component)
+         destination = self.cache / Path(name).name
+         pin = self.config.get('sha256', {}).get(Path(name).name)
+         record = destination.with_suffix(destination.suffix + '.json')
+         if destination.is_file() and destination.stat().st_size == size:
+-            if pin is None or (record.is_file() and json.loads(record.read_text()).get('sha256') == pin) or sha256_file(destination) == pin:
++            if not record_hashes or pin is None or (record.is_file() and json.loads(record.read_text()).get('sha256') == pin) or sha256_file(destination) == pin:
+                 return destination
+             destination.unlink()
+         self.cache.mkdir(parents=True, exist_ok=True)
+         partial = destination.with_suffix(destination.suffix + '.partial')
+-        digest = hashlib.sha256()
++        digest = hashlib.sha256() if record_hashes else None
+         log(f'ipsw: extracting {component} ({name}, {size >> 20} MiB)')
+         with self.zip.open(name) as source, partial.open('wb') as target:
+             while chunk := source.read(CHUNK):
+                 target.write(chunk)
+-                digest.update(chunk)
++                if digest is not None:
++                    digest.update(chunk)
+         if partial.stat().st_size != size:
+             partial.unlink()
+             raise Error(f'incomplete extraction of {name}')
+-        if pin and digest.hexdigest() != pin:
++        if digest is not None and pin and digest.hexdigest() != pin:
+             partial.unlink()
+             raise Error(f'{name} differs from the pinned sha256 of board.toml [ipsw.sha256]: {digest.hexdigest()}')
+         partial.rename(destination)
+-        record.write_text(json.dumps({'component': component, 'member': name, 'size': size, 'sha256': digest.hexdigest(),
+-                                      'source': 'remote' if self.remote else 'local'}, indent=2) + '\n')
++        metadata = {'component': component, 'member': name, 'size': size,
++                    'source': 'remote' if self.remote else 'local'}
++        if digest is not None:
++            metadata['sha256'] = digest.hexdigest()
++        record.write_text(json.dumps(metadata, indent=2) + '\n')
+         return destination
+ 
+     def read(self, component):
+@@ -197,10 +203,11 @@ def im4p_payload(data):
+ 
+ def kernelcache(ctx, source):
+     """The decompressed arm64 kernelcache Mach-O of the IPSW, in out/ipsw (checked against the board pin)."""
++    record_hashes = os.environ.get('UNIXNU_RECORD_HASHES', '1') != '0'
+     spec = ctx.board.get('kernel', {}).get('prelink', {})
+     out = source.cache / 'kernelcache.decompressed'
+     pin = spec.get('kernelcache_sha256')
+-    if out.is_file() and (pin is None or sha256_file(out) == pin):
++    if out.is_file() and (not record_hashes or pin is None or sha256_file(out) == pin):
+         return out
+     tool('compression_tool', 'macOS /usr/bin/compression_tool decodes the LZFSE kernelcache')
+     source.cache.mkdir(parents=True, exist_ok=True)
+@@ -224,7 +231,7 @@ def kernelcache(ctx, source):
+     if fat[:4] != b'\xcf\xfa\xed\xfe':
+         raise Error('the decompressed kernelcache is not a 64-bit Mach-O')
+     out.write_bytes(fat)
+-    if pin and sha256_file(out) != pin:
++    if record_hashes and pin and sha256_file(out) != pin:
+         out.unlink()
+         raise Error(f'the kernelcache of this IPSW does not match the pin of board.toml (sha256 {pin})')
+     return out
+diff --git a/scripts/unixnu/kernel.py b/scripts/unixnu/kernel.py
+index 65e52bc..0fe115d 100644
+--- a/scripts/unixnu/kernel.py
++++ b/scripts/unixnu/kernel.py
+@@ -81,7 +81,19 @@ def build(ctx, modules):
+     env.update(version_env(modules))
+     env['JOBS'] = str(ctx.jobs)
+     record = ctx.tree / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/osfmk/DEVELOPMENT/startup.o.json'
+-    if not record.is_file():
++    link_filelist = ctx.tree / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/link.filelist'
++
++    def compile_inputs_missing():
++        if not record.is_file() or not link_filelist.is_file():
++            return True
++
++        for line in link_filelist.read_text().splitlines():
++            if line.strip() and not Path(line.strip()).is_file():
++                return True
++
++        return False
++
++    if compile_inputs_missing():
+         # The archive builders and the boot progress layer read compile records of the XNU build, which only an earlier
+         # pass leaves behind. A first build from scratch therefore runs one pass without them; XNU_BOOTSTRAP makes it
+         # skip the archive checks and link without the archives, so it stops at the link and only the records are
+@@ -91,10 +103,12 @@ def build(ctx, modules):
+         try:
+             run(['bash', script], cwd=ctx.tree, env=subprocess_env, log_file=ctx.logs / 'kernel-bootstrap.log')
+         except Error:
+-            if not record.is_file():
++            if compile_inputs_missing():
+                 raise
+     storage = ctx.tree / 'build/storage-abi/include/IOKit/storage'
+-    if (ctx.tree / 'refer/IOStorageFamily').is_dir() and not storage.is_dir():
++    needs_storage = any(ctx.need_config().get(name) for name in (
++        'XNU_NATIVE_UFS', 'XNU_NATIVE_VIRTIO_BLOCK', 'XNU_NATIVE_RAM_BLOCK'))
++    if needs_storage and (ctx.tree / 'refer/IOStorageFamily').is_dir() and not storage.is_dir():
+         log('kernel: prepare storage headers')
+         run(['python3', ctx.tree / 'scripts/prepare-storage-headers.py'], cwd=ctx.tree, env=env,
+             log_file=ctx.logs / 'storage-headers.log')
+@@ -115,7 +129,8 @@ def prelink(ctx):
+     if not cache.is_file():
+         raise Error(f'kernelcache not found: {cache}')
+     wanted = spec.get('kernelcache_sha256')
+-    if wanted and sha256_file(cache) != wanted:
++    record_hashes = os.environ.get('UNIXNU_RECORD_HASHES', '1') != '0'
++    if record_hashes and wanted and sha256_file(cache) != wanted:
+         raise Error(f'{cache} does not match the kernelcache this board was qualified against (sha256 {wanted})')
+     kernel = ctx.tree / spec['kernel']
+     if not kernel.is_file():
+@@ -133,5 +148,8 @@ def prelink(ctx):
+         command += ['--early-security-init', spec['early_security_init']]
+     command += spec.get('extra_args', [])
+     run(command, cwd=ctx.tree, log_file=ctx.logs / 'prelink.log')
+-    log(f'kernel: {output} sha256 {sha256_file(output)}')
++    if record_hashes:
++        log(f'kernel: {output} sha256 {sha256_file(output)}')
++    else:
++        log(f'kernel: {output} ({output.stat().st_size} bytes)')
+     return output
+diff --git a/scripts/unixnu/payload.py b/scripts/unixnu/payload.py
+index 3de810c..1d39294 100644
+--- a/scripts/unixnu/payload.py
++++ b/scripts/unixnu/payload.py
+@@ -37,6 +37,56 @@ def check_args(arguments):
+     return line
+ 
+ 
++def override_args(arguments, extra):
++    names = {item.split('=', 1)[0] for item in extra}
++    return [item for item in arguments if item.split('=', 1)[0] not in names] + extra
++
++
++def extra_entries(spec, arguments, initrd):
++    """Render board entries after the default kernel entry, before installation.
++
++    XNU entries reuse the default kernel, Data seed and final command line.
++    Their kernel_args replace arguments by name, including command-line overrides.
++    EFI and action entries supply the fields consumed by the existing boot menu.
++    """
++    config = ''
++    for entry in spec.get('extra_entries', []):
++        kind = entry['type']
++        config += ('[[entry]]\n'
++                   f'id = {json.dumps(entry["id"])}\n'
++                   f'title = {json.dumps(entry["title"])}\n'
++                   f'type = {json.dumps(kind)}\n')
++        if kind == 'xnu':
++            line = check_args(override_args(arguments, entry.get('kernel_args', [])))
++            config += ('path = "Payloads/kernel.macho"\n'
++                       f'{initrd}args = {json.dumps(line)}\n')
++        elif kind == 'efi':
++            config += f'path = {json.dumps(entry["path"])}\n'
++            if 'args' in entry:
++                config += f'args = {json.dumps(entry["args"])}\n'
++        elif kind == 'action':
++            config += f'action = {json.dumps(entry["action"])}\n'
++        else:
++            raise Error(f'unsupported payload extra entry type: {kind}')
++
++    return config
++
++
++def copy_payload_files(ctx, spec, stage):
++    """Copy selected build outputs into board-specified paths inside the FAT."""
++    for entry in spec.get('files', []):
++        source = ctx.work / entry['source']
++        relative = Path(entry['destination'])
++        if relative.is_absolute() or '..' in relative.parts:
++            raise Error(f'payload file destination must stay inside the FAT: {relative}')
++
++        destination = stage / relative
++        if destination.exists():
++            raise Error(f'payload file would replace a generated file: {relative}')
++        destination.parent.mkdir(parents=True, exist_ok=True)
++        shutil.copyfile(source, destination)
++
++
+ def check_native_root(kernel, arguments):
+     """Refuse the known bare-metal AMFI panic before the volume is written."""
+     values = {}
+@@ -65,24 +115,44 @@ def write_volume(stage, image, label, size_mib):
+ 
+ 
+ def skip_setup_seed(ctx, base, tool_path, tool_args=()):
+-    """A copy of the Data seed whose preferences mark Setup (the Hello pages) as done; cached by the hash of the base and the
+-    tool's extra arguments (board.toml [payload] skip_setup_args)."""
++    """Create a Data copy whose preferences mark Setup as complete.
++
++    With file hashes disabled, reuse is based on the source path, size, modification
++    time and tool arguments recorded beside the generated seed.
++    """
+     tool('hdiutil')
+     out = paths(ctx)[0]
+     out.mkdir(parents=True, exist_ok=True)
+-    key = sha256_file(base)[:12] + (('-' + hashlib.sha256(' '.join(tool_args).encode()).hexdigest()[:8]) if tool_args else '')
++    record_hashes = os.environ.get('UNIXNU_RECORD_HASHES', '1') != '0'
++    metadata = None
++    record = out / 'data-skip-setup-input.json'
++    if record_hashes:
++        key = sha256_file(base)[:12] + (('-' + hashlib.sha256(' '.join(tool_args).encode()).hexdigest()[:8]) if tool_args else '')
++    else:
++        key = 'metadata'
++        stat = base.stat()
++        tool_stat = (ctx.tree / tool_path).stat()
++        metadata = {'source': str(base), 'size': stat.st_size, 'mtime_ns': stat.st_mtime_ns,
++                    'tool': tool_path, 'tool_size': tool_stat.st_size,
++                    'tool_mtime_ns': tool_stat.st_mtime_ns, 'args': list(tool_args)}
++
+     seed = out / f'data-skip-setup-{key}.dbr'
++    if metadata is not None and (not record.is_file() or json.loads(record.read_text()) != metadata):
++        seed.unlink(missing_ok=True)
+     if not seed.is_file():
+         log('payload: marking Setup as done in a copy of the Data seed (mounts the seed read-write, no root needed)')
+         for stale in out.glob('data-skip-setup-*'):
+             stale.unlink()
+         (ctx.tree / 'build').mkdir(exist_ok=True)
+         run(['python3', ctx.tree / tool_path, base, seed, *tool_args], cwd=ctx.tree, log_file=ctx.logs / 'payload-skip-setup.log')
++        if metadata is not None:
++            record.write_text(json.dumps(metadata, indent=2) + '\n')
+     return seed
+ 
+ 
+ def build(ctx, kernel=None):
+     log('payload')
++    record_hashes = os.environ.get('UNIXNU_RECORD_HASHES', '1') != '0'
+     spec = ctx.board.get('payload')
+     if not spec:
+         raise Error('board.toml has no [payload]')
+@@ -92,8 +162,7 @@ def build(ctx, kernel=None):
+         raise Error(f'kernel not found: {kernel}; run "unixnu build kernel" or pass --kernel FILE')
+     extra = list(getattr(args, 'kernel_arg', None) or [])
+     # An extra NAME=VALUE replaces the board's argument of the same name.
+-    names = {item.split('=', 1)[0] for item in extra}
+-    arguments = [item for item in spec.get('kernel_args', []) if item.split('=', 1)[0] not in names] + extra
++    arguments = override_args(spec.get('kernel_args', []), extra)
+     line = check_args(arguments)
+     check_native_root(kernel, arguments)
+     owner_trust = getattr(args, 'owner_trust_cache', None)
+@@ -102,7 +171,7 @@ def build(ctx, kernel=None):
+         allowed = spec.get('trust_cache_sha256')
+         if not trust.is_file():
+             raise Error(f'trust cache not found: {trust}')
+-        if allowed and not owner_trust and sha256_file(trust) not in allowed:
++        if record_hashes and allowed and not owner_trust and sha256_file(trust) not in allowed:
+             raise Error(f'{trust} is not one of the trust caches this board accepts (board.toml [payload] trust_cache_sha256)')
+     data = expand(args.data_ramdisk) if getattr(args, 'data_ramdisk', None) else None
+     if data and not data.is_file():
+@@ -174,6 +243,7 @@ def build(ctx, kernel=None):
+     config = (f'version = 1\n[boot]\ntimeout = {spec.get("timeout", 3)}\ndefault = "xnu"\n[kits]\nautoload = false\n{loader}'
+               f'[[entry]]\nid = "xnu"\ntitle = "{spec.get("title", "UniXNU")}"\ntype = "xnu"\npath = "Payloads/kernel.macho"\n{initrd}'
+               f'args = "{line}"\n')
++    config += extra_entries(spec, arguments, initrd)
+     install = spec.get('install')
+     if install:
+         if not data:
+@@ -189,6 +259,7 @@ def build(ctx, kernel=None):
+     config += ('[[entry]]\nid = "reset"\ntitle = "Restart"\ntype = "action"\naction = "reset"\n'
+                '[[entry]]\nid = "shutdown"\ntitle = "Power off"\ntype = "action"\naction = "shutdown"\n')
+     (stage / 'EFI/UniXNU/unixnu.toml').write_text(config)
++    copy_payload_files(ctx, spec, stage)
+     for path in [stage, *stage.rglob('*')]:
+         os.utime(path, (EPOCH, EPOCH))
+     size = int(spec.get('size_mib', 192))
+@@ -196,11 +267,17 @@ def build(ctx, kernel=None):
+     if content > size * 1024 * 1024 * 0.95:
+         raise Error(f'the payload files take {content >> 20} MiB; raise size_mib (now {size}) in board.toml [payload]')
+     write_volume(stage, image, spec.get('volume', 'UNIXNU')[:11], size)
+-    data_report = {'kernel_sha256': sha256_file(kernel), 'payload_kernel_sha256': sha256_file(payloads / 'kernel.macho'),
+-                   'adt_sha256': sha256_file(payloads / 'kernel.macho.adt'), 'kernel_args': line,
+-                   'trust_cache_sha256': sha256_file(trust) if trust else None, 'gpu_addon_sha256': sha256_file(addon) if addon else None,
+-                   'data_ramdisk_sha256': sha256_file(data) if data else None, 'skip_setup': bool(getattr(args, 'skip_setup', False)), 'panic_screen': bool(spec.get('panic_screen')),
+-                   'payload_sha256': sha256_file(image), 'payload_bytes': image.stat().st_size, 'hardware_tested': False}
++    data_report = {'kernel_args': line, 'skip_setup': bool(getattr(args, 'skip_setup', False)),
++                   'panic_screen': bool(spec.get('panic_screen')),
++                   'payload_bytes': image.stat().st_size, 'hardware_tested': False}
++    if record_hashes:
++        data_report.update({'kernel_sha256': sha256_file(kernel),
++                            'payload_kernel_sha256': sha256_file(payloads / 'kernel.macho'),
++                            'adt_sha256': sha256_file(payloads / 'kernel.macho.adt'),
++                            'trust_cache_sha256': sha256_file(trust) if trust else None,
++                            'gpu_addon_sha256': sha256_file(addon) if addon else None,
++                            'data_ramdisk_sha256': sha256_file(data) if data else None,
++                            'payload_sha256': sha256_file(image)})
+     report.write_text(json.dumps(data_report, indent=2) + '\n')
+     shutil.rmtree(stage)
+     log(f'payload: {image} ({image.stat().st_size >> 20} MiB)')
+diff --git a/scripts/unixnu/userdata.py b/scripts/unixnu/userdata.py
+index 6885f51..69b2360 100644
+--- a/scripts/unixnu/userdata.py
++++ b/scripts/unixnu/userdata.py
+@@ -11,12 +11,14 @@ Manifest (little endian): "SHNGROOT", u32 version=1, u32 count, u64 image_bytes,
+ {char name[32], u64 offset, u64 size, u32 block_size=512, u32 flags(1=read-only), u8 sha256[32], 40 reserved},
+ and at byte 4064 the SHA-256 of bytes 0..4063.
+ 
+-The images come from the IPSW (a local file or a remote URL, see ipsw.py) and are checked against the pins of
+-board.toml. The disk images are attached read-only without mounting (macOS hdiutil). Nothing is flashed: the
+-report prints the fastboot command, to be run by the user.
++The images come from the IPSW (a local file or a remote URL, see ipsw.py). UNIXNU_RECORD_HASHES=0 disables
++file confirmation and report hashes; the SHNGROOT v1 window and header digests remain part of the disk format.
++The disk images are attached read-only without mounting (macOS hdiutil). The report prints a generic fastboot
++example; the board's deployment procedure owns the actual device write.
+ """
+ import hashlib
+ import json
++import os
+ import plistlib
+ import re
+ import struct
+@@ -52,6 +54,7 @@ def attach(dmg):
+ 
+ def build(ctx, dry_run=False):
+     log('userdata payload')
++    record_hashes = os.environ.get('UNIXNU_RECORD_HASHES', '1') != '0'
+     spec = ctx.board.get('userdata')
+     if not spec:
+         raise Error('board.toml has no [userdata]')
+@@ -85,6 +88,7 @@ def build(ctx, dry_run=False):
+             device = attach(dmg)
+             try:
+                 raw = device.replace('/dev/disk', '/dev/rdisk')
++                # SHNGROOT v1 stores the actual window digest in each entry.
+                 digest = hashlib.sha256()
+                 target.seek(offset)
+                 done = 0
+@@ -100,19 +104,27 @@ def build(ctx, dry_run=False):
+             finally:
+                 subprocess.run(['hdiutil', 'detach', device], capture_output=True)
+             entries.append((name, offset, size, digest.digest()))
+-            log(f'userdata: {name} {size} bytes at {offset:#x} sha256 {digest.hexdigest()}')
++            log(f'userdata: {name} {size} bytes at {offset:#x}')
++            if record_hashes:
++                log(f'userdata: {name} sha256 {digest.hexdigest()}')
+         header = bytearray(4096)
+         header[0:8] = b'SHNGROOT'
+         struct.pack_into('<IIQ', header, 8, 1, len(entries), total)
+         for index, (name, offset, size, digest) in enumerate(entries):
+             struct.pack_into('<32sQQII32s40s', header, 24 + 128 * index, name.encode(), offset, size, 512, 1, digest, bytes(40))
++        # NativeUfs checks this on-disk header digest before reading the windows.
+         header[4064:4096] = hashlib.sha256(bytes(header[:4064])).digest()
+         target.seek(0)
+         target.write(header)
+-    data = {'image_bytes': total, 'image_sha256': sha256_file(image), 'manifest_sha256': hashlib.sha256(bytes(header)).hexdigest(),
+-            'windows': [{'name': n, 'offset': o, 'size': s, 'sha256': d.hex()} for n, o, s, d in entries],
++    data = {'image_bytes': total,
++            'windows': [{'name': n, 'offset': o, 'size': s} for n, o, s, _ in entries],
+             'userdata_bytes': capacity, 'flash_command': f'fastboot flash userdata {image}',
+             'source': 'remote' if source.remote else 'local', 'hardware_tested': False}
++    if record_hashes:
++        data['image_sha256'] = sha256_file(image)
++        data['manifest_sha256'] = hashlib.sha256(bytes(header)).hexdigest()
++        for window, entry in zip(data['windows'], entries):
++            window['sha256'] = entry[3].hex()
+     report.write_text(json.dumps(data, indent=2) + '\n')
+     log(f'userdata: {image}')
+     log(f'flash it yourself with: {data["flash_command"]}')

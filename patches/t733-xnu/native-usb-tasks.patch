@@ -1,0 +1,70 @@
+--- a/bsd/conf/files
++++ b/bsd/conf/files
+@@ -110,6 +110,7 @@
+ bsd/dev/mem.c				standard
+ bsd/dev/munge.c 			optional config_requires_u32_munging
+ bsd/dev/unix_startup.c			standard
++bsd/dev/native_usb_tasks.c		standard
+ 
+ bsd/dev/monotonic.c         optional config_cpu_counters
+ 
+--- a/osfmk/conf/files
++++ b/osfmk/conf/files
+@@ -120,2 +120,3 @@
+ osfmk/kern/build_config.c		standard
++osfmk/kern/native_usb_thread_snapshot.c	standard
+ osfmk/kern/clock.c			standard
+--- a/bsd/kern/kern_proc.c
++++ b/bsd/kern/kern_proc.c
+@@ -747,6 +747,51 @@
+ 	return proc_ref_try_fast(p) ? p : PROC_NULL;
+ }
+ 
++/* The USB process snapshot owns each returned reference until proc_rele().
++ * This path skips exec transitions instead of waiting for their completion.
++ * The list mutex is tried once and at most 1024 entries are examined.
++ */
++int native_usb_process_refs(proc_t *, unsigned, unsigned *, unsigned *, bool *);
++int
++native_usb_process_refs(proc_t *refs, unsigned capacity, unsigned *examined,
++    unsigned *skipped, bool *truncated)
++{
++	unsigned count = 0;
++	proc_t p;
++	*examined = *skipped = 0;
++	*truncated = false;
++	if (capacity > 256) {
++		capacity = 256;
++	}
++	if (!lck_mtx_try_lock(&proc_list_mlock)) {
++		return -1;
++	}
++	ALLPROC_FOREACH(p) {
++		if (count == capacity || *examined == 1024) {
++			*truncated = true;
++			break;
++		}
++		++*examined;
++		if (p->p_stat == SIDL) {
++			++*skipped;
++			continue;
++		}
++		uint32_t bits = proc_ref_try_fast(p);
++		if (!bits) {
++			++*skipped;
++			continue;
++		}
++		if (bits & (P_REF_WILL_EXEC | P_REF_IN_EXEC | P_REF_SHADOW)) {
++			proc_rele(p);
++			++*skipped;
++			continue;
++		}
++		refs[count++] = p;
++	}
++	proc_list_unlock();
++	return (int)count;
++}
++
+ proc_t
+ proc_ref(proc_t p, int locked)
+ {

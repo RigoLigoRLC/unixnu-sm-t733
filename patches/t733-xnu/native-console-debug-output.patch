@@ -1,0 +1,24 @@
+--- a/osfmk/kern/printf.c
++++ b/osfmk/kern/printf.c
+@@ -920,7 +920,9 @@
+ 
+ 	debug_putc(c);
+ 
+-	if (!console_is_serial() && !disable_serial_output) {
++	/* PE_kputc falls back to this console when no serial device exists. */
++	if (!console_is_serial() && !disable_serial_output &&
++	    PE_kputc != console_write_unbuffered) {
+ 		PE_kputc(c);
+ 	}
+ }
+@@ -932,7 +934,9 @@
+ 
+ 	debug_putc(c);
+ 
+-	if (!console_is_serial() && !disable_serial_output) {
++	/* The unbuffered console write above already reaches the fallback. */
++	if (!console_is_serial() && !disable_serial_output &&
++	    PE_kputc != console_write_unbuffered) {
+ 		PE_kputc(c);
+ 	}
+ }

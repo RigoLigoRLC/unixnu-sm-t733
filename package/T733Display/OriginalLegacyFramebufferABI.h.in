@@ -1,0 +1,77 @@
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+#pragma once
+#include <IOKit/IOService.h>
+#include <libkern/libkern.h>
+
+struct OriginalLegacySwapRequest;
+
+// IOMobileFramebufferLegacy retains the original 21H461 object extent and slot
+// order. The builder fills its declarations from the original dispatch table.
+// NativeLegacyDisplay owns the CPU copy; the original family owns user clients,
+// surface references, request queues, and completion delivery.
+class IOMobileFramebufferLegacy : public IOService {
+    OSDeclareAbstractStructors(IOMobileFramebufferLegacy)
+    unsigned char originalPrivate[0x18a0 - sizeof(IOService)];
+
+public:
+    void installBootDimensions(uint32_t width, uint32_t height) {
+        auto bytes = reinterpret_cast<unsigned char *>(this);
+        memcpy(bytes + 5808, &width, sizeof(width));
+        memcpy(bytes + 5812, &height, sizeof(height));
+    }
+
+    const OriginalLegacySwapRequest *pendingSwapRequest() const {
+        const OriginalLegacySwapRequest *request = nullptr;
+        memcpy(&request, reinterpret_cast<const unsigned char *>(this) + 5480, sizeof(request));
+        return request;
+    }
+
+    // The pending queue transfers its head reference to the current-swap slot.
+    // completeCurrentSwap then releases that reference and wakes its waiters.
+    bool activateOnlyPendingSwap(const OriginalLegacySwapRequest *request) {
+        auto self = reinterpret_cast<unsigned char *>(this);
+        auto bytes = reinterpret_cast<const unsigned char *>(request);
+        const void *current = nullptr, *head = nullptr, *tail = nullptr;
+        const void *next = nullptr, *previous = nullptr;
+        memcpy(&current, self + 5472, 8);
+        memcpy(&head, self + 5480, 8);
+        memcpy(&tail, self + 5488, 8);
+        if (!request || current || head != request) {
+            return false;
+        }
+
+        memcpy(&next, bytes + 2960, 8);
+        memcpy(&previous, bytes + 2968, 8);
+        if (previous != self + 5480) {
+            return false;
+        }
+        if (next) {
+            const void *link = self + 5480;
+            auto nextBytes = const_cast<unsigned char *>(reinterpret_cast<const unsigned char *>(next));
+            memcpy(nextBytes + 2968, &link, 8);
+        } else if (tail != bytes + 2960) {
+            return false;
+        }
+
+        memcpy(self + 5472, &request, 8);
+        memcpy(self + 5480, &next, 8);
+        if (!next) {
+            const void *emptyTail = self + 5480;
+            memcpy(self + 5488, &emptyTail, 8);
+        }
+        return true;
+    }
+
+    void free() override;
+    bool init(OSDictionary *properties = nullptr) override;
+    IOReturn setProperties(OSObject *) override;
+    void systemWillShutdown(IOOptionBits) override;
+    IOService *probe(IOService *, SInt32 *) override;
+    bool start(IOService *) override;
+    void stop(IOService *) override;
+    IOWorkLoop *getWorkLoop() const override;
+    IOReturn newUserClient(task_t, void *, UInt32, IOUserClient **) override;
+    IOReturn setPowerState(unsigned long, IOService *) override;
+@VIRTUAL_METHODS@
+};
+static_assert(sizeof(IOMobileFramebufferLegacy) == 0x18a0, "Original Legacy instance extent");

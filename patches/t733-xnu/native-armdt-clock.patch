@@ -1,0 +1,53 @@
+--- a/pexpert/arm/pe_identify_machine.c
++++ b/pexpert/arm/pe_identify_machine.c
+@@ -42,8 +42,12 @@
+ 	(void)bootArgs;
+ 
++#if XNU_ARM_DT_PLATFORM
++	(void)pe_arm_get_soc_base_phys();
++#else
+ 	if (pe_arm_get_soc_base_phys() == 0) {
+ 		return;
+ 	}
++#endif
+ 
+ 	/* Clear the gPEClockFrequencyInfo struct */
+ 	bzero((void *)&gPEClockFrequencyInfo, sizeof(clock_frequency_info_t));
+@@ -51,9 +55,16 @@
+ 
++#if XNU_ARM_DT_PLATFORM
++	/* The architectural counter supplies its frequency independently of MMIO. */
++	uint64_t counter_frequency;
++	__asm__ volatile("mrs %0, cntfrq_el0" : "=r" (counter_frequency));
++	gPEClockFrequencyInfo.timebase_frequency_hz = (uint32_t)counter_frequency;
++#else
+ 	/* Start with default values. */
+ 	gPEClockFrequencyInfo.timebase_frequency_hz = 24000000;
+ 	gPEClockFrequencyInfo.bus_clock_rate_hz = 100000000;
+ 	gPEClockFrequencyInfo.cpu_clock_rate_hz = 400000000;
++#endif
+ 
+ 	err = SecureDTLookupEntry(NULL, "/cpus", &cpus);
+ 	assert(err == kSuccess);
+ 
+@@ -170,12 +181,16 @@
+ 	gPEClockFrequencyInfo.bus_clock_rate_den = 1;
+ 
+-	gPEClockFrequencyInfo.bus_to_cpu_rate_num =
+-	    (2 * gPEClockFrequencyInfo.cpu_clock_rate_hz) / gPEClockFrequencyInfo.bus_clock_rate_hz;
++	if (gPEClockFrequencyInfo.bus_clock_rate_hz != 0) {
++		gPEClockFrequencyInfo.bus_to_cpu_rate_num =
++		    (2 * gPEClockFrequencyInfo.cpu_clock_rate_hz) / gPEClockFrequencyInfo.bus_clock_rate_hz;
++	}
+ 	gPEClockFrequencyInfo.bus_to_cpu_rate_den = 2;
+ 
+ 	gPEClockFrequencyInfo.bus_to_dec_rate_num = 1;
+-	gPEClockFrequencyInfo.bus_to_dec_rate_den =
+-	    gPEClockFrequencyInfo.bus_clock_rate_hz / gPEClockFrequencyInfo.dec_clock_rate_hz;
++	if (gPEClockFrequencyInfo.dec_clock_rate_hz != 0) {
++		gPEClockFrequencyInfo.bus_to_dec_rate_den =
++		    gPEClockFrequencyInfo.bus_clock_rate_hz / gPEClockFrequencyInfo.dec_clock_rate_hz;
++	}
+ }
+ 
+ vm_offset_t

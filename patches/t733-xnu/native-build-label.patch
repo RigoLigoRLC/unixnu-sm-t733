@@ -1,0 +1,15 @@
+--- a/osfmk/kern/startup.c
++++ b/osfmk/kern/startup.c
+@@ -434,6 +434,12 @@
+ 	printf("%s\n", version); /* log kernel version */
+ 
++	char t733_build[64] = { 0 };
++	if (PE_parse_boot_argn("t733-build", t733_build, sizeof(t733_build))) {
++		t733_build[sizeof(t733_build) - 1] = '\0';
++		printf("T733 build: %s\n", t733_build);
++	}
++
+ 	scale_setup();
+ 
+ 	kernel_bootstrap_log("vm_mem_bootstrap");
+ 	vm_mem_bootstrap();

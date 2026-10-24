@@ -1,0 +1,57 @@
+# Values decoded from T733ZCS9DYE1 vendor_boot DTB with recovery DTBO entry 1.
+[source]
+dtb_index = 0
+dtbo_index = 1
+selected_dts = ".cache/firmware/device-tree/T733ZCS9DYE1/selected-stock.dts"
+running_firmware = "T733ZCS9DYE1"
+dram_reg = "0 0 0 0"
+
+[gic]
+distributor_base = 0x17a00000
+distributor_size = 0x10000
+redistributor_base = 0x17a60000
+redistributor_size = 0x100000
+redistributor_stride = 0x20000
+
+[ufs]
+controller_base = 0x1d84000
+controller_size = 0x3000
+ice_base = 0x1d88000
+ice_size = 0x8000
+ice_hwkm_base = 0x1d90000
+ice_hwkm_size = 0x9000
+stream_id = 0x80
+reset_gpio = 175
+lanes_per_direction = 2
+
+# These regions contain the boot display allocation and refresh metadata.
+[display]
+splash_base = 0xe1000000
+splash_size = 0x2300000
+dfps_base = 0xe3300000
+dfps_size = 0x100000
+width = 1600
+height = 2560
+geometry_source = "Android wm size and T733 platform display configuration"
+
+[samsung_logs]
+sec_debug_base = 0xf0000000
+sec_debug_size = 0x900000
+ss_plog_base = 0xf0900000
+ss_plog_size = 0x200000
+ramoops_base = 0xf0b00000
+ramoops_size = 0x100000
+
+[userdata]
+first_lba = 2320896
+last_lba = 31099898
+block_count = 28779003
+lba_bytes = 4096
+source = "backups/sm-t733-gpt-2026-10-22/partitions.tsv primary and backup-at-disk-end"
+pit_declared_block_count = 0
+pit_logical_unit_count = 6
+android_block_device = "sda34"
+gpt_read = true
+scsi_lun_read = true
+scsi_lun = 0
+scsi_path = "/sys/devices/platform/soc/1d84000.ufshc/host0/target0:0:0/0:0:0:0"

@@ -1,0 +1,138 @@
+{
+  "owner": "RigoLigoRLC",
+  "created_on": "2026-10-24",
+  "visibility": "public",
+  "repositories": [
+    {
+      "name": "unixnu-sm-t733",
+      "url": "https://github.com/RigoLigoRLC/unixnu-sm-t733",
+      "kind": "new",
+      "upstream": null,
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": null,
+      "description": "UniXNU device configuration and build integration for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
+      "device_changes_pushed": true
+    },
+    {
+      "name": "unixnu-core",
+      "url": "https://github.com/RigoLigoRLC/unixnu-core",
+      "kind": "fork",
+      "upstream": "UniXNU/UniXNU",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": "1a01c2afa197d975d04da892325c56b6b14aaecb",
+      "description": "UniXNU core build and boot-menu adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
+      "adaptation_commit": "63f6920d552daacd050b4af65e45d6df16cfc332",
+      "device_changes_pushed": true
+    },
+    {
+      "name": "unixnu-mu-silicium",
+      "url": "https://github.com/RigoLigoRLC/unixnu-mu-silicium",
+      "kind": "fork",
+      "upstream": "Project-Silicium/Mu-Silicium",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": "42fe563791e51bf5500c2e470ed294ca0c94b97c",
+      "description": "Project Silicium UEFI firmware and Samsung boot packaging for Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
+      "adaptation_commit": "799544f93bfffd0e7eae38efb53a08fb996d4af5",
+      "device_changes_pushed": true
+    },
+    {
+      "name": "unixnu-armcpu",
+      "url": "https://github.com/RigoLigoRLC/unixnu-armcpu",
+      "kind": "fork",
+      "upstream": "UniXNU/ArmCpu",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": "1951cc8444b340d7d8879e9418220cf29eb711d7",
+      "description": "ArmCpu SMP, GIC and timer adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
+      "adaptation_commit": "55e18efdbbb50c3b8bde5edfd95e8e2df8a765b4",
+      "device_changes_pushed": true
+    },
+    {
+      "name": "unixnu-darwinboot",
+      "url": "https://github.com/RigoLigoRLC/unixnu-darwinboot",
+      "kind": "fork",
+      "upstream": "UniXNU/DarwinBoot",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": "d099354d0eab34df5088ca1ba89c9c88bc3260bb",
+      "description": "DarwinBoot kernel loading and framebuffer handoff for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
+      "adaptation_commit": "e251431e438289ed608898d59989f3bd609757d1",
+      "device_changes_pushed": true
+    },
+    {
+      "name": "unixnu-nativegenispi",
+      "url": "https://github.com/RigoLigoRLC/unixnu-nativegenispi",
+      "kind": "fork",
+      "upstream": "UniXNU/NativeGeniSpi",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": "b5399b5646c4d7415deec6d887fd51715a97a024",
+      "description": "Qualcomm GENI SPI FIFO and transfer recovery adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
+      "adaptation_commit": "d57a1715273080095e8ba77b2ea515849823c8a8",
+      "device_changes_pushed": true
+    },
+    {
+      "name": "unixnu-nativemobiledisplay",
+      "url": "https://github.com/RigoLigoRLC/unixnu-nativemobiledisplay",
+      "kind": "fork",
+      "upstream": "UniXNU/NativeMobileDisplay",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": "8666a9950c9699b368931d18cac92c0fdb2ce9c0",
+      "description": "CPU software display, framebuffer copying and presentation for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
+      "adaptation_commit": "e6dc9eab8f989fb801ffcfc139093e1f0b6e2fb4",
+      "device_changes_pushed": true
+    },
+    {
+      "name": "unixnu-nativeramblock",
+      "url": "https://github.com/RigoLigoRLC/unixnu-nativeramblock",
+      "kind": "fork",
+      "upstream": "UniXNU/NativeRamBlock",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": "d4d22d9819b0162eda49f6402235dddc2279410d",
+      "description": "Persistent Data storage and explicit reset handling for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
+      "adaptation_commit": "373c04db4bc74bc877d93f69d43e60d09f633a60",
+      "device_changes_pushed": true
+    },
+    {
+      "name": "unixnu-nativeufs",
+      "url": "https://github.com/RigoLigoRLC/unixnu-nativeufs",
+      "kind": "fork",
+      "upstream": "UniXNU/NativeUfs",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": "af785c1777161a62931425c2faaa536ce0bebd5b",
+      "description": "SM7325 UFS, SMMU and root storage support for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
+      "adaptation_commit": "c6dd2bf97046b47ab4f03bc508c7bec4e5960c14",
+      "device_changes_pushed": true
+    },
+    {
+      "name": "unixnu-nativeprelink",
+      "url": "https://github.com/RigoLigoRLC/unixnu-nativeprelink",
+      "kind": "fork",
+      "upstream": "UniXNU/NativePrelink",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": "2b6ffb50117eee820b98aca9bd51b5c7dfb2970e",
+      "description": "XNU prelink and storage binding adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
+      "adaptation_commit": "844512c52e9c9ed3b0edb02d748344f12cdae710",
+      "device_changes_pushed": true
+    },
+    {
+      "name": "unixnu-nativefocaltechtouch",
+      "url": "https://github.com/RigoLigoRLC/unixnu-nativefocaltechtouch",
+      "kind": "new",
+      "upstream": null,
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": null,
+      "description": "FT8203 touch controller support over Qualcomm GENI SPI for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
+      "adaptation_commit": "7c87706c06383812d77c0e8262de1b0ffca1d1af",
+      "device_changes_pushed": true
+    }
+  ]
+}

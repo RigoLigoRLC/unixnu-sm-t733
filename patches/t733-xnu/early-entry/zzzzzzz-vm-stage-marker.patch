@@ -1,0 +1,183 @@
+--- a/osfmk/arm64/arm_vm_init.c
++++ b/osfmk/arm64/arm_vm_init.c
+@@ -1,3 +1,4 @@
++#include "early_entry.h"
+ /*
+  * Copyright (c) 2007-2011 Apple Inc. All rights reserved.
+  *
+@@ -1846,6 +1847,10 @@
+ 	gPhysSize = mem_size = ((gPhysBase + args->memSize) & ~PAGE_MASK) - gPhysBase;
+ 
+ 	mem_actual = args->memSizeActual ? args->memSizeActual : mem_size;
++	arm_early_stage(16, 0x00004040, "VM: managed memory initialized");
++	arm_early_value("gPhysBase", gPhysBase);
++	arm_early_value("mem_size", mem_size);
++	arm_early_value("topOfKernelData", args->topOfKernelData);
+ 
+ 	if ((memory_size != 0) && (mem_size > memory_size)) {
+ 		mem_size = memory_size;
+@@ -1875,5 +1880,8 @@
+ 	// Slide the physical aperture to a random page-aligned location within the slide range
++	arm_early_stage(17, 0x00004040, "VM: calling early_random");
+ 	uint64_t physmap_slide = early_random() & ARM64_PHYSMAP_SLIDE_MASK & ~((uint64_t)PAGE_MASK);
++	arm_early_stage(18, 0x00004040, "VM: early_random returned");
++	arm_early_value("physmap_slide", physmap_slide);
+ 	assert(physmap_slide < ARM64_PHYSMAP_SLIDE_RANGE);
+ 
+ 	physmap_base += physmap_slide;
+@@ -1909,6 +1917,7 @@
+     dynamic_memory_begin += IOFILTER_STACK_REGION_SIZE;
+     iofilter_stacks_end = (void*)dynamic_memory_begin;
+ #endif
+ #endif
++	arm_early_value("dynamic_memory_begin", dynamic_memory_begin);
+ 	if (dynamic_memory_begin > VM_MAX_KERNEL_ADDRESS) {
+ 		panic("Unsupported memory configuration %lx", mem_size);
+@@ -1951,6 +1960,7 @@
+ 	arm_replace_identity_map();
+ #endif
+ 
++	arm_early_stage(19, 0x00004040, "VM: allocating invalid and CPU root tables");
+ 	/* Initialize invalid tte page */
+ 	invalid_tte = (tt_entry_t *)alloc_ptpage(TRUE);
+ 	invalid_ttep = kvtophys((vm_offset_t)invalid_tte);
+@@ -1965,6 +1975,9 @@
+ 	cpu_tte = (tt_entry_t *)alloc_ptpage(TRUE);
+ 	cpu_ttep = kvtophys((vm_offset_t)cpu_tte);
+ 	bzero(cpu_tte, ARM_PGBYTES);
++	arm_early_stage(20, 0x00004040, "VM: root tables allocated");
++	arm_early_value("cpu_ttep", cpu_ttep);
++	arm_early_value("invalid_ttep", invalid_ttep);
+ 	avail_end = gPhysBase + mem_size;
+ 	assert(!(avail_end & PAGE_MASK));
+ 
+@@ -1978,6 +1991,7 @@
+ 	 *   the so called physical aperture should be statically mapped
+ 	 */
++	arm_early_stage(21, 0x00004040, "VM: allocating L1/L2 mapping tables");
+ 	init_ptpages(cpu_tte, gVirtBase, dynamic_memory_begin, TRUE, ARM_TTE_TABLE_AP(ARM_TTE_TABLE_AP_USER_NA));
+ 
+ #if defined(ARM_LARGE_MEMORY)
+ 	/*
+@@ -1997,6 +2011,7 @@
+ 	arm_vm_expand_kernel_el0_mappings();
+ #endif /* __ARM_KERNEL_PROTECT__ */
+ 
++	arm_early_stage(22, 0x00004040, "VM: tables ready; reading Mach-O segments");
+ 	/*
+ 	 * Now retrieve addresses for various segments from kernel mach-o header
+ 	 */
+@@ -2078,6 +2093,9 @@
+ 	edata = (vm_offset_t) segDATAB + segSizeDATA;
+ 	end_kern = round_page(segHIGHESTKC ? segHIGHESTKC : getlastkerneladdr()); /* Force end to next page */
+ 
++	arm_early_stage(23, 0x00004040, "VM: segment layout loaded");
++	arm_early_value("segPRELINKTEXTB", segPRELINKTEXTB);
++	arm_early_value("end_kern", end_kern);
+ 	vm_set_page_size();
+ 
+ 	vm_kernel_base = segTEXTB;
+@@ -2100,6 +2118,8 @@
+ 	vm_prelink_sdata = segPRELINKDATAB;
+ 	vm_prelink_edata = segPRELINKDATAB + segSizePRELINKDATA;
+ 
++	arm_early_stage(24, 0x00004040, "VM: entering arm_vm_prot_init");
+ 	arm_vm_prot_init(args);
++	arm_early_stage(25, 0x00004040, "VM: arm_vm_prot_init returned");
+ 
+ 	/*
+@@ -2148,6 +2168,11 @@
+ 	arm_set_user_tbi();
+ 
++	arm_early_stage(26, 0x00004040, "VM: entering arm_vm_physmap_init");
+ 	arm_vm_physmap_init(args);
++	arm_early_stage(27, 0x00004040, "VM: physmap ready; switching translation tables");
++	arm_early_value("cpu_ttep", cpu_ttep);
++	arm_early_value("invalid_ttep", invalid_ttep);
++	arm_early_end();
+ 	set_mmu_ttb_alternate(cpu_ttep & TTBR_BADDR_MASK);
+ 
+ #if XNU_MONITOR
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -540,7 +540,7 @@
+ 
+ 	arm_early_stage(13, 0x00808080, "entering arm_vm_init");
+-	arm_early_end();
+ 	boot_progress_stage("arm_vm_init enter");
+ 	arm_vm_init(xmaxmem, args);
++	arm_early_resume(args);
+ 	boot_progress_stage("arm_vm_init returned");
+ 
+@@ -555,6 +555,9 @@
+ 	PE_consistent_debug_inherit();
+ 
+ 	/* Setup debugging output. */
++	arm_early_stage(28, 0x00004040, "arm_init: initializing serial and kprintf");
+ 	const unsigned int serial_exists = serial_init();
++	arm_early_value("serial_exists", serial_exists);
+ 	kernel_startup_initialize_upto(STARTUP_SUB_KPRINTF);
++	arm_early_stage(29, 0x00004040, "arm_init: kprintf startup complete");
+ 	kprintf("kprintf initialized\n");
+@@ -596,6 +599,8 @@
+ 		disableConsoleOutput = FALSE;     /* Allow printfs to happen */
+ 	}
++	arm_early_stage(30, 0x00004040, "arm_init: entering PE_create_console");
+ 	PE_create_console();
++	arm_early_stage(31, 0x00004040, "arm_init: PE_create_console returned");
+ 
+ 	/* setup console output */
+ 	PE_init_printf(FALSE);
+--- a/pexpert/arm/pe_init.c
++++ b/pexpert/arm/pe_init.c
+@@ -1,3 +1,4 @@
++#include "early_entry.h"
+ /*
+  * Copyright (c) 2000-2017 Apple Inc. All rights reserved.
+  *
+@@ -265,6 +266,8 @@
+ 	uint32_t        populate_registry_time_value = 0;
+ 
++	arm_early_stage(32, 0x00004040, "PE_init_iokit: acquiring text console");
+ 	PE_init_printf(TRUE);
++	arm_early_stage(33, 0x00004040, "PE_init_iokit: console attach returned");
+ 
+ 	printf("iBoot version: %s\n", iBoot_version);
+ #if defined(TARGET_OS_OSX) && defined(__arm64__)
+--- a/osfmk/console/video_console.c
++++ b/osfmk/console/video_console.c
+@@ -1,3 +1,4 @@
++#include "early_entry.h"
+ #include <kern/boot_progress.h>
+ /*
+  * Copyright (c) 2000-2020 Apple Inc. All rights reserved.
+@@ -2969,6 +2970,8 @@
+ #if !defined(XNU_TARGET_OS_BRIDGE)
+ 		vc_progress_set( graphics_now, delay );
+ #endif /* !defined(XNU_TARGET_OS_BRIDGE) */
++		arm_early_stage(34, 0x00004040, "console: enabling acquired screen");
+ 		gc_enable( !graphics_now );
++		arm_early_value("console text enabled", gc_enabled);
+ 		gc_acquired = TRUE;
+ 		gc_desire_text = FALSE;
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -1,3 +1,4 @@
++#include "early_entry.h"
+ #include <kern/boot_progress.h>
+ /*
+  * Copyright (c) 2012-2023 Apple Inc. All rights reserved.
+@@ -470,6 +471,13 @@
+ 	ss_valid = is_saved_state64(ss);
+ 	arm_saved_state64_t *state = saved_state64(ss);
+ 
++	if (ss_valid) {
++		arm_early_stage(35, 0x00800000, "Synchronous exception saved state");
++		arm_early_value("PC", state->pc);
++		arm_early_value("LR", state->lr);
++		arm_early_value("ESR", state->esr);
++		arm_early_value("FAR", state->far);
++	}
+ 	os_atomic_cmpxchg(&original_faulting_state, NULL, state, seq_cst);
+ 
+ 	// rdar://80659177

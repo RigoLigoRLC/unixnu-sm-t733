@@ -1,0 +1,55 @@
+# SM-T733 external binary inputs
+# This is an input inventory, not a redistribution license or an extraction script.
+# Obtain inputs from your own firmware/IPSW. Do not commit their contents.
+# Samsung cache root: .cache/firmware/vendor/T733ZCS9DYE1/
+# scripts/import-vendor-inputs.py accepts --extraction and --inventory.
+
+# Samsung SM-T733 CHN T733ZCS9DYE1 / T733CHN9DYE1
+# Required by the current FT8203 driver; source is the vendor partition.
+vendor/firmware/tsp_focaltech/ft8203_gts7xllite.bin
+
+# Retained hardware inputs for additional drivers and board reference.
+# These are not all consumed by the current CPU-display boot configuration.
+vendor/firmware/epen/w9021_gts7xllite.bin
+vendor/firmware/a660_gmu.bin
+vendor/firmware/a660_sqe.fw
+apnhlos/image/a660_zap.mdt
+apnhlos/image/a660_zap.b00
+apnhlos/image/a660_zap.b01
+apnhlos/image/a660_zap.b02
+vendor/firmware/tsp_himax/hx83121a_gts7xllite.bin
+vendor/etc/qdcm_calib_data_ss_dsi_panel_FT8203_TS124QDM_WQXGA.xml
+vendor/etc/qdcm_calib_data_ss_dsi_panel_HX83121_PPC357DB11_WQXGA.xml
+vendor/etc/fstab.qcom
+vendor/etc/charger_fw_fstab.qti
+vendor/ueventd.rc
+odm/ueventd.rc
+vendor/etc/init/hw/init.target.rc
+vendor/etc/init/hw/init.gts7fewifi.rc
+vendor/etc/init/hw/init.qti.ufs.rc
+vendor/etc/init/hw/init.samsung.display.rc
+vendor/bin/init.kernel.post_boot-yupik.sh
+
+# Firmware/DT acquisition inputs, held outside source publication.
+# vendor_boot image: extract its DTB section; stock board memory is patched at boot.
+# recovery image: extract its recovery DTBO section; runtime selection was DTB0/DTBO1.
+# Live /sys/firmware/fdt supplies actual DRAM/reserved-memory for this device.
+# Store stock files below .cache/firmware/stock/T733ZCS9DYE1/:
+stock/T733ZCS9DYE1/vendor_boot.dtb
+stock/T733ZCS9DYE1/recovery_dtbo.img
+
+# Apple restore input: iPad_Pro_HFR_17.7.11_21H461_Restore.ipsw
+# Select the iPad7,1 / j120ap Erase BuildIdentity in BuildManifest.plist.
+# chip_id=0x8011, board_id=12. Resolve component paths from that identity.
+# Required prelink/input components: KernelCache, DeviceTree.
+# The kernelcache supplies the original 21H461 Apple modules used by binding scripts.
+# Required complete-system components and exact IPSW member paths:
+OS:044-76040-038.dmg
+Cryptex1,SystemOS:044-76034-038.dmg
+StaticTrustCache:Firmware/044-76040-038.dmg.trustcache
+Cryptex1,SystemTrustCache:Firmware/044-76034-038.dmg.trustcache
+
+# The dyld cache, launchd, lockdownd, frameworks and original Apple kernel modules
+# come from these components; do not add extracted copies to the source repository.
+# Generate Data seeds and signed root policies locally using the preparation tools.
+# Owner private signing keys and local identity seeds are local inputs, not downloads.

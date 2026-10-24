@@ -1,0 +1,52 @@
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -164,6 +164,17 @@
+ 	b		Lcheck_cpu_data_entry	// loop
+ Lfound_cpu_data_entry:
+ 
++#if XNU_NATIVE_ARCH_TIMER
++	// The per-CPU record remains reachable at its physical address before MMU setup.
++	ldrh	w4, [x21, CPU_NUMBER_GS]
++	adrp	x6, EXT(armcpu_secondary_entry)@page
++	add		x6, x6, EXT(armcpu_secondary_entry)@pageoff
++	mov		w5, #1
++	str		w5, [x6, x4, lsl #2]
++	dsb		sy
++#endif
++
++
+ 
+ 	adrp	x20, EXT(const_boot_args)@page
+ 	add		x20, x20, EXT(const_boot_args)@pageoff
+@@ -352,6 +363,16 @@
+ 	add		lr, lr, x22
+ 	sub		lr, lr, x23
+ 
++#if XNU_NATIVE_ARCH_TIMER
++	ldrh	w4, [x21, CPU_NUMBER_GS]
++	adrp	x6, EXT(armcpu_secondary_entry)@page
++	add		x6, x6, EXT(armcpu_secondary_entry)@pageoff
++	mov		w5, #2
++	str		w5, [x6, x4, lsl #2]
++	dsb		sy
++#endif
++
++
+ 	b		common_start
+ 
+ /*
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -710,6 +710,12 @@
+ arm_init_cpu(
+ 	cpu_data_t      *cpu_data_ptr)
+ {
++#if XNU_NATIVE_ARCH_TIMER
++	extern volatile uint32_t armcpu_secondary_entry[8];
++	armcpu_secondary_entry[cpu_data_ptr->cpu_number] = 3;
++	__asm__ volatile ("dmb ish" ::: "memory");
++#endif
++
+ #if __ARM_PAN_AVAILABLE__
+ 	__builtin_arm_wsr("pan", 1);
+ #endif

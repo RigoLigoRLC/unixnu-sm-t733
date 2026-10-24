@@ -1,0 +1,19 @@
+--- a/osfmk/console/video_console.c
++++ b/osfmk/console/video_console.c
+@@ -2878,6 +2878,16 @@
+ #else
+ 				unsigned int flags = VM_WIMG_IO;
+ #endif
++				unsigned int t733_writecombine = 0;
++				if (PE_parse_boot_argn("t733-fb-writecombine", &t733_writecombine,
++				    sizeof(t733_writecombine)) && t733_writecombine == 1) {
++					/* T733 scanout occupies reserved DRAM. Normal non-cacheable
++					 * writes reach the running DPU without dirty CPU cache lines.
++					 * NativeLegacyDisplay uses the same attribute for its alias. */
++					flags = VM_WIMG_WCOMB;
++					kprintf("T733 console: framebuffer Normal Non-Cacheable\n");
++				}
++
+ 				if (boot_vinfo->v_length != 0) {
+ 					newMapSize = (unsigned int) round_page(boot_vinfo->v_length);
+ 				} else {

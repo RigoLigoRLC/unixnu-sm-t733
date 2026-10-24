@@ -1,0 +1,84 @@
+--- a/osfmk/kern/sched_prim.c
++++ b/osfmk/kern/sched_prim.c
+@@ -1857,6 +1857,81 @@
+ 	return prev;
+ }
+ 
++#if defined(__arm64__)
++bool t733_display_bind_begin(void **previous_binding, int *cpu);
++void t733_display_bind_end(void *previous_binding);
++
++/*
++ * The T733 display caller holds its sleepable work-loop gate while copying.
++ * This entry selects an online performance CPU and migrates the current
++ * non-realtime thread. The caller restores the returned binding after copying.
++ */
++bool
++t733_display_bind_begin(void **previous_binding, int *cpu)
++{
++	if (!ml_get_interrupts_enabled() || get_preemption_level() != 0) {
++		return false;
++	}
++
++	processor_t target = PROCESSOR_NULL;
++	const int candidates[] = {5, 4, 6, 7};
++	const int maximum_cpu = ml_get_max_cpu_number();
++	for (unsigned int index = 0; index < sizeof(candidates) / sizeof(candidates[0]); index++) {
++		const int candidate = candidates[index];
++		if (candidate > maximum_cpu) {
++			continue;
++		}
++		processor_t processor = cpu_to_processor(candidate);
++		if (processor == PROCESSOR_NULL) {
++			continue;
++		}
++		const processor_state_t state = processor->state;
++		if (state == PROCESSOR_IDLE || state == PROCESSOR_DISPATCHING || state == PROCESSOR_RUNNING) {
++			target = processor;
++			break;
++		}
++	}
++	if (target == PROCESSOR_NULL) {
++		return false;
++	}
++
++	thread_t self = current_thread();
++	spl_t s = splsched();
++	thread_lock(self);
++	if (self->sched_pri >= BASEPRI_RTQUEUES ||
++	    self->sched_mode == TH_MODE_REALTIME || self->saved_mode == TH_MODE_REALTIME) {
++		thread_unlock(self);
++		splx(s);
++		return false;
++	}
++
++	*previous_binding = thread_bind_internal(self, target);
++	*cpu = (int)target->cpu_id;
++	thread_unlock(self);
++	splx(s);
++	thread_block(THREAD_CONTINUE_NULL);
++	return true;
++}
++
++void
++t733_display_bind_end(void *previous_binding)
++{
++	thread_t self = current_thread();
++	processor_t previous = (processor_t)previous_binding;
++	spl_t s = splsched();
++	thread_lock(self);
++	thread_assert_runq_null(self);
++	/* The saved binding also applies if the caller changed policy during copy. */
++	self->bound_processor = previous;
++	thread_unlock(self);
++	splx(s);
++
++	if (previous != PROCESSOR_NULL) {
++		thread_block(THREAD_CONTINUE_NULL);
++	}
++}
++#endif
++
+ void
+ thread_bind_during_wakeup(thread_t thread, processor_t processor)
+ {

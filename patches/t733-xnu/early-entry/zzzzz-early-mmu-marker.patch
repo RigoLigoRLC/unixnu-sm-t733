@@ -1,0 +1,103 @@
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -488,6 +488,58 @@
+ .endmacro
+ #endif
+ 
++#if XNU_EARLY_ENTRY_MARKER
++/* BootVideo receives Device mappings in TTBR0. Existing L2 tables remain
++ * in place because the framebuffer and kernel can share an L1 entry.
++ * x2 is the bootstrap allocation cursor and x25 is the TTBR0 root.
++ */
++.macro map_early_framebuffer
++	ldr		x0, [x20, BA_VIDEO_BASE]
++	cbz		x0, 9f
++	ldr		x4, [x20, BA_VIDEO_STRIDE]
++	ldr		x5, [x20, BA_VIDEO_HEIGHT]
++	mul		x4, x4, x5
++	cbz		x4, 9f
++	add		x4, x0, x4
++	and		x0, x0, #(ARM_TTE_BLOCK_L2_MASK)
++1:
++	and		x5, x0, #(ARM_TT_L1_INDEX_MASK)
++	lsr		x5, x5, #(ARM_TT_L1_SHIFT - TTE_SHIFT)
++	add		x5, x25, x5
++	ldr		x6, [x5]
++	cbnz	x6, 2f
++	add		x2, x2, PGBYTES
++	add		x7, x25, #(BOOTSTRAP_TABLE_BYTES >> 12), lsl #12
++	cmp		x2, x7
++	b.hs	Lbootstrap_tables_exhausted
++	mov		x6, #(ARM_TTE_BOOT_TABLE)
++	orr		x6, x6, x2
++	str		x6, [x5]
++2:
++	and		x6, x6, #(ARM_TTE_TABLE_MASK)
++	and		x5, x0, #(ARM_TT_L2_INDEX_MASK)
++	lsr		x5, x5, #(ARM_TT_L2_SHIFT - TTE_SHIFT)
++	add		x6, x6, x5
++	mov		x7, #((ARM_TTE_BOOT_BLOCK & ~ARM_TTE_BLOCK_ATTRINDXMASK) | ARM_TTE_BLOCK_ATTRINDX(CACHE_ATTRINDX_DISABLE))
++	orr		x7, x7, x0
++	str		x7, [x6]
++	mov		x7, #(ARM_TT_L2_SIZE)
++	add		x0, x0, x7
++	cmp		x0, x4
++	b.lo	1b
++	dsb		sy
++9:
++.endmacro
++
++/* The cold-entry return reaches this label through the KVA mapping.
++ * TTBR0 still contains the explicit BootVideo Device mappings.
++ */
++	.align 2
++Learly_arm_init:
++	early_entry_marker x0, 7, 0x8000, 0x00ff
++	b		EXT(arm_init)
++#endif
++
+ 	.align 2
+ 	.globl EXT(start_first_cpu)
+ LEXT(start_first_cpu)
+@@ -554,8 +612,13 @@
+ 	// Load address to the C init routine into link register
++#if XNU_EARLY_ENTRY_MARKER
++	adrp	lr, Learly_arm_init@page
++	add		lr, lr, Learly_arm_init@pageoff
++#else
+ 	adrp	lr, EXT(arm_init)@page
+ 	add		lr, lr, EXT(arm_init)@pageoff
++#endif
+ 	add		lr, lr, x22							// Convert to KVA
+ 	sub		lr, lr, x23
+ 
+ 	/*
+ 	 * Set up the bootstrap page tables with a single block entry for the V=P
+@@ -662,5 +725,8 @@
+ 	b Lbootstrap_tables_exhausted
+ Lbootstrap_tables_ready:
++#if XNU_EARLY_ENTRY_MARKER
++	map_early_framebuffer
++#endif
+ 	/* Ensure TTEs are visible */
+ 	dsb		ish
+ 
+@@ -803,8 +869,18 @@
+ 	// Enable caches, MMU, ROP and JOP
+ 	MOV64   x0, SCTLR_EL1_DEFAULT
++#if XNU_EARLY_ENTRY_MARKER
++	cbnz	x21, 6f
++	early_entry_marker x20, 5, 0x0000, 0x00ff
++6:
++#endif
+ 	MSR_SCTLR_EL1_X0
+ 	isb		sy
+ 
++#if XNU_EARLY_ENTRY_MARKER
++	cbnz	x21, 7f
++	early_entry_marker x20, 6, 0xffff, 0x00ff
++7:
++#endif
+ #if !VMAPPLE
+ 	MOV64   x1, SCTLR_EL1_DEFAULT
+ 	cmp		x0, x1

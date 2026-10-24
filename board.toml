@@ -1,0 +1,196 @@
+# SM-T733 system configuration for the upstream UniXNU build driver.
+[board]
+name = "gts7fewifi"
+soc = "SM7325"
+description = "Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733)"
+kit = "gts7fewifi"
+
+[ipsw]
+url = "https://updates.cdn-apple.com/2025SpringFCS/fullrestores/122-77166/DCA6CFE8-90E9-4B92-880D-3DE171798E40/iPad_Pro_HFR_17.7.11_21H461_Restore.ipsw"
+product = "iPad7,1"
+version = "17.7.11"
+build = "21H461"
+device_class = "j120ap"
+chip_id = 0x8011
+board_id = 12
+fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache"]
+
+[userdata]
+first_lba = 2320896
+last_lba = 31099898
+lba_bytes = 4096
+windows = [
+  { name = "OS", component = "OS" },
+  { name = "SystemOS", component = "Cryptex1,SystemOS" },
+]
+
+[kernel]
+defconfig = "gts7fewifi_defconfig"
+archives = [
+  "build-corecrypto-14.py",
+  "build-corecrypto-14.py --namespace",
+  "build-arm-driver.py ArmDTPlatform",
+  "build-arm-driver.py ArmCpu",
+  "build-root-policy-archive.py --tree . --policies .cache/firmware/t733-inputs/policies --output build/verified-root",
+  "build-platform-power.py --tree . --kernelcache .cache/firmware/t733-inputs/kernelcache.decompressed --layout .cache/firmware/t733-inputs/bindings/kernel.json",
+  "build-data-storage.py --component NativeAES --tree . --output build/native-aes --kernelcache .cache/firmware/t733-inputs/kernelcache.decompressed --layout .cache/firmware/t733-inputs/bindings/kernel.json",
+  "build-arm-driver.py NativeUfs --owner-root --storage-kernel .cache/firmware/t733-inputs/bindings/kernel.macho --storage-layout .cache/firmware/t733-inputs/bindings/kernel.json",
+  "build-data-storage.py --component NativeRamBlock --tree . --output build/native-ram-block --kernel .cache/firmware/t733-inputs/bindings/kernel.macho --layout .cache/firmware/t733-inputs/bindings/kernel.json",
+  "build-software-display.py --tree . --kernelcache .cache/firmware/t733-inputs/kernelcache.decompressed --layout .cache/firmware/t733-inputs/bindings/kernel.json",
+  "build-touch-input.py --tree . --kernelcache .cache/firmware/t733-inputs/kernelcache.decompressed --layout .cache/firmware/t733-inputs/bindings/kernel.json",
+  "build-battery.py --tree .",
+  "build-libpthread-kernel.py",
+  "build-boot-log.py --tree .",
+]
+
+[kernel.prelink]
+tool = "kits/NativePrelink/emit_prelink.py"
+kernel = "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped.noctf"
+slide = "-0x1000000"
+early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff005ab4ae0"
+extra_args = ["--storage-bindings", "build/native-ufs/bindings.json"]
+roots = [
+  "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib",
+  "com.apple.driver.AppleARMPlatform",
+  "com.apple.driver.AppleARMWatchdogTimer",
+  "com.apple.driver.AppleAudioClockLibs",
+  "com.apple.driver.AppleEffaceableStorage",
+  "com.apple.driver.AppleIISController",
+  "com.apple.driver.AppleM2ScalerCSCDriver",
+  "com.apple.driver.AppleMobileFileIntegrity",
+  "com.apple.driver.ApplePMGR",
+  "com.apple.driver.IODARTFamily",
+  "com.apple.filesystems.apfs",
+  "com.apple.iokit.CoreAnalyticsFamily",
+  "com.apple.iokit.IOAVFamily",
+  "com.apple.iokit.IOAudio2Family",
+  "com.apple.iokit.IOCECFamily",
+  "com.apple.iokit.IOCryptoAcceleratorFamily",
+  "com.apple.iokit.IOGPUFamily",
+  "com.apple.iokit.IOHDCPFamily",
+  "com.apple.iokit.IOMobileGraphicsFamily",
+  "com.apple.iokit.IOReportFamily",
+  "com.apple.iokit.IOSlowAdaptiveClockingFamily",
+  "com.apple.iokit.IOStorageFamily",
+  "com.apple.iokit.IOSurface",
+  "com.apple.kec.Libm",
+  "com.apple.kec.corecrypto",
+  "com.apple.kext.AppleMatch",
+  "com.apple.kext.CoreTrust",
+  "com.apple.security.AppleImage4",
+  "com.apple.security.sandbox",
+  "com.apple.iokit.IOHIDFamily",
+  "com.apple.iokit.IOHIDEventDriver",
+]
+
+[firmware]
+config = "gts7fewifi"
+dsc = "Platforms/Samsung/gts7fewifiPkg/gts7fewifi.dsc"
+fd = "Build/gts7fewifiPkg/{target}_CLANGPDB/FV/SILICIUM_UEFI.fd"
+packages = [
+  "{uefi}", "{uefi}/Platforms/Samsung", "{tree}/package",
+  "{tree}/drivers/DarwinBoot", "{edk2}", "{uefi}/Common/Mu",
+  "{uefi}/Common/Mu_OEM_Sample", "{uefi}/Silicon/Qualcomm",
+  "{uefi}/Silicon/Samsung", "{uefi}/Silicon/Silicium", "{uefi}/Silicium-ACPI",
+]
+
+[firmware.defines]
+DEVICE_MODEL = "gts7fewifi"
+T733_USERDATA_PAYLOAD = "1"
+
+[payload]
+volume = "T733ESP"
+size_mib = 512
+title = "Boot UniXNU"
+loader = "firmware"
+timeout = -1
+dram_size = 0x180000000
+panic_screen = false
+files = [
+  { source = "package/Build/Out/AARCH64-DEBUG/UniXNU.efi", destination = "EFI/UniXNU/UpdatedMenu.efi" },
+]
+extra_entries = [
+  { id = "updated-menu", title = "Updated menu", type = "efi", path = "UpdatedMenu.efi" },
+  { id = "xnu-1-cpus", title = "Boot 1 CPU", type = "xnu", kernel_args = ["cpus=1", "sheng-smp=0"] },
+  { id = "xnu-2-cpus", title = "Boot 2 CPUs", type = "xnu", kernel_args = ["cpus=2", "sheng-smp=1"] },
+  { id = "xnu-4-cpus", title = "Boot 4 CPUs", type = "xnu", kernel_args = ["cpus=4", "sheng-smp=1"] },
+  { id = "exit", title = "Return to firmware", type = "action", action = "exit" },
+]
+kernel_args = [
+  "-v", "serial=3", "debug=0x14e", "kt_fixed_zones=120",
+  "sheng-smp=1", "cpus=8",
+  "armcpu-redist-ipi=1",
+  "native-ufs-root=1", "native-ufs-diagnostics=1", "native-ufs-metadata=1",
+  "sheng-pmgr=2",
+  "native-usb-debug=1",
+  "native-process-logs=1",
+  "sheng-log=1",
+  "sheng-data-persist=2", "sheng-log-reserve=1024",
+  "sheng-disable-watchdogd=1",
+  "t733-disable-locationd=1", "t733-disable-identityservicesd=1",
+  "offline-mobile-graphics-load=1",
+  "offline-legacy-register=1", "offline-legacy-phase=4",
+  "offline-legacy-gop=1", "offline-legacy-unit-scale=2",
+  "offline-legacy-pm=1", "offline-legacy-validate=1",
+  "offline-legacy-transfer=1", "offline-legacy-cpu-present=1",
+  "offline-key-events=1", "sheng-aks=1", "sheng-vsync=60",
+  "t733-fb-writecombine=1",
+  "t733-display-bind-big=1",
+  "t733-touch=1",
+  "t733-battery=1",
+  "t733-managed-rt-normal=1",
+]
+
+# The 21H461 AttentionAwareness initializer creates a circular wait during
+# SpringBoard startup. The kernel replaces it after matching the original bytes.
+# PosterBoard's two attribute dictionaries omit file protection because this
+# Data volume provides POSIX permissions without Apple data protection.
+# The lockdownd FairPlay MIG requests 1200 through 1203 use five-second send
+# and receive timeouts. Their original stubs release reply ports on failure
+# and return the error through the FairPlay hardware query and cleanup calls.
+# The libsystem_platform zero-fill entry uses its existing paired-store loop
+# for both bzero and memset with a zero value. This avoids DC ZVA faults while
+# clearing software-rendered surfaces and preserves the original tail stores.
+# IconServices ISCompositor reports rendering mode 0, selecting its existing
+# CoreGraphics layer drawing and scaling without CoreImage filter effects.
+# The unavailable OpenGL dispatch otherwise crashes iconservicesagent.
+# CoreImage reports its OpenGL backend unavailable, so context creation follows
+# its existing failure return when Metal is also unavailable on this board.
+# CoreUI shape-effect flattening returns a retained input CGImage, preserving
+# image ownership when its CI context is unavailable. Text effects use the
+# existing CoreGraphics glyph drawing path instead of CoreImage rendering.
+text_fixups = [
+  "dyld_shared_cache_arm64.15,421e8bc,28ad1bb0008544f9,c0035fd6008544f9",
+  "dyld_shared_cache_arm64.13,1b05bec,44008052,24008052",
+  "dyld_shared_cache_arm64.13,1b05b08,44008052,24008052",
+  "dyld_shared_cache_arm64.29,1f55b9c,010400a8,35000014",
+  "dyld_shared_cache_arm64.13,6ac2294,000840f9,000080d2",
+  "dyld_shared_cache_arm64.07,2e2cf98,20008052,00008052",
+  "dyld_shared_cache_arm64.11,34f8c7c,eb2bb96de923016d,e00302aaf6fcd614",
+  "dyld_shared_cache_arm64.11,34f8da4,ff0302d1eb2b016d,e00302aaacfcd614",
+  "dyld_shared_cache_arm64.11,34f19fc,686d25d008a189b9,00008052c0035fd6",
+  "lockdownd,2c4a8,61008052,61228052",
+  "lockdownd,2c4b4,05008052,05718252",
+  "lockdownd,2c704,61008052,61228052",
+  "lockdownd,2c710,05008052,05718252",
+  "lockdownd,2c888,61008052,61228052",
+  "lockdownd,2c894,05008052,05718252",
+  "lockdownd,2ca3c,61008052,61228052",
+  "lockdownd,2ca48,05008052,05718252",
+]
+
+[payload.adt]
+tool = "scripts/make-gts7fewifi-adt.py"
+cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
+psci_method = "smc"
+owned_memory_size = "0x40000000"
+root_match_volume_uuid = "04769D26-2CA0-4825-B443-E2E5F88300F2"
+packed_data_ramdisk = true
+persistent_data = true
+ipad_identity = true
+
+[payload.install]
+title = "Install / erase Data"
+confirm = "First boot requires installation. Erase all Data changes and initialize the fixed 96 GiB Data volume?"
+confirm_titles = ["Erase Data and skip Hello", "Erase Data and show Hello"]
+confirm_args = ["sheng-data-reset=1", "sheng-data-reset=2"]

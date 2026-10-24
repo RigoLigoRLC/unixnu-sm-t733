@@ -1,0 +1,7 @@
+early-entry/zzzz-early-entry-marker.patch
+early-entry/zzzzz-early-mmu-marker.patch
+early-entry/zzzzzz-early-c-marker.patch
+early-entry/zzzzzzz-vm-stage-marker.patch
+early-entry/zzzzzzzz-undefined-stage-marker.patch
+early-entry/zzzzzzzzz-early-framebuffer-map-space.patch
+early-entry/zzzzzzzzzz-early-panic-format.patch

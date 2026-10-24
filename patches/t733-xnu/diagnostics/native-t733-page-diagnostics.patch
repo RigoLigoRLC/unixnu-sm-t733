@@ -1,0 +1,50 @@
+--- a/osfmk/arm/pmap/pmap.c
++++ b/osfmk/arm/pmap/pmap.c
+@@ -498,3 +498,5 @@
+ static SECURITY_READ_ONLY_LATE(unsigned int) t733_managed_rt_normal = 0;
+ 
++void t733_pmap_fault_diagnostic(pmap_t pmap, vm_map_address_t va);
++
+ MARK_AS_PMAP_DATA SIMPLE_LOCK_DECLARE(asid_lock, 0);
+@@ -10454,6 +10456,41 @@
+ 	return result;
+ }
+ 
++void
++t733_pmap_fault_diagnostic(pmap_t pmap, vm_map_address_t va)
++{
++	if (pmap == PMAP_NULL || pmap == kernel_pmap) {
++		return;
++	}
++	if (!pmap_try_lock(pmap, PMAP_LOCK_SHARED)) {
++		printf("NativeProcess: user-page va=0x%llx pmap-busy\n",
++		    (unsigned long long)va);
++		return;
++	}
++
++	pt_entry_t *entry = pmap_pte(pmap, va);
++	pt_entry_t pte = entry ? os_atomic_load(entry, relaxed) : 0;
++	bool valid = (pte & ARM_PTE_TYPE) == ARM_PTE_TYPE_VALID;
++	pmap_paddr_t pa = valid ? pte_to_pa(pte) : 0;
++	bool managed = valid && pa_valid(pa);
++	unsigned int wimg = valid ? pmap_cache_attributes((ppnum_t)atop(pa)) : 0;
++	uint64_t mair, mpidr;
++	__asm__ volatile("mrs %0, mair_el1" : "=r" (mair));
++	__asm__ volatile("mrs %0, mpidr_el1" : "=r" (mpidr));
++	unsigned int index = (unsigned int)((pte & ARM_PTE_ATTRINDXMASK) >> 2);
++	unsigned int attribute = (unsigned int)((mair >> (index * 8)) & 0xff);
++
++	pmap_unlock(pmap, PMAP_LOCK_SHARED);
++
++	printf("NativeProcess: user-page va=0x%llx pte=0x%llx valid=%u "
++	    "pa=0x%llx managed=%u wimg=0x%x index=%u attr=0x%x "
++	    "mair=0x%llx mpidr=0x%llx rt-normal=%u\n",
++	    (unsigned long long)va, (unsigned long long)pte, valid,
++	    (unsigned long long)pa, managed, wimg, index, attribute,
++	    (unsigned long long)mair, (unsigned long long)mpidr,
++	    t733_managed_rt_normal);
++}
++
+ MARK_AS_PMAP_TEXT static void
+ pmap_sync_wimg(ppnum_t pn, unsigned int wimg_bits_prev, unsigned int wimg_bits_new)
+ {

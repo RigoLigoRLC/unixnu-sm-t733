@@ -1,0 +1,26 @@
+--- a/osfmk/vm/vm_shared_region.c
++++ b/osfmk/vm/vm_shared_region.c
+@@ -266,3 +266,23 @@
++/* The caller holds task_lock while this helper copies the mapped region. */
++int native_usb_shared_region_info(task_t, uint64_t *, uint64_t *);
++int
++native_usb_shared_region_info(task_t task, uint64_t *base, uint64_t *slide)
++{
++	int valid = 0;
++	if (!lck_mtx_try_lock(&vm_shared_region_lock)) {
++		return 0;
++	}
++	vm_shared_region_t region = task->shared_region;
++	if (region && region->sr_first_mapping != (mach_vm_offset_t)-1 &&
++	    !region->sr_mapping_in_progress && !region->sr_slide_in_progress) {
++		*base = region->sr_base_address;
++		*slide = region->sr_slide;
++		valid = 1;
++	}
++	vm_shared_region_unlock();
++	return valid;
++}
++
+ vm_map_t
+ vm_shared_region_vm_map(
+ 	vm_shared_region_t      shared_region)

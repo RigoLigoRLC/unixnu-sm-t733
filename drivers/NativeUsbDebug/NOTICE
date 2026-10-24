@@ -1,0 +1,28 @@
+NativeUsbDebug source provenance
+
+Direct upstream: https://github.com/xyyyds0106/ios-vermeer-lab
+Revision: d68e05df683f863f054b0f9c063c54d2b1342b2a
+
+native_usb_debug.c adapts xnu/vermeer/vermeer_usb_debug.c.
+vermeer_usb_protocol.h adapts xnu/vermeer/vermeer_usb_protocol.h.
+native_usb_log.c and native_usb_log.h use xnu/vermeer/vermeer_debug.c
+and xnu/vermeer/vermeer_log_ring.h as references for console capture
+and independent reader positions.
+
+All Rights Reserved by the original authors for upstream-derived code.
+This statement records the retained rights of those authors. It is not
+a license declaration made by them or a grant of redistribution rights.
+The upstream tree at the revision above contains no explicit license grant
+for its added USB implementation. This device repository grants no new
+license over that material and does not apply its BSD license to it.
+
+The SM-T733 adaptations provide board registers, clock and SMMU handling,
+DMA allocation, reconnect handling, log accounting, panic integration,
+console commands and process diagnostics. The task and thread snapshot
+files implement the local process diagnostics; the controller and CDC
+source attribution above does not identify them as copied upstream files.
+
+The source was located through tycykp/UniXNU-OnePlus-Ace5 at revision
+3c10f8847cd2073b804ac3272bc60f12bb4bc751. Its BSD-2-Clause-Patent license
+does not establish a license grant for the separate ios-vermeer-lab code.
+See ../../support/SOURCES.md for the complete source chain.

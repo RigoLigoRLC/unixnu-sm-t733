@@ -1,0 +1,94 @@
+# Stock paths and decoded_dts use .cache/firmware; backups paths use workspace root.
+# memory_record uses the device repository root.
+[device]
+model = "SM-T733"
+region = "CHN"
+pda = "T733ZCS9DYE1"
+csc = "T733CHN9DYE1"
+board_revision = 2
+subpcb_revision = 3
+dtb_index = 0
+dtbo_index = 1
+
+[directories]
+stock = "stock/T733ZCS9DYE1"
+vendor = "vendor/T733ZCS9DYE1"
+device_tree = "device-tree/T733ZCS9DYE1"
+
+[acquisition]
+stock = "downloaded and boot components extracted in workspace downloads/samsung/SM-T733-CHN-T733ZCS9DYE1"
+vendor = "extracted from the device super and apnhlos backups; selected files imported into vendor/T733ZCS9DYE1"
+runtime_device_tree = "root read completed; backups/sm-t733-runtime-2026-10-22/binary/running-device-tree.dtb"
+
+[stock_device_tree]
+base = "stock/T733ZCS9DYE1/vendor_boot.dtb"
+overlay_table = "stock/T733ZCS9DYE1/recovery_dtbo.img"
+selected_overlay = "device-tree/T733ZCS9DYE1/recovery-entry1.dtbo"
+selected_tree = "device-tree/T733ZCS9DYE1/selected-stock.dtb"
+selected_source = "device-tree/T733ZCS9DYE1/selected-stock.dts"
+overlay_entries = "device-tree/T733ZCS9DYE1/dtbo-entries.json"
+base_index = 0
+overlay_index = 1
+memory_reg = "zero in stock; supplied by the bootloader at boot"
+
+[runtime_hardware]
+fdt = "backups/sm-t733-runtime-2026-10-22/binary/running-device-tree.dtb"
+decoded_dts = "device-tree/runtime-2026-10-22/running-device-tree.dts"
+memory_record = "package/runtime-memory.json"
+dram_base = 0x80000000
+dram_address_span = 0x180000000
+memory_reg_total_bytes = 0x17c600000
+gpt = "backups/sm-t733-gpt-2026-10-22/partitions.tsv"
+ufs_scsi_path = "/sys/devices/platform/soc/1d84000.ufshc/host0/target0:0:0/0:0:0:0"
+ufs_lun = 0
+ufs_logical_block_size = 4096
+lcd_type = "BOE_876270"
+pen_firmware = "4502406D"
+
+[input_devices]
+touch_driver = "focaltech_ts"
+touch_firmware = "FT0101020E"
+touch_path = "a98000.spi/spi_master/spi1/spi1.1"
+pen_driver = "wacom_w90xx"
+pen_path = "a94000.i2c/i2c-27/27-0056"
+source = "backups/sm-t733-2026-10-22/info/input-drivers.txt"
+
+[vendor_inputs]
+extraction = "out/t733-vendor-inputs"
+inventory = "out/t733-vendor-inputs/inventory.json"
+super_backup = "backups/sm-t733-partitions-2026-10-22/images/super.img"
+apnhlos_backup = "backups/sm-t733-partitions-2026-10-22/images/apnhlos.img"
+vendor_image = "out/t733-runtime-super/vendor.img"
+odm_image = "out/t733-runtime-super/odm.img"
+runtime_log = "backups/sm-t733-root-2026-10-22/text/dmesg.txt"
+cache = "vendor/T733ZCS9DYE1"
+cache_sources = "vendor/T733ZCS9DYE1/sources.json"
+
+[vendor_inputs.files]
+gpu_gmu = "vendor/firmware/a660_gmu.bin"
+gpu_sqe = "vendor/firmware/a660_sqe.fw"
+gpu_zap_metadata = "apnhlos/image/a660_zap.mdt"
+gpu_zap_segment0 = "apnhlos/image/a660_zap.b00"
+gpu_zap_segment1 = "apnhlos/image/a660_zap.b01"
+gpu_zap_segment2 = "apnhlos/image/a660_zap.b02"
+touch_focaltech = "vendor/firmware/tsp_focaltech/ft8203_gts7xllite.bin"
+pen_wacom = "vendor/firmware/epen/w9021_gts7xllite.bin"
+alternate_touch_himax = "vendor/firmware/tsp_himax/hx83121a_gts7xllite.bin"
+display_focaltech_calibration = "vendor/etc/qdcm_calib_data_ss_dsi_panel_FT8203_TS124QDM_WQXGA.xml"
+alternate_display_himax_calibration = "vendor/etc/qdcm_calib_data_ss_dsi_panel_HX83121_PPC357DB11_WQXGA.xml"
+storage_fstab = "vendor/etc/fstab.qcom"
+firmware_mounts = "vendor/etc/charger_fw_fstab.qti"
+vendor_permissions = "vendor/ueventd.rc"
+odm_permissions = "odm/ueventd.rc"
+qualcomm_init = "vendor/etc/init/hw/init.target.rc"
+board_init = "vendor/etc/init/hw/init.gts7fewifi.rc"
+ufs_init = "vendor/etc/init/hw/init.qti.ufs.rc"
+display_init = "vendor/etc/init/hw/init.samsung.display.rc"
+chipset_post_boot = "vendor/bin/init.kernel.post_boot-yupik.sh"
+
+[trust_cache]
+required_for_current_payload = false
+kernel_runtime_enabled = false
+current_stage = "platform initialization with corecrypto prelink root and storage drivers disabled"
+user_space_components = ["StaticTrustCache", "Cryptex1,SystemTrustCache"]
+user_space_identity = "iPad7,1 / j120ap / 17.7.11 / 21H461"

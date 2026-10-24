@@ -1,0 +1,103 @@
+--- a/bsd/kern/kern_exit.c
++++ b/bsd/kern/kern_exit.c
+@@ -1880,7 +1880,24 @@
+ 	bool corpse_source = false;
+ 	task_t task = proc_task(p);
+ 
+ 
++	unsigned native_process_logs = 0;
++	if (PE_parse_boot_argn("native-process-logs", &native_process_logs,
++	    sizeof(native_process_logs)) && native_process_logs) {
++		printf("NativeProcess: exit pid=%d name=%s status=%d signal=%d cs=0x%x exception=%d code=0x%llx subcode=0x%llx\n",
++		    proc_getpid(p), p->p_name, WEXITSTATUS(rv), WTERMSIG(rv),
++		    proc_getcsflags(p), ut->uu_exception,
++		    (unsigned long long)ut->uu_code, (unsigned long long)ut->uu_subcode);
++		if (p->p_exit_reason != OS_REASON_NULL) {
++			const char *description = exit_reason_get_string_desc(p->p_exit_reason);
++			printf("NativeProcess: reason pid=%d namespace=%u code=0x%llx flags=0x%llx description=%.512s\n",
++			    proc_getpid(p), p->p_exit_reason->osr_namespace,
++			    (unsigned long long)p->p_exit_reason->osr_code,
++			    (unsigned long long)p->p_exit_reason->osr_flags,
++			    description ? description : "none");
++		}
++	}
++
+ 	if (p->p_crash_behavior != 0 || p == initproc) {
+ 		proc_handle_critical_exit(p, rv);
+ 	}
+--- a/osfmk/kern/exception.c
++++ b/osfmk/kern/exception.c
+@@ -102,6 +102,18 @@
+ #include <sys/code_signing.h> /* for developer mode state */
+ 
++#if defined(__arm64__) && defined(MACH_BSD)
++#include <arm/thread.h>
++#include <arm/proc_reg.h>
++#include <kern/backtrace.h>
++#include <kern/clock.h>
++#include <machine/machine_routines.h>
++extern void t733_pmap_fault_diagnostic(pmap_t, vm_map_address_t);
++#if XNU_NATIVE_USB_DEBUG
++extern int native_usb_shared_region_info(task_t, uint64_t *, uint64_t *);
++#endif
++#endif
++
+ bool panic_on_exception_triage = false;
+ 
+ /* Not used in coded, only for inspection during debugging */
+ unsigned long c_thr_exc_raise = 0;
+@@ -798,6 +810,54 @@
+ 	task_t   task   = current_task();
+ 
+ 	assert(codeCnt > 0);
++
++#if defined(__arm64__) && defined(MACH_BSD)
++	unsigned native_process_logs = 0;
++	struct proc *process = get_bsdtask_info(task);
++	if (process && (exception == EXC_BAD_ACCESS || exception == EXC_BAD_INSTRUCTION ||
++	    exception == EXC_ARITHMETIC || exception == EXC_BREAKPOINT) &&
++	    PE_parse_boot_argn("native-process-logs", &native_process_logs,
++	    sizeof(native_process_logs)) && native_process_logs) {
++		printf("NativeProcess: exception pid=%d name=%s type=%d code=0x%llx subcode=0x%llx\n",
++		    proc_pid(process), proc_name_address(process), exception,
++		    (unsigned long long)code[0], (unsigned long long)(codeCnt > 1 ? code[1] : 0));
++		arm_saved_state_t *state = get_user_regs(thread);
++		if (state && is_saved_state64(state)) {
++			printf("NativeProcess: registers pid=%d pc=0x%llx lr=0x%llx sp=0x%llx fp=0x%llx far=0x%llx esr=0x%x\n",
++			    proc_pid(process), (unsigned long long)get_saved_state_pc(state),
++			    (unsigned long long)get_saved_state_lr(state), (unsigned long long)get_saved_state_sp(state),
++			    (unsigned long long)get_saved_state_fp(state),
++			    (unsigned long long)saved_state64(state)->far, saved_state64(state)->esr);
++			t733_pmap_fault_diagnostic(get_task_pmap(task), saved_state64(state)->far);
++			if (ml_get_interrupts_enabled()) {
++				uintptr_t frames[32] = {0};
++				struct backtrace_user_info info = BTUINFO_INIT;
++				unsigned count = backtrace_user(frames, 32, NULL, &info);
++				uint64_t sample = mach_absolute_time();
++				uint64_t cache_base = 0, cache_slide = 0;
++				int cache_valid = 0;
++#if XNU_NATIVE_USB_DEBUG
++				cache_valid = native_usb_shared_region_info(task, &cache_base, &cache_slide);
++#endif
++				printf("NativeProcess STACK_CACHE: sample=exception-%llu pid=%d name=%s valid=%d slide=0x%llx base=0x%llx main_load=0x%llx\n",
++				    (unsigned long long)sample, proc_pid(process), proc_name_address(process),
++				    cache_valid, (unsigned long long)cache_slide, (unsigned long long)cache_base,
++				    (unsigned long long)task->mach_header_vm_address);
++				printf("NativeProcess STACK: sample=exception-%llu pid=%d tid=%llu name=%s frame=0 pc=0x%llx kind=lr\n",
++				    (unsigned long long)sample, proc_pid(process), (unsigned long long)thread_tid(thread),
++				    proc_name_address(process), (unsigned long long)get_saved_state_lr(state));
++				for (unsigned i = 0; i < count; ++i) {
++					printf("NativeProcess STACK: sample=exception-%llu pid=%d tid=%llu name=%s frame=%u pc=0x%llx kind=%s\n",
++					    (unsigned long long)sample, proc_pid(process), (unsigned long long)thread_tid(thread),
++					    proc_name_address(process), i + 1, (unsigned long long)frames[i], i ? "fp" : "pc");
++				}
++				printf("NativeProcess STACK_END: sample=exception-%llu pid=%d tid=%llu name=%s frames=%u error=%d flags=%x\n",
++				    (unsigned long long)sample, proc_pid(process), (unsigned long long)thread_tid(thread),
++				    proc_name_address(process), count + 1, info.btui_error, info.btui_info);
++			}
++		}
++	}
++#endif
+ 
+ 	if (VM_MAP_PAGE_SIZE(task->map) < PAGE_SIZE) {
+ 		DEBUG4K_EXC("thread %p task %p map %p exception %d codes 0x%llx 0x%llx\n",

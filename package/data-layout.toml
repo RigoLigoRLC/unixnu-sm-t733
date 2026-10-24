@@ -1,0 +1,26 @@
+# The fixed Data disk uses the existing APFS UUID and the persisted seed.
+[seed]
+path = ".cache/inputs/data.dbr"
+format = "DBRDISK1"
+logical_bytes = 103079215104
+volume_uuid = "09A342FC-CB72-44DE-A10E-B89F14508869"
+setup = "skipped"
+build = "21H461"
+
+[userdata]
+block_bytes = 4096
+partition_bytes = 117878796288
+image_bytes = 9919528960
+fat_offset = 9382658048
+fat_bytes = 536870912
+
+[persistent_data]
+mode = 2
+log_reserve_mib = 1024
+offset = 13722689536
+bytes = 103082364928
+end = 116805054464
+header_bytes = 4096
+bitmap_bytes = 3145728
+initialize_args = "sheng-data-reset=1"
+initialize_hello_args = "sheng-data-reset=2"

@@ -1,0 +1,20 @@
+--- a/osfmk/kern/debug.c
++++ b/osfmk/kern/debug.c
+@@ -1139,7 +1139,16 @@
+ #pragma clang diagnostic pop
+ 
+ #if XNU_EARLY_ENTRY_MARKER
+-	arm_early_panic(panic_format_str, panic_caller);
++	if (panic_format_str != NULL && panic_args != NULL) {
++		char panic_display[512];
++		va_list panic_display_args;
++		va_copy(panic_display_args, *panic_args);
++		vsnprintf(panic_display, sizeof(panic_display), panic_format_str, panic_display_args);
++		va_end(panic_display_args);
++		arm_early_panic(panic_display, panic_caller);
++	} else {
++		arm_early_panic(panic_format_str, panic_caller);
++	}
+ #endif
+ #if defined(__x86_64__) && (DEVELOPMENT || DEBUG)
+ 	read_lbr();

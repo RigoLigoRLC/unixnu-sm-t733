@@ -1,0 +1,14 @@
+--- a/osfmk/kern/kalloc.c
++++ b/osfmk/kern/kalloc.c
+@@ -1776,7 +1776,10 @@
+ 		}
+ 
+ 		zone_carry = 0;
+-		assert(n_zones_sig + n_zones_type + 1 <= 32);
++		assertf(n_zones_sig + n_zones_type + 1 <= 32,
++		    "kalloc type size=%llu budget=%u signature_zones=%u type_zones=%u unique_signatures=%u additional_types=%u",
++		    (unsigned long long)z_size, kt_fixed_zones, n_zones_sig,
++		    n_zones_type, n_unique_sig, total_types);
+ 		zone_t kt_zones_for_size[32] = {};
+ 		kalloc_type_create_zone_for_size(kt_zones_for_size,
+ 		    n_zones_sig + n_zones_type, z_size);

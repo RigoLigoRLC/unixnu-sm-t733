@@ -1,0 +1,20 @@
+version = 1
+
+[boot]
+timeout = -1
+default = "exit"
+
+[kits]
+autoload = false
+
+[[entry]]
+id = "reset"
+title = "Reboot device"
+type = "action"
+action = "reset"
+
+[[entry]]
+id = "exit"
+title = "SM-T733: return to firmware"
+type = "action"
+action = "exit"

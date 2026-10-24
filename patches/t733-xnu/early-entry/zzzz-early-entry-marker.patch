@@ -1,0 +1,73 @@
+--- a/osfmk/arm64/genassym.c
++++ b/osfmk/arm64/genassym.c
+@@ -326,6 +326,10 @@
+ 	DECLARE("BA_MEM_SIZE", offsetof(struct boot_args, memSize));
+ 	DECLARE("BA_TOP_OF_KERNEL_DATA", offsetof(struct boot_args, topOfKernelData));
+ 	DECLARE("BA_BOOT_FLAGS", offsetof(struct boot_args, bootFlags));
++	DECLARE("BA_VIDEO_BASE", offsetof(struct boot_args, Video.v_baseAddr));
++	DECLARE("BA_VIDEO_STRIDE", offsetof(struct boot_args, Video.v_rowBytes));
++	DECLARE("BA_VIDEO_HEIGHT", offsetof(struct boot_args, Video.v_height));
++	DECLARE("BA_VIDEO_DEPTH", offsetof(struct boot_args, Video.v_depth));
+ 
+ 	DECLARE("SR_RESTORE_TCR_EL1", offsetof(struct sysreg_restore, tcr_el1));
+ 
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -457,6 +457,37 @@
+  * Cold boot init routine.  Called from __start
+  *   x0 - Boot args
+  */
++#if XNU_EARLY_ENTRY_MARKER
++/* The marker writes one framebuffer sixteenth while the MMU is disabled.
++ * Arguments are boot_args, segment index, and the two pixel halfwords.
++ * Scratch registers x8 through x13 carry no cold-entry state.
++ */
++.macro early_entry_marker
++	ldr		x8, [$0, BA_VIDEO_BASE]
++	cbz		x8, 9f
++	ldr		x9, [$0, BA_VIDEO_DEPTH]
++	and		x9, x9, #0xff
++	cmp		x9, #32
++	b.ne	9f
++	ldr		x9, [$0, BA_VIDEO_STRIDE]
++	ldr		x10, [$0, BA_VIDEO_HEIGHT]
++	mul		x10, x9, x10
++	lsr		x10, x10, #4
++	and		x10, x10, #0xfffffffffffffffc
++	cbz		x10, 9f
++	mov		x13, #$1
++	madd	x8, x10, x13, x8
++	mov		w12, #$2
++	movk	w12, #$3, lsl #16
++8:
++	str		w12, [x8], #4
++	subs	x10, x10, #4
++	b.ne	8b
++	dsb		sy
++9:
++.endmacro
++#endif
++
+ 	.align 2
+ 	.globl EXT(start_first_cpu)
+ LEXT(start_first_cpu)
+@@ -464,4 +495,8 @@
+ 
++#if XNU_EARLY_ENTRY_MARKER
++	early_entry_marker x0, 3, 0x00ff, 0x00ff
++#endif
++
+ 	// Unlock the core for debugging
+ 	msr		OSLAR_EL1, xzr
+ 	msr		DAIFSet, #(DAIFSC_ALL)				// Disable all interrupts
+@@ -627,6 +664,10 @@
+ 	/* Ensure TTEs are visible */
+ 	dsb		ish
+ 
++#if XNU_EARLY_ENTRY_MARKER
++	early_entry_marker x20, 4, 0xff00, 0x00ff
++#endif
++
+ 
+ 	b		common_start
+ 

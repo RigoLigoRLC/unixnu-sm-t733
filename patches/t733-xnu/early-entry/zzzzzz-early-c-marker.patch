@@ -1,0 +1,70 @@
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -330,5 +330,7 @@
+  *			operation.
+  */
++#include "early_entry_impl.h"
++
+ static void
+ arm_setup_pre_sign(void)
+ {
+@@ -357,9 +359,11 @@
+ 	unsigned int dt_entry_size = 0;
+ 
++	arm_early_begin(args);
+ 	arm_setup_pre_sign();
+ 
+ 	arm_slide_rebase_and_sign_image();
++	arm_early_stage(9, 0x00008080, "image rebasing complete");
+ 
+ 	/* If kernel integrity is supported, use a constant copy of the boot args. */
+ 	const_boot_args = *args;
+ 	BootArgs = args = &const_boot_args;
+@@ -369,13 +374,16 @@
+ 	BootCpuData.jop_key = ml_default_jop_pid();
+ #endif /* defined(HAS_APPLE_PAC) */
+ 
++	arm_early_stage(10, 0x00800080, "CPU data ready; entering PE");
+ 	PE_init_platform(FALSE, args); /* Get platform expert set up */
++	arm_early_stage(11, 0x00000080, "PE initialized; entering WFE setup");
+ 	boot_progress_init();
+ 
+ #if __arm64__
+ 	configure_timer_apple_regs();
+ 	wfe_timeout_configure();
+ 	wfe_timeout_init();
++	arm_early_stage(12, 0x00808000, "WFE setup complete");
+ 
+ 	configure_misc_apple_boot_args();
+ 	configure_misc_apple_regs(true);
+@@ -531,6 +539,8 @@
+ 	__builtin_arm_wsr("pan", 1);
+ #endif  /* __ARM_PAN_AVAILABLE__ */
+ 
++	arm_early_stage(13, 0x00808080, "entering arm_vm_init");
++	arm_early_end();
+ 	boot_progress_stage("arm_vm_init enter");
+ 	arm_vm_init(xmaxmem, args);
+ 	boot_progress_stage("arm_vm_init returned");
+--- a/osfmk/kern/debug.c
++++ b/osfmk/kern/debug.c
+@@ -1133,5 +1133,9 @@
+ #endif /* defined (__x86_64__) */
+ 
++#if XNU_EARLY_ENTRY_MARKER
++extern void arm_early_panic(const char *message, uintptr_t caller);
++#endif
++
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wmissing-noreturn"
+ void
+@@ -1143,6 +1147,9 @@
+ {
+ #pragma clang diagnostic pop
+ 
++#if XNU_EARLY_ENTRY_MARKER
++	arm_early_panic(panic_format_str, panic_caller);
++#endif
+ #if defined(__x86_64__) && (DEVELOPMENT || DEBUG)
+ 	read_lbr();
+ #endif

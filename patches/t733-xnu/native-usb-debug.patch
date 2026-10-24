@@ -1,0 +1,95 @@
+--- a/bsd/conf/files
++++ b/bsd/conf/files
+@@ -107,5 +107,7 @@
+ bsd/dev/random/randomdev.c		standard
+ 
++bsd/dev/native_usb_log.c			standard
++bsd/dev/native_usb_debug.c		standard
+ bsd/dev/memdev.c			standard
+ bsd/dev/mem.c				standard
+ bsd/dev/munge.c 			optional config_requires_u32_munging
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -1326,6 +1326,10 @@
+ 	u_int32_t       flags;
+ 	kern_return_t   err;
+ 
++#if XNU_NATIVE_USB_DEBUG
++	extern void native_usb_debug_start(void);
++	native_usb_debug_start();
++#endif
+ 	err = IOFindBSDRoot(rootdevice, sizeof(rootdevice), &rootdev, &flags);
+ 	if (err) {
+ 		printf("setconf: IOFindBSDRoot returned an error (%d);"
+--- a/osfmk/console/serial_console.c
++++ b/osfmk/console/serial_console.c
+@@ -279,6 +279,10 @@
+ static inline void
+ _cnputs(char *c, int size, bool poll)
+ {
++#if XNU_NATIVE_USB_DEBUG
++	extern void native_usb_log_append(const char *, int);
++	native_usb_log_append(c, size);
++#endif
+ 	if (disableConsoleOutput) {
+ 		return;
+ 	}
+@@ -526,6 +530,10 @@
+ void
+ console_write(char *str, int size)
+ {
+ 	if (disableConsoleOutput) {
++#if XNU_NATIVE_USB_DEBUG
++		extern void native_usb_log_append(const char *, int);
++		native_usb_log_append(str, size);
++#endif
+ 		return;
+ 	}
+@@ -610,6 +618,10 @@
+ void
+ console_write_unbuffered(char c)
+ {
++#if XNU_NATIVE_USB_DEBUG
++	extern void native_usb_log_append(const char *, int);
++	native_usb_log_append(&c, 1);
++#endif
+ 	if (disableConsoleOutput) {
+ 		return;
+ 	}
+--- a/pexpert/arm/pe_kprintf.c
++++ b/pexpert/arm/pe_kprintf.c
+@@ -157,6 +157,10 @@
+ static void
+ serial_putc_crlf(char c)
+ {
++#if XNU_NATIVE_USB_DEBUG
++	extern void native_usb_log_append(const char *, int);
++	native_usb_log_append(&c, 1);
++#endif
+ 	if (c == '\n') {
+ 		uart_putc('\r');
+ 	}
+--- a/osfmk/kern/debug.c
++++ b/osfmk/kern/debug.c
+@@ -1143,6 +1143,21 @@
+ 	read_lbr();
+ #endif
+ 
++#if XNU_NATIVE_USB_DEBUG
++	{
++		extern void native_usb_debug_panic(const char *, unsigned long);
++		char usb_message[512];
++		if (panic_format_str != NULL && panic_args != NULL) {
++			va_list usb_args;
++			va_copy(usb_args, *panic_args);
++			vsnprintf(usb_message, sizeof(usb_message), panic_format_str, usb_args);
++			va_end(usb_args);
++			native_usb_debug_panic(usb_message, panic_caller);
++		} else {
++			native_usb_debug_panic(panic_format_str, panic_caller);
++		}
++	}
++#endif
+ #if CONFIG_SPTM
+ 	/*
+ 	 * If SPTM has not itself already panicked, trigger a panic lockdown. This

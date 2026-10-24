@@ -1,0 +1,32 @@
+[submodule "drivers/ArmCpu"]
+	path = drivers/ArmCpu
+	url = https://github.com/RigoLigoRLC/unixnu-armcpu.git
+	branch = unixnu-sm-t733
+[submodule "drivers/DarwinBoot"]
+	path = drivers/DarwinBoot
+	url = https://github.com/RigoLigoRLC/unixnu-darwinboot.git
+	branch = unixnu-sm-t733
+[submodule "drivers/NativeGeniSpi"]
+	path = drivers/NativeGeniSpi
+	url = https://github.com/RigoLigoRLC/unixnu-nativegenispi.git
+	branch = unixnu-sm-t733
+[submodule "drivers/NativeMobileDisplay"]
+	path = drivers/NativeMobileDisplay
+	url = https://github.com/RigoLigoRLC/unixnu-nativemobiledisplay.git
+	branch = unixnu-sm-t733
+[submodule "drivers/NativeRamBlock"]
+	path = drivers/NativeRamBlock
+	url = https://github.com/RigoLigoRLC/unixnu-nativeramblock.git
+	branch = unixnu-sm-t733
+[submodule "drivers/NativeUfs"]
+	path = drivers/NativeUfs
+	url = https://github.com/RigoLigoRLC/unixnu-nativeufs.git
+	branch = unixnu-sm-t733
+[submodule "kits/NativePrelink"]
+	path = kits/NativePrelink
+	url = https://github.com/RigoLigoRLC/unixnu-nativeprelink.git
+	branch = unixnu-sm-t733
+[submodule "drivers/NativeFocaltechTouch"]
+	path = drivers/NativeFocaltechTouch
+	url = https://github.com/RigoLigoRLC/unixnu-nativefocaltechtouch.git
+	branch = unixnu-sm-t733

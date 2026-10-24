@@ -1,0 +1,654 @@
+{
+  "source": "backups/sm-t733-runtime-2026-10-22/binary/running-device-tree.dtb",
+  "dram_envelope": {
+    "base": "0x80000000",
+    "size": "0x180000000",
+    "end_exclusive": "0x200000000"
+  },
+  "memory_reg_total_bytes": "0x17c600000",
+  "memory": [
+    {
+      "base": "0x80000000",
+      "size": "0x3a800000",
+      "end_exclusive": "0xba800000"
+    },
+    {
+      "base": "0x100000000",
+      "size": "0x100000000",
+      "end_exclusive": "0x200000000"
+    },
+    {
+      "base": "0xc0000000",
+      "size": "0x40000000",
+      "end_exclusive": "0x100000000"
+    },
+    {
+      "base": "0xbae00000",
+      "size": "0x1e00000",
+      "end_exclusive": "0xbcc00000"
+    }
+  ],
+  "fdt_reservations": [],
+  "reserved_memory": [
+    {
+      "path": "/reserved-memory/uh_guest_region",
+      "status": "okay",
+      "no_map": false,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xb0400000",
+          "size": "0x1200000",
+          "end_exclusive": "0xb1600000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/uh_heap_region",
+      "status": "okay",
+      "no_map": false,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xb0200000",
+          "size": "0x200000",
+          "end_exclusive": "0xb0400000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/hyp@80000000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x80000000",
+          "size": "0x600000",
+          "end_exclusive": "0x80600000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/xbl_aop_mem@80700000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x80700000",
+          "size": "0x160000",
+          "end_exclusive": "0x80860000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/cmd_db@80860000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x80860000",
+          "size": "0x20000",
+          "end_exclusive": "0x80880000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/reserved_xbl_uefi@80880000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x80880000",
+          "size": "0x14000",
+          "end_exclusive": "0x80894000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/secdata_apss@808ff000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x808ff000",
+          "size": "0x1000",
+          "end_exclusive": "0x80900000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/smem@80900000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x80900000",
+          "size": "0x200000",
+          "end_exclusive": "0x80b00000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/fw@80b00000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x80b00000",
+          "size": "0x100000",
+          "end_exclusive": "0x80c00000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/wlan_fw@80c00000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x80c00000",
+          "size": "0xc00000",
+          "end_exclusive": "0x81800000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/cdsp_secure_heap@81800000",
+      "status": "disabled",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x81800000",
+          "size": "0x1e00000",
+          "end_exclusive": "0x83600000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/adsp@86700000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x84700000",
+          "size": "0x4800000",
+          "end_exclusive": "0x88f00000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/cdsp@88f00000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x88f00000",
+          "size": "0x1e00000",
+          "end_exclusive": "0x8ad00000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/adsp_region",
+      "status": "okay",
+      "no_map": false,
+      "reusable": true,
+      "alloc-ranges": [
+        {
+          "base": "0x0",
+          "size": "0xffffffff",
+          "end_exclusive": "0xffffffff"
+        }
+      ],
+      "size": "0xc00000",
+      "alignment": "0x400000"
+    },
+    {
+      "path": "/reserved-memory/video@8ad00000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x8ad00000",
+          "size": "0x500000",
+          "end_exclusive": "0x8b200000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/cvp@8b200000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x8b200000",
+          "size": "0x500000",
+          "end_exclusive": "0x8b700000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/ipa_fw@8b700000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x8b700000",
+          "size": "0x10000",
+          "end_exclusive": "0x8b710000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/ipa_gsi@8b710000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x8b710000",
+          "size": "0xa000",
+          "end_exclusive": "0x8b71a000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/gpu_micro_code@8b71a000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x8b71a000",
+          "size": "0x2000",
+          "end_exclusive": "0x8b71c000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/mpss@8b800000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x8b800000",
+          "size": "0xf600000",
+          "end_exclusive": "0x9ae00000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/wlan@9ae00000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x9ae00000",
+          "size": "0x1900000",
+          "end_exclusive": "0x9c700000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/removed_region@c0000000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xc0000000",
+          "size": "0x5f00000",
+          "end_exclusive": "0xc5f00000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/pil_trustedvm_region@d0800000",
+      "status": "disabled",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xd0800000",
+          "size": "0x76f7000",
+          "end_exclusive": "0xd7ef7000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/qrtr-shmem",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xd7ef7000",
+          "size": "0x9000",
+          "end_exclusive": "0xd7f00000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/neuron_block@0",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xd7f00000",
+          "size": "0x80000",
+          "end_exclusive": "0xd7f80000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/neuron_block@1",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xd7f80000",
+          "size": "0x80000",
+          "end_exclusive": "0xd8000000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/user_contig_region",
+      "status": "okay",
+      "no_map": false,
+      "reusable": true,
+      "alloc-ranges": [
+        {
+          "base": "0x0",
+          "size": "0xffffffff",
+          "end_exclusive": "0xffffffff"
+        }
+      ],
+      "size": "0x1000000",
+      "alignment": "0x400000"
+    },
+    {
+      "path": "/reserved-memory/qseecom_region",
+      "status": "okay",
+      "no_map": false,
+      "reusable": true,
+      "alloc-ranges": [
+        {
+          "base": "0x0",
+          "size": "0xffffffff",
+          "end_exclusive": "0xffffffff"
+        }
+      ],
+      "size": "0x1c00000",
+      "alignment": "0x400000"
+    },
+    {
+      "path": "/reserved-memory/splash_region",
+      "status": "okay",
+      "no_map": false,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xe1000000",
+          "size": "0x2300000",
+          "end_exclusive": "0xe3300000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/qseecom_ta_region",
+      "status": "okay",
+      "no_map": false,
+      "reusable": true,
+      "alloc-ranges": [
+        {
+          "base": "0x0",
+          "size": "0xffffffff",
+          "end_exclusive": "0xffffffff"
+        }
+      ],
+      "size": "0x1000000",
+      "alignment": "0x400000"
+    },
+    {
+      "path": "/reserved-memory/secure_display_region",
+      "status": "okay",
+      "no_map": false,
+      "reusable": true,
+      "alloc-ranges": [
+        {
+          "base": "0x0",
+          "size": "0xffffffff",
+          "end_exclusive": "0xffffffff"
+        }
+      ],
+      "size": "0x8c00000",
+      "alignment": "0x400000"
+    },
+    {
+      "path": "/reserved-memory/linux,cma",
+      "status": "okay",
+      "no_map": false,
+      "reusable": true,
+      "alloc-ranges": [
+        {
+          "base": "0x0",
+          "size": "0xffffffff",
+          "end_exclusive": "0xffffffff"
+        }
+      ],
+      "size": "0x2000000",
+      "alignment": "0x400000"
+    },
+    {
+      "path": "/reserved-memory/mem_dump_region",
+      "status": "okay",
+      "no_map": false,
+      "reusable": true,
+      "alloc-ranges": [
+        {
+          "base": "0x0",
+          "size": "0xffffffff",
+          "end_exclusive": "0xffffffff"
+        }
+      ],
+      "size": "0x2c00000"
+    },
+    {
+      "path": "/reserved-memory/audio_cma_region",
+      "status": "okay",
+      "no_map": false,
+      "reusable": true,
+      "alloc-ranges": [
+        {
+          "base": "0x0",
+          "size": "0xffffffff",
+          "end_exclusive": "0xffffffff"
+        }
+      ],
+      "size": "0x1c00000",
+      "alignment": "0x400000"
+    },
+    {
+      "path": "/reserved-memory/dfps_data_memory",
+      "status": "okay",
+      "no_map": false,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xe3300000",
+          "size": "0x100000",
+          "end_exclusive": "0xe3400000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/memshare_region",
+      "status": "disabled",
+      "no_map": true,
+      "reusable": false,
+      "alloc-ranges": [
+        {
+          "base": "0x0",
+          "size": "0xdfffffff",
+          "end_exclusive": "0xdfffffff"
+        }
+      ],
+      "size": "0x800000",
+      "alignment": "0x100000"
+    },
+    {
+      "path": "/reserved-memory/cnss_wlan_region",
+      "status": "okay",
+      "no_map": false,
+      "reusable": true,
+      "alloc-ranges": [
+        {
+          "base": "0x0",
+          "size": "0xffffffff",
+          "end_exclusive": "0xffffffff"
+        }
+      ],
+      "size": "0x1400000",
+      "alignment": "0x400000"
+    },
+    {
+      "path": "/reserved-memory/sec_debug_region@F0000000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xf0000000",
+          "size": "0x900000",
+          "end_exclusive": "0xf0900000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/sec_debug_rdx_bootdev@0",
+      "status": "okay",
+      "no_map": false,
+      "reusable": false,
+      "alloc-ranges": [
+        {
+          "base": "0x100000000",
+          "size": "0xad00000",
+          "end_exclusive": "0x10ad00000"
+        }
+      ],
+      "size": "0x0",
+      "non_gki_size": "0xad00000"
+    },
+    {
+      "path": "/reserved-memory/ss_plog@1B0900000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xf0900000",
+          "size": "0x200000",
+          "end_exclusive": "0xf0b00000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/ramoops@F0B00000",
+      "status": "okay",
+      "no_map": false,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xf0b00000",
+          "size": "0x100000",
+          "end_exclusive": "0xf0c00000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/kaslr_region@A0001000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xa0001000",
+          "size": "0x1000",
+          "end_exclusive": "0xa0002000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/tima_region@B0100000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xb0100000",
+          "size": "0x100000",
+          "end_exclusive": "0xb0200000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/modem_shared_mem_region@d0000000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0xd0000000",
+          "size": "0x0",
+          "end_exclusive": "0xd0000000"
+        }
+      ],
+      "non_gki_size": "0x6000000"
+    },
+    {
+      "path": "/reserved-memory/hdm_region@9FB00000",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x9fb00000",
+          "size": "0x1000",
+          "end_exclusive": "0x9fb01000"
+        }
+      ]
+    },
+    {
+      "path": "/reserved-memory/dummy_mem",
+      "status": "okay",
+      "no_map": true,
+      "reusable": false,
+      "reg": [
+        {
+          "base": "0x9c700000",
+          "size": "0x100000",
+          "end_exclusive": "0x9c800000"
+        }
+      ]
+    }
+  ]
+}

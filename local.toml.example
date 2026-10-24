@@ -1,0 +1,9 @@
+# Runtime FDT supplies the DRAM address span; DarwinBoot selects a UEFI window.
+[hardware]
+dram_size = 0x180000000
+# owned_memory_size = 0x...
+# unique_chip_id = "..."
+# chip_id = "733"
+
+# The identity fields are project-assigned hexadecimal software seeds.
+# The ADT generator accepts --hardware-input PATH when invoked from another tree.

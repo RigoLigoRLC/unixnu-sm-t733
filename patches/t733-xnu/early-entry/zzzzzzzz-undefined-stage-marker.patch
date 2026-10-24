@@ -1,0 +1,84 @@
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -1050,6 +1050,15 @@
+ 			(void) ml_set_interrupts_enabled(interrupt_state);
+ 			return;
+ 		} else {
++			arm_early_stage(36, 0x00800000, "Undefined kernel instruction saved state");
++			arm_early_value("fault PC", get_saved_state_pc(state));
++			arm_early_value("fault instruction", instr);
++			if (is_saved_state64(state)) {
++				arm_saved_state64_t *saved = saved_state64(state);
++				arm_early_value("fault LR", saved->lr);
++				arm_early_value("fault ESR", saved->esr);
++				arm_early_value("fault FAR", saved->far);
++			}
+ 			panic("Undefined kernel instruction: pc=%p instr=%x", (void*)get_saved_state_pc(state), instr);
+ 		}
+ 	}
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -604,7 +604,9 @@
+ 	arm_early_stage(31, 0x00004040, "arm_init: PE_create_console returned");
+ 
+ 	/* setup console output */
++	arm_early_stage(37, 0x00004040, "arm_init: entering PE_init_printf");
+ 	PE_init_printf(FALSE);
++	arm_early_stage(38, 0x00004040, "arm_init: PE_init_printf returned");
+ 
+ #if __arm64__
+ #if DEBUG
+@@ -613,9 +615,13 @@
+ #endif
+ #endif
+ 
++	arm_early_stage(39, 0x00004040, "arm_init: entering cpu_machine_idle_init");
+ 	cpu_machine_idle_init(TRUE);
++	arm_early_stage(40, 0x00004040, "arm_init: cpu_machine_idle_init returned");
+ 
++	arm_early_stage(41, 0x00004040, "arm_init: entering PE_init_platform(TRUE)");
+ 	PE_init_platform(TRUE, &BootCpuData);
++	arm_early_stage(42, 0x00004040, "arm_init: PE_init_platform(TRUE) returned");
+ 
+ #if __arm64__
+ 	extern bool cpu_config_correct;
+@@ -623,7 +629,9 @@
+ 		panic("The cpumask=N boot arg cannot be used together with cpus=N, and the boot CPU must be enabled");
+ 	}
+ 
++	arm_early_stage(43, 0x00004040, "arm_init: entering ml_map_cpu_pio");
+ 	ml_map_cpu_pio();
++	arm_early_stage(44, 0x00004040, "arm_init: ml_map_cpu_pio returned");
+ 
+ #if APPLE_ARM64_ARCH_FAMILY
+ 	configure_late_apple_regs(true);
+@@ -631,15 +639,21 @@
+ 
+ #endif
+ 
++	arm_early_stage(45, 0x00004040, "arm_init: entering cpu_timebase_init");
+ 	cpu_timebase_init(TRUE);
++	arm_early_stage(46, 0x00004040, "arm_init: cpu_timebase_init returned");
+ 
+ #if KPERF
+ 	/* kptimer_curcpu_up() must be called after cpu_timebase_init */
+ 	kptimer_curcpu_up();
+ #endif /* KPERF */
+ 
++	arm_early_stage(47, 0x00004040, "arm_init: entering PE_init_cpu");
+ 	PE_init_cpu();
++	arm_early_stage(48, 0x00004040, "arm_init: PE_init_cpu returned");
++	arm_early_stage(49, 0x00004040, "arm_init: entering fiq_context_init");
+ 	fiq_context_init(TRUE);
++	arm_early_stage(50, 0x00004040, "arm_init: fiq_context_init returned");
+ 
+ 
+ #if HIBERNATION
+@@ -688,6 +702,7 @@
+ 	 * function, we do not risk failing the check even though
+ 	 * we mutate the guard word during execution.
+ 	 */
++	arm_early_stage(51, 0x00004040, "arm_init: DRAM read; preparing machine_startup");
+ 	__stack_chk_guard = (unsigned long)early_random();
+ 	/* Zero a byte of the protector to guard
+ 	 * against string vulnerabilities

@@ -213,6 +213,25 @@ outputs = []
 legacy_name = "NativeVirtioBlock"
 
 [[component]]
+id = "EarlyEntry"
+kind = "kit"
+function = "SM-T733 framebuffer markers and early exception console"
+scope = "board"
+repository = "https://github.com/RigoLigoRLC/unixnu-sm-t733.git"
+revision = "60cf5023dd1bc897e2c6c1588939ac592feb5041"
+path = "kits/EarlyEntry"
+hardware = ["SM-T733 inherited framebuffer"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["BootArgs framebuffer", "Selected early-entry patch series"]
+verified_devices = ["gts7fewifi"]
+dependencies = []
+source_files = ["early_entry.h", "early_entry_impl.h"]
+runtime_identifiers = ["arm_early_stage", "arm_early_printf"]
+build_stage = "embedded"
+build = []
+outputs = []
+
+[[component]]
 id = "device"
 kind = "package"
 function = "SM-T733 platform composition, original ABI adapters and hardware policies"

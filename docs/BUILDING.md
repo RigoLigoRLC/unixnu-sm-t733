@@ -20,7 +20,7 @@ cp local.toml.example local.toml
 
 `bootstrap-base.sh` 将公共 fork 检出到 `support/UniXNU.rev` 的固定提交，再初始化子模块。目标目录必须尚不存在。已有同版本公共源码时直接设置 `UNIXNU_BASE`。公共官方基线由 `support/UniXNU.upstream.rev` 记录，配套固件由 `support/Mu-Silicium.rev` 固定。
 
-`feeds.toml` 固定公开的 [unixnu-sm7325-common](https://github.com/RigoLigoRLC/unixnu-sm7325-common) 提交，公共驱动及 Apple OSS 由对应 core feed 提供。设备有 12 个 driver 子模块和 1 个 kit 子模块；`components.toml` 保留社区 fork 身份及本机 recipe。克隆和更新设备仓库后都执行递归子模块初始化。
+`feeds.toml` 固定公开的 [unixnu-sm7325-common](https://github.com/RigoLigoRLC/unixnu-sm7325-common) 提交，公共驱动及 Apple OSS 由对应 core feed 提供。设备有 13 个 driver 子模块和 1 个 kit 子模块；`components.toml` 保留社区 fork 身份及本机 recipe。克隆和更新设备仓库后都执行递归子模块初始化，gitlink 与组件 revision 一起更新。
 
 公开 `board.toml` 与 `board.platform.toml` 的 `[payload.adt] chip_id = "733"` 是十六进制软件身份输入。每台设备的 `hardware.unique_chip_id` 填在忽略的 `local.toml`：
 
@@ -52,6 +52,8 @@ bash scripts/build.sh system-local-1 \
 | `.cache/inputs/debugserver` | 同版原始 OS 的 `/usr/libexec/debugserver`，作为开发副本签名输入 |
 | `.cache/inputs/os-root` | 同版只读 OS 挂载目录或链接，提供 J120 静态壁纸 |
 | `.cache/firmware/vendor/T733ZCS9DYE1/vendor/firmware/tsp_focaltech/ft8203_gts7xllite.bin` | 本机 FT8203 触屏固件 |
+| `.cache/firmware/vendor/T733ZCS9DYE1/vendor/firmware/a660_gmu.bin`、`a660_sqe.fw` | A642L 的 A660 GMU 和 SQE 固件 |
+| `.cache/firmware/vendor/T733ZCS9DYE1/apnhlos/image/a660_zap.mdt`、`a660_zap.b02` | PAS 13 认证元数据与 ZAP shader |
 
 已有输入可通过统一导入器复制：
 
@@ -78,7 +80,9 @@ bash scripts/build.sh system-local-1
 bash scripts/build.sh platform-local-1 --platform
 ```
 
-系统入口依次执行 configure、resolve、kernel、menu、wallpaper、debug-tools、payload。kernel 内部完成源码准备、头文件导出、编译记录、按序 archive、最终链接和预链接；wallpaper 与 debug-tools 生成壁纸、开发调试工具、addon 及 trust bundle；payload 调用共用 DTS 转换器生成 ADT，再组装菜单、固定种子及 FAT。构建命令只生成产物。
+系统入口依次执行 configure、resolve、kernel、menu、turnip、wallpaper、debug-tools、payload。kernel 内部完成源码准备、头文件导出、编译记录、按序 archive、最终链接和预链接；turnip 编译 ARM64/iOS Vulkan 库，debug-tools 编译 CP 和 Vulkan 离屏程序并加入 addon 与 trust bundle；payload 调用共用 DTS 转换器生成 ADT，再组装菜单、固定种子及 FAT。构建命令只生成产物。
+
+turnip 阶段通过 `tools/gpu/bootstrap-turnip.py` 在公共 core 的 `.cache` 内准备固定 Mesa、Python 依赖、glslang 和 bison，再调用官方 `build-turnip-darwin.py`。也可提前执行 `python3 tools/gpu/bootstrap-turnip.py --core "$UNIXNU_BASE"` 准备依赖，保留 `UNIXNU_RECORD_HASHES=0`。
 
 默认 `--out` 为 `build/work`。format 2 的中间目录为：
 

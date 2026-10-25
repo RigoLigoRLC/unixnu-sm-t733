@@ -50,3 +50,7 @@
 	path = drivers/NativeQcomDsi
 	url = https://github.com/RigoLigoRLC/unixnu-nativeqcomdsi.git
 	branch = unixnu-sm-t733
+[submodule "drivers/Adreno6xx"]
+	path = drivers/Adreno6xx
+	url = https://github.com/RigoLigoRLC/unixnu-adreno6xx.git
+	branch = unixnu-sm-t733

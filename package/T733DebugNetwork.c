@@ -7,16 +7,96 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <signal.h>
+#include <spawn.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <sys/sockio.h>
 #include <sys/sysctl.h>
 #include <sys/time.h>
+#include <sys/wait.h>
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
+
+extern char **environ;
+
+static pid_t gpu_diagnostic_pid;
+static unsigned gpu_diagnostic_phase;
+
+static void start_turnip_diagnostic(void);
+
+static void reap_gpu_diagnostic(void)
+{
+    if (!gpu_diagnostic_pid) {
+        return;
+    }
+
+    int status = 0;
+    pid_t result = waitpid(gpu_diagnostic_pid, &status, WNOHANG);
+    if (result == gpu_diagnostic_pid) {
+        int start_turnip = gpu_diagnostic_phase == 1 && WIFEXITED(status) &&
+            WEXITSTATUS(status) == 0;
+        if (WIFEXITED(status)) {
+            syslog(LOG_NOTICE, "GPU diagnostic pid=%d exited status=%d",
+                gpu_diagnostic_pid, WEXITSTATUS(status));
+        } else if (WIFSIGNALED(status)) {
+            syslog(LOG_ERR, "GPU diagnostic pid=%d terminated signal=%d",
+                gpu_diagnostic_pid, WTERMSIG(status));
+        }
+
+        gpu_diagnostic_pid = 0;
+        gpu_diagnostic_phase = 0;
+        if (start_turnip) {
+            start_turnip_diagnostic();
+        }
+    } else if (result < 0 && errno == ECHILD) {
+        gpu_diagnostic_pid = 0;
+        gpu_diagnostic_phase = 0;
+    }
+}
+
+static void start_gpu_diagnostic(void)
+{
+    const char *path = "/private/var/ngpu/bin/t733-adreno";
+    if (access(path, X_OK) < 0) {
+        return;
+    }
+
+    char *arguments[] = {"t733-adreno", "--stage", "submit",
+        "--wait-seconds", "120", NULL};
+    int error = posix_spawn(&gpu_diagnostic_pid, path, NULL, NULL, arguments, environ);
+    if (error) {
+        gpu_diagnostic_pid = 0;
+        syslog(LOG_ERR, "GPU diagnostic spawn failed: %s", strerror(error));
+        return;
+    }
+
+    gpu_diagnostic_phase = 1;
+    syslog(LOG_NOTICE, "GPU diagnostic pid=%d started independently", gpu_diagnostic_pid);
+}
+
+static void start_turnip_diagnostic(void)
+{
+    const char *path = "/private/var/ngpu/bin/t733-turnip";
+    if (access(path, X_OK) < 0) {
+        return;
+    }
+
+    char *arguments[] = {"t733-turnip", NULL};
+    int error = posix_spawn(&gpu_diagnostic_pid, path, NULL, NULL, arguments, environ);
+    if (error) {
+        gpu_diagnostic_pid = 0;
+        syslog(LOG_ERR, "Turnip diagnostic spawn failed: %s", strerror(error));
+        return;
+    }
+
+    gpu_diagnostic_phase = 2;
+    syslog(LOG_NOTICE, "Turnip diagnostic pid=%d started after CP readback succeeded", gpu_diagnostic_pid);
+}
 
 /* The launchd helper assigns the USB Ethernet address and enables the normal
  * lockdown network connection setting through its local socket API. It then
@@ -74,6 +154,8 @@ static void enable_lockdown_connections(void)
     int confirmed = 0;
     unsigned attempts = 0;
     for (unsigned attempt = 1; attempt <= 45; ++attempt) {
+        reap_gpu_diagnostic();
+
         struct timespec now;
         if (clock_gettime(CLOCK_MONOTONIC, &now) < 0 ||
             now.tv_sec - started.tv_sec >= 90) {
@@ -236,6 +318,22 @@ static int accept_debugger(void)
     struct in_addr allowed_peer;
     inet_pton(AF_INET, "192.168.73.1", &allowed_peer);
     for (;;) {
+        reap_gpu_diagnostic();
+
+        fd_set readable;
+        FD_ZERO(&readable);
+        FD_SET(listener, &readable);
+        struct timeval poll_interval = {.tv_sec = 1, .tv_usec = 0};
+        int ready = select(listener + 1, &readable, NULL, NULL, &poll_interval);
+        if (ready == 0 || (ready < 0 && errno == EINTR)) {
+            continue;
+        }
+
+        if (ready < 0) {
+            operation = "select";
+            goto failed;
+        }
+
         struct sockaddr_in peer = {0};
         socklen_t peer_length = sizeof(peer);
         int connection = accept(listener, (struct sockaddr *)&peer, &peer_length);
@@ -317,6 +415,7 @@ int main(void)
 
     syslog(LOG_NOTICE, "unet0 192.168.73.2/30 ready; developer mode=%d query error=%d console=%d",
         developer_mode, developer_error, isatty(STDIN_FILENO));
+    start_gpu_diagnostic();
     enable_lockdown_connections();
     int connection = accept_debugger();
     if (connection < 0) {
@@ -328,6 +427,13 @@ int main(void)
     syslog(LOG_NOTICE, "starting development-signed debugserver with connected fd=%d", connection);
     char *arguments[] = {"debugserver", "--log-file=stderr", "--log-flags=0x80000",
         descriptor_argument, NULL};
+    reap_gpu_diagnostic();
+    if (gpu_diagnostic_pid) {
+        // The inherited ignored disposition lets the kernel reap a diagnostic
+        // that finishes after this process becomes debugserver.
+        signal(SIGCHLD, SIG_IGN);
+    }
+
     execv("/private/var/ngpu/bin/t733-debugserver", arguments);
     syslog(LOG_ERR, "debugserver exec failed: %s", strerror(errno));
     close(connection);

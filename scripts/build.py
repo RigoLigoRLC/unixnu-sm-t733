@@ -144,6 +144,7 @@ def main():
         config = args.defconfig.expanduser().resolve()
     unixnu("configure", ["defconfig", config], platform=args.platform)
     work = resolved_output("resolve", platform=args.platform)
+    environment["T733_RESOLVED_TREE"] = str(work / "tree")
     current_kernel = work / "kernel"
     if args.preserve_kernel_tag and (current_kernel / "kernel.macho").is_file():
         preserved = out.parent / ("t733-kernel-" + args.preserve_kernel_tag)
@@ -163,6 +164,8 @@ def main():
     if not args.platform:
         debug_tools = release / "debug-tools"
         wallpaper = release / "wallpaper"
+        run("turnip", [sys.executable, DEVICE / "tools/gpu/bootstrap-turnip.py",
+                       "--core", base, "--build", "--abi-directory", work / "tree/drivers/Adreno6xx"])
         run("wallpaper", [sys.executable, base / "scripts/make-wallpaper-overlay.py",
                           args.system_root.expanduser().resolve(), wallpaper])
         run("debug-tools", [sys.executable, DEVICE / "scripts/build-debug-tools.py",

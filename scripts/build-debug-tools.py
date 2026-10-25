@@ -12,12 +12,14 @@ PNG images for the kernel's existing wallpaper mount.
 """
 
 import argparse
+import os
 from pathlib import Path
 import plistlib
 import re
 import shutil
 import struct
 import subprocess
+import sys
 import uuid
 import zlib
 
@@ -94,6 +96,17 @@ def main():
          "--identifier", "org.unixnu.t733.debugserver",
          "--entitlements", debugger_entitlements, debugger])
 
+    gpu_output = output / "gpu"
+    work = Path(os.environ["T733_RESOLVED_TREE"])
+    core = Path(os.environ["UNIXNU_BASE"])
+    run([sys.executable, DEVICE / "tools/gpu/build-userspace.py",
+         "--output", gpu_output, "--abi-directory", work / "drivers/Adreno6xx",
+         "--pm4-directory", work / "kits/AdrenoPM4", "--core", core,
+         "--turnip-library", core / "build/mesa-tu-ios/src/freedreno/vulkan/libvulkan_freedreno.dylib"])
+    gpu_binary = gpu_output / "t733-adreno"
+    turnip_binary = gpu_output / "t733-turnip"
+    turnip_library = gpu_output / "libvulkan_freedreno.dylib"
+
     original = args.trust_cache.read_bytes()
     count = struct.unpack_from("<I", original)[0]
     offsets = struct.unpack_from(f"<{count}I", original, 4)
@@ -102,6 +115,9 @@ def main():
     entries = sorted([
         trust_entry(binary, HELPER_CONSTRAINT_CATEGORY),
         trust_entry(debugger, HELPER_CONSTRAINT_CATEGORY),
+        trust_entry(gpu_binary, 0),
+        trust_entry(turnip_binary, 0),
+        trust_entry(turnip_library, 0),
     ], key=lambda entry: entry[:20])
     owner = struct.pack("<I16sI", 2, uuid.uuid4().bytes, len(entries))
     owner += b"".join(entries)
@@ -132,6 +148,9 @@ def main():
         ("bin/t733-debug-network", 0o755, binary.read_bytes()),
         ("bin/IOMFB_FDR_Loader", 0o755, binary.read_bytes()),
         ("bin/t733-debugserver", 0o755, debugger.read_bytes()),
+        ("bin/t733-adreno", 0o755, gpu_binary.read_bytes()),
+        ("bin/t733-turnip", 0o755, turnip_binary.read_bytes()),
+        ("bin/libvulkan_freedreno.dylib", 0o755, turnip_library.read_bytes()),
         ("daemons/com.apple.iomfb_fdr_loader.plist", 0o644, job),
         ("preferences/backboardd-brightness.plist", 0o644,
          (DEVICE / "package/backboardd-brightness.plist").read_bytes()),

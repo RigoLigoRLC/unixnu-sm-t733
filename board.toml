@@ -16,6 +16,7 @@ include = [
   "NativeMobileDisplay", "NativeGeniSpi", "NativeFocaltechTouch",
   "NativeQcomTsens", "NativeQcomSpmi", "NativePmicKeys",
   "NativeGeniI2c", "NativeQcomDsi", "NativeUsbDebug", "NativeUsbNetwork", "device",
+  "Adreno6xx", "EarlyEntry",
 ]
 
 [device_tree]
@@ -50,6 +51,7 @@ patch_series = [
   "device:patches/os/ipados-17.7.11-21H461/series",
   "device:patches/t733-xnu/series",
   "device:patches/t733-xnu/diagnostics.list",
+  "device:patches/t733-xnu/early-entry.list",
 ]
 archives = [
   "build-corecrypto-14.py",
@@ -68,6 +70,7 @@ archives = [
   "build-battery.py --tree .",
   "build-pmic-keys.py --tree .",
   "build-display-power.py --tree . --sources .",
+  "build-adreno6xx.py --tree .",
   "build-libpthread-kernel.py",
   "build-boot-log.py --tree .",
 ]
@@ -140,6 +143,7 @@ files = [
 ]
 extra_entries = [
   { id = "updated-menu", title = "Updated menu", type = "efi", path = "UpdatedMenu.efi" },
+  { id = "xnu-gpu-off", title = "Boot GPU off", type = "xnu", kernel_args = ["native-adreno-a6xx=0"] },
   { id = "xnu-ufs-poll", title = "Boot UFS polling", type = "xnu", kernel_args = ["native-ufs-queue-depth=1", "native-ufs-poll=1"] },
   { id = "xnu-1-cpus", title = "Boot 1 CPU", type = "xnu", kernel_args = ["cpus=1", "sheng-smp=0"] },
   { id = "xnu-2-cpus", title = "Boot 2 CPUs", type = "xnu", kernel_args = ["cpus=2", "sheng-smp=1"] },
@@ -147,15 +151,15 @@ extra_entries = [
   { id = "exit", title = "Return to firmware", type = "action", action = "exit" },
 ]
 kernel_args = [
-  "serial=3", "debug=0x14e", "kt_fixed_zones=120",
-  "darwinboot-handoff-diagnostics=0",
+  "-v", "serial=3", "debug=0x14e", "kt_fixed_zones=120",
+  "darwinboot-handoff-diagnostics=1",
   "sheng-smp=1", "cpus=8",
   "armcpu-redist-ipi=1",
   "native-ufs-root=1", "native-ufs-diagnostics=0", "native-ufs-metadata=1",
   "sheng-pmgr=2",
   "native-usb-debug=1",
   "sheng-gpu-addon=1",
-  "native-process-logs=0",
+  "native-process-logs=1",
   "sheng-log=1",
   "sheng-data-persist=2", "sheng-log-reserve=1024",
   "sheng-disable-watchdogd=1",
@@ -173,6 +177,7 @@ kernel_args = [
   "t733-cpu-dvfs=1",
   "t733-display-power=1",
   "t733-managed-rt-normal=1",
+  "native-adreno-a6xx=1",
 ]
 
 # The 21H461 AttentionAwareness initializer creates a circular wait during

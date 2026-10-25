@@ -1,13 +1,13 @@
 # GitHub 仓库与适配分支
 
-截至 2026-10-25，`RigoLigoRLC` 账号已发布 17 个公开仓库：9 个 fork、8 个新仓。
+截至 2026-10-25，`RigoLigoRLC` 账号已发布 18 个公开仓库：10 个 fork、8 个新仓。
 仓库名全部使用 `unixnu-` 前缀；适配分支和默认分支统一为
 `unixnu-sm-t733`。每个 description 都包含 `SM-T733` 和模块用途。
 完整 description 与 fork 分支的基础提交保存在
 [repositories.json](../support/repositories.json)。
 
 2026-10-24 已为下表十二个 `drivers/` 独立仓库添加 `unixnu` topic。
-设备已注册十三个 driver/kit 子模块，固定各模块的已发布提交。
+设备已注册十四个 driver/kit 子模块，固定各模块的已发布提交；新 GPU 仓库也带有 `unixnu` topic。
 按照[官方仓库规范](https://unixnu.com/zh/contributing/repository)，
 其余硬件驱动的独立仓库、子模块迁移次序和贡献范围见
 [UPSTREAMING.md](UPSTREAMING.md)。
@@ -17,6 +17,7 @@
 | [unixnu-sm-t733](https://github.com/RigoLigoRLC/unixnu-sm-t733) | 新建 | 设备配置、ADT、板级服务、补丁清单、构建入口及模块提交 |
 | [unixnu-core](https://github.com/RigoLigoRLC/unixnu-core) | [UniXNU/UniXNU](https://github.com/UniXNU/UniXNU) | 公共菜单、payload 扩展与构建修正 |
 | [unixnu-sm7325-common](https://github.com/RigoLigoRLC/unixnu-sm7325-common) | 新建 | format 2 的 SM7325 DTSI、配置、SoC 补丁和共享组件声明 |
+| [unixnu-adreno6xx](https://github.com/RigoLigoRLC/unixnu-adreno6xx) | [UniXNU/Adreno740](https://github.com/UniXNU/Adreno740) | SM7325 A642L 上电、GMU/HFI、SMMU 与 CP 提交；实机执行待记录 |
 | [unixnu-mu-silicium](https://github.com/RigoLigoRLC/unixnu-mu-silicium) | [Project-Silicium/Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium) | Samsung UEFI、BootShim、MSC 与 BOOT/recovery 封装 |
 | [unixnu-armcpu](https://github.com/RigoLigoRLC/unixnu-armcpu) | [UniXNU/ArmCpu](https://github.com/UniXNU/ArmCpu) | SM7325 SMP、GIC、timer 与 IPI |
 | [unixnu-darwinboot](https://github.com/RigoLigoRLC/unixnu-darwinboot) | [UniXNU/DarwinBoot](https://github.com/UniXNU/DarwinBoot) | 内核装载窗口、BootVideo 与内核交接 |
@@ -39,9 +40,9 @@ NativeUsbDebug 的来源和 ARR 声明保留在设备目录，见
 
 ## 当前远程内容
 
-九个 fork 和八个新仓的适配分支为 `unixnu-sm-t733`。
-核心固定提交为 `1d9fed8e4224ac38ae4f5bb751e8526dcf47870f`，官方基线为 `fb5e8ba`；UEFI 为
-`a3618199b60a019d0f1f7ccf39e6109690bae728`。十三个模块的完整适配提交
+十个 fork 和八个新仓的适配分支为 `unixnu-sm-t733`。
+核心固定提交为 `8e411474977f2c7fd459a99cb2e3d1f3466d85ac`，官方基线为 `fb5e8ba`；UEFI 为
+`a3618199b60a019d0f1f7ccf39e6109690bae728`。十四个模块的完整适配提交
 保存在 `support/repositories.json` 的 `adaptation_commit`，设备仓库的
 Git submodule 记录固定对应提交。设备仓库自身由使用者检出的 Git 提交标识。
 

@@ -4,14 +4,14 @@ schema_version = 1
 name = "gts7fewifi"
 soc = "SM7325"
 os_profile = "ipados-17.7.11-21H461"
-summary = "Samsung SM-T733 format 2 build system-format2-48f completed seven build stages and full FAT deployment. Its USB boot record confirms eight CPUs, UFS requests without failures or timeouts, continuing CPU display frames and touch DOWN/UP. Earlier memory and power observations retain their original build identities."
+summary = "Samsung SM-T733 format 2 baseline48f records eight CPUs, UFS, CPU display and touch. A642L driver and Turnip tooling compiled and deployed as49h with verbose diagnostics; GPU hardware execution remains pending. The49g IODT interrupt-parent panic is addressed by emitting AAPL,phandle in the shared converter."
 
 [[area]]
 id = "configuration"
 status = "implemented"
 components = ["ArmDTPlatform", "device"]
 paths = ["README.md", "AGENTS.md", "docs/**", "board*.toml", "feeds.toml", "components.toml", "configs/**", "dts/**", ".gitmodules", "porting.toml", ".github/**"]
-inputs = ["SM-T733 uses the SM7325 profile and the iPad7,1 21H461 restore inputs.", "The device's 13 driver and kit submodules retain their community repositories and adaptation revisions."]
+inputs = ["SM-T733 uses the SM7325 profile and the iPad7,1 21H461 restore inputs.", "The device's 14 driver and kit submodules retain their community repositories and adaptation revisions."]
 configuration = ["Both boards select schema_version 2, sm7325 and ipados-17.7.11-21H461.", "The component list and archive list are complete arrays; device components.toml supplies community identities and board-specific recipes.", "Public payload.adt.chip_id is hexadecimal 733; private local.toml hardware.unique_chip_id enters the official UNIXNU_UNIQUE_CHIP_ID environment variable."]
 procedure = ["Run bash scripts/build.sh TAG for the system configuration or add --platform for the platform configuration.", "The official driver resolves output paths from the selected OS profile and defconfig."]
 findings = ["Format 2 arrays replace inherited arrays, so every selected component, configuration fragment, patch series and archive remains explicit.", "The SM7325 profile owns common CPU, interrupt, timer, PSCI and UFS facts; the device owns memory span, identity and board policies.", "system-format2-48f completed configure, resolve, kernel, menu, wallpaper, debug-tools and payload with exit code 0."]
@@ -23,7 +23,7 @@ evidence = [{ kind = "source", reference = "board.toml", result = "The system bo
 [[area]]
 id = "firmware"
 status = "implemented"
-components = ["DarwinBoot"]
+components = ["DarwinBoot", "EarlyEntry"]
 paths = ["proprietary-files.txt", "scripts/extract-files.py", "support/Mu-Silicium.rev", "drivers/DarwinBoot", "board*.toml"]
 inputs = ["Samsung bootloader is unlocked; BOOT/recovery use memory-input-display-46.", "DarwinBoot receives the actual UEFI memory map, framebuffer and loaded sidecar addresses."]
 configuration = ["gts7fewifi.dsc supplies the Samsung firmware package and userdata payload driver.", "The normal system menu entry is Boot UniXNU."]
@@ -106,17 +106,17 @@ evidence = [{ kind = "source", reference = "package/T733PmicKeys.cpp", result = 
 
 [[area]]
 id = "gpu"
-status = "planned"
-components = []
-paths = ["configs/**", "board.toml"]
-inputs = ["The device GPU is Adreno 642L on SM7325."]
-configuration = ["CONFIG_XNU_NATIVE_ADRENO remains disabled.", "The existing graphics-related boot arguments and software rendering inputs remain preserved."]
-procedure = ["Complete format 2 migration before starting GPU power, GMU, SMMU and submission work."]
-findings = ["Official Adreno740 and AdrenoMetal components describe SM8550/A740 hardware."]
-completion = ["A642L submissions, mappings, completion interrupts and fences work before a Metal client presents a GPU-rendered image."]
-limits = ["No A642L GPU acceleration is claimed by the current device build."]
-next_action = ["Implement the A642L hardware stage after the format 2 deployment is complete."]
-evidence = []
+status = "implemented"
+components = ["Adreno6xx", "ArmSmmu4K", "AdrenoPM4", "AdrenoFirmware"]
+paths = ["drivers/Adreno6xx", "package/T733GpuResources.cpp", "scripts/build-adreno6xx.py", "tools/gpu", "board.toml"]
+inputs = ["SM7325 A642L chip ID 0x06030500, 512 KiB GMEM and A660 GMU/SQE/ZAP inputs."]
+configuration = ["The independent Adreno6xx archive is force-loaded with native-adreno-a6xx=1.", "GPU classes register after IOBSD; screen and early diagnostics are enabled."]
+procedure = ["Initialize live command-db votes, clocks, GPU/GMU SMMU and HFI, then require CP fence and GPU memory readback before publication.", "Run the raw ABI command followed by Turnip fill, compute and triangle readback."]
+findings = ["49h completed eight build stages and its FAT was written and synced; GPU runtime results are pending.", "49g panicked in IODTGetICellCounts because interrupt-parent resolution requires AAPL,phandle;49h includes the shared converter correction."]
+completion = ["Actual A642L submissions and rendering succeed before enabling system Metal composition and direct DPU scanout."]
+limits = ["No successful A642L GPU hardware execution has been recorded.", "Final display presentation uses GPU-rendered surfaces directly; framebuffer copies remain a diagnostic fallback."]
+next_action = ["Collect 49h screen and USB initialization results."]
+evidence = [{ kind = "source", reference = "scripts/build-adreno6xx.py", result = "The component is compiled into a dedicated archive with deferred IOKit constructors; hardware execution remains pending." }]
 
 [[area]]
 id = "network"

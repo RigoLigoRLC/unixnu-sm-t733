@@ -36,7 +36,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "42fe563791e51bf5500c2e470ed294ca0c94b97c",
       "description": "Project Silicium UEFI firmware and Samsung boot packaging for Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "799544f93bfffd0e7eae38efb53a08fb996d4af5",
+      "adaptation_commit": "a3618199b60a019d0f1f7ccf39e6109690bae728",
       "device_changes_pushed": true
     },
     {

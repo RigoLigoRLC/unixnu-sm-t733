@@ -41,7 +41,7 @@ NativeUsbDebug 的来源和 ARR 声明保留在设备目录，见
 
 九个 fork 和八个新仓的适配分支为 `unixnu-sm-t733`。
 核心固定提交为 `1d9fed8e4224ac38ae4f5bb751e8526dcf47870f`，官方基线为 `fb5e8ba`；UEFI 为
-`799544f93bfffd0e7eae38efb53a08fb996d4af5`。十三个模块的完整适配提交
+`a3618199b60a019d0f1f7ccf39e6109690bae728`。十三个模块的完整适配提交
 保存在 `support/repositories.json` 的 `adaptation_commit`，设备仓库的
 Git submodule 记录固定对应提交。设备仓库自身由使用者检出的 Git 提交标识。
 

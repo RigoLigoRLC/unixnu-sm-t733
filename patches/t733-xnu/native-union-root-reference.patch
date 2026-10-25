@@ -1,0 +1,21 @@
+--- a/bsd/vfs/vfs_syscalls.c
++++ b/bsd/vfs/vfs_syscalls.c
+@@ -2538,9 +2538,16 @@ checkdirs_callback(proc_t p, void * arg)
+ 	 */
+ 	proc_fdlock(p);
+ 	if (fdp->fd_cdir == olddp) {
+-		old_cvp = olddp;
+ 		fdp->fd_cdir = newdp;
+-		new_cvp = NULL;
++		/*
++		 * set_rootvnode gives kernproc's cwd the reference owned by
++		 * rootvnode. checkdirs transfers that reference after this
++		 * callback. Other cwd pointers own a separate reference.
++		 */
++		if (p != kernproc || olddp != rootvnode) {
++			old_cvp = olddp;
++			new_cvp = NULL;
++		}
+ 	}
+ 	if (fdp->fd_rdir == olddp) {
+ 		old_rvp = olddp;

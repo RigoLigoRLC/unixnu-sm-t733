@@ -11,6 +11,48 @@ extern kmod_info_t g_kernel_kmod_info;
 kern_return_t OSKextLoadKextWithIdentifier(const char *);
 void sheng_pmgr_static_init(void) __asm__("__GLOBAL__sub_I_ShengPlatformPower.cpp");
 IOService *sheng_original_pmgr_nub_create(IORegistryEntry *, ApplePMGR *);
+extern int (*PE_halt_restart)(unsigned int);
+int native_ufs_shutdown_complete(void) __attribute__((weak_import));
+}
+
+// The platform callback reads the completion flag set by the UFS power-tree
+// notification before PSCI stops the machine. It cannot wait for storage here
+// because IOKit may already have disabled interrupts. Panic restart uses PSCI directly.
+static int t733_halt_restart(unsigned type)
+{
+    uint64_t function;
+    bool orderly = false;
+    switch (type) {
+        case kPEHaltCPU:
+        case kPEUPSDelayHaltCPU:
+            function = 0x84000008;
+            orderly = true;
+            break;
+        case kPERestartCPU:
+            function = 0x84000009;
+            orderly = true;
+            break;
+        case kPEPanicRestartCPU:
+            function = 0x84000009;
+            break;
+        default:
+            return 0;
+    }
+
+    if (orderly && native_ufs_shutdown_complete && !native_ufs_shutdown_complete()) {
+        IOLog("T733PlatformPower: storage shutdown incomplete\n");
+        return -1;
+    }
+
+    register uint64_t x0 __asm__("x0") = function;
+    register uint64_t x1 __asm__("x1") = 0;
+    register uint64_t x2 __asm__("x2") = 0;
+    register uint64_t x3 __asm__("x3") = 0;
+    __asm__ volatile("dsb sy\n\tsmc #0"
+        : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : : "memory");
+
+    IOLog("T733PlatformPower: PSCI %llx returned %lld\n", function, x0);
+    return -1;
 }
 
 __attribute__((noreturn)) static void unavailable(unsigned slot)
@@ -138,5 +180,6 @@ extern "C" void sheng_pmgr_run(void)
     provider->registerService(kIOServiceSynchronous);
     nub->registerService(kIOServiceSynchronous);
     OSSafeReleaseNULL(description);
+    PE_halt_restart = t733_halt_restart;
     printf("T733PlatformPower: original ApplePMGRNub published\n");
 }

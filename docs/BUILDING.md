@@ -1,50 +1,59 @@
 # 构建与装配
 
-从设备仓库目录执行本文命令。主机需要 macOS、完整 Xcode 与 iPhoneOS SDK、Python 3.11 或更高版本、Git、make、LLVM/LLD、mtools、dtc、openssl 和 unifdef。按照 [UniXNU 构建文档](https://unixnu.com/building) 安装公共工具；固件另需配套 UEFI 的工具和输入。
+设备构建采用 format 2，按 ARM64、SM7325、iPadOS 21H461 和 SM-T733 四层解析。主机需要 macOS、完整 Xcode 与 iPhoneOS SDK、Python 3.11 或更高版本、Git、make、LLVM/LLD、mtools、dtc、openssl 和 unifdef。固件还需要配套 UEFI 的工具及原厂输入。
 
-2026-10-24 的整理保留 38a 的配置与固定 Data 输入，内核与 FAT 组装交由官方命令处理。本轮只修改源码和文档，未构建、测试或部署，设备上的 38a 没有更新。
+`system-format2-48f` 于 2026-10-25 完成七阶段构建、完整 536870912 字节 FAT 写入和 sync。启动后 USB 已记录到八核上线、UFS 无失败或超时、持续显示帧和触点事件，具体数值与原始记录位置见 [48f 交付记录](archive/FORMAT2_2026-10-25.md)。迁移前的输入与迭代事实见 [构建归档](archive/BUILDING_2026-10-24.md)。
 
-## 1. 公共源码与本机身份
+## 1. 固定源码与私有身份
+
+从设备仓库的父目录开始：
 
 ```sh
 git clone --recurse-submodules --branch unixnu-sm-t733 https://github.com/RigoLigoRLC/unixnu-sm-t733.git
 cd unixnu-sm-t733
-# 已有设备仓库检出在更新后执行此命令。
 git submodule update --init --recursive
 export UNIXNU_RECORD_HASHES=0
-bash scripts/bootstrap-base.sh ../UniXNU
-export UNIXNU_BASE="$(cd ../UniXNU && pwd)"
+bash scripts/bootstrap-base.sh ../unixnu-core
+export UNIXNU_BASE="$(cd ../unixnu-core && pwd)"
 cp local.toml.example local.toml
 ```
 
-`bootstrap-base.sh` 仅接受尚不存在的目录：克隆 `RigoLigoRLC/unixnu-core`、检出 `support/UniXNU.rev` 固定的适配提交并初始化子模块。该提交已包含公共适配；`support/UniXNU.patch` 记录相对 `support/UniXNU.upstream.rev` 的差异供阅读。已有相同适配版本的工作区直接设置 `UNIXNU_BASE`。后续命令使用 `PYTHON` 指定解释器，省略时为 `python3`。
+`bootstrap-base.sh` 将公共 fork 检出到 `support/UniXNU.rev` 的固定提交，再初始化子模块。目标目录必须尚不存在。已有同版本公共源码时直接设置 `UNIXNU_BASE`。公共官方基线由 `support/UniXNU.upstream.rev` 记录，配套固件由 `support/Mu-Silicium.rev` 固定。
 
-`local.toml` 的 `hardware.unique_chip_id` 和 `hardware.chip_id` 为十六进制软件身份种子，两项一起填写；本机 DRAM 包络为 `0x180000000`。该文件被 Git 忽略。
+`feeds.toml` 固定公开的 [unixnu-sm7325-common](https://github.com/RigoLigoRLC/unixnu-sm7325-common) 提交，公共驱动及 Apple OSS 由对应 core feed 提供。设备有 12 个 driver 子模块和 1 个 kit 子模块；`components.toml` 保留社区 fork 身份及本机 recipe。克隆和更新设备仓库后都执行递归子模块初始化。
 
-公共 `unixnu` 自动处理所需源码。也可显式执行：
+公开 `board.toml` 与 `board.platform.toml` 的 `[payload.adt] chip_id = "733"` 是十六进制软件身份输入。每台设备的 `hardware.unique_chip_id` 填在忽略的 `local.toml`：
 
-```sh
-python3 "$UNIXNU_BASE/unixnu" defconfig gts7fewifi_defconfig -D . --out build/work
-python3 "$UNIXNU_BASE/unixnu" fetch -D . --out build/work
-python3 "$UNIXNU_BASE/unixnu" ipsw fetch -D . --out build/work
+```toml
+[hardware]
+unique_chip_id = "YOUR_HEXADECIMAL_SEED"
 ```
 
-`UNIXNU_IPSW` 可指定本地 IPSW；省略时使用 `board.toml` 中的 21H461 URL。生成的 `unixnu.lock` 应随发布源码保存；公共源自身还由 `support/UniXNU.rev` 固定。
+示例中的字符串须替换为本机非零 64 位十六进制种子。`scripts/build.py` 读取该值并传入官方 `UNIXNU_UNIQUE_CHIP_ID`；已有同名环境变量优先。共用 DTS 转换器从此环境变量和公开 board 的 `chip_id` 生成 ADT 身份。板级 DTS 提供实际 DRAM 地址跨度，`owned_memory_size = "auto"` 继续让 DarwinBoot 按实时 UEFI conventional memory 分配连续窗口。
+
+本地 SoC 开发可显式选择已检出的仓库，参数会传给每次官方命令：
+
+```sh
+bash scripts/build.sh system-local-1 \
+  --local-module soc:sm7325=/absolute/path/unixnu-sm7325-common
+```
 
 ## 2. 私有输入
 
-系统构建读取如下文件：
+系统构建读取以下忽略文件：
 
-| 路径 | 来源 |
+| 路径 | 输入 |
 | --- | --- |
-| `.cache/inputs/kernelcache.decompressed` | 匹配 IPSW 的 KernelCache；缺少时构建入口自动提取 |
-| `.cache/inputs/bindings/kernel.macho` 和 `kernel.json` | 平台内核的 IOStorage 地址布局；缺少时自动构建平台配置 |
-| `.cache/inputs/policies/os/`、`policies/systemos/` | 各自的 `manifest.bin` 与 `trusted-key.bin` |
-| `.cache/inputs/trust.bundle` | 原始 StaticTrustCache 与 SystemTrustCache 的 bundle |
-| `.cache/inputs/data.dbr` | 固定 96 GiB 逻辑容量的 DBRDISK1 Data 种子 |
-| `.cache/firmware/vendor/T733ZCS9DYE1/vendor/firmware/tsp_focaltech/ft8203_gts7xllite.bin` | 本机原厂触屏固件 |
+| `.cache/inputs/kernelcache.decompressed` | 同版 21H461 KernelCache；缺少时入口自动提取 |
+| `.cache/inputs/bindings/kernel.macho`、`kernel.json` | 平台内核 IOStorage 布局；缺少时入口自动构建平台配置 |
+| `.cache/inputs/policies/os/`、`policies/systemos/` | 各卷的 `manifest.bin`、`trusted-key.bin` |
+| `.cache/inputs/trust.bundle` | 原始 StaticTrustCache 与 SystemTrustCache bundle |
+| `.cache/inputs/data.dbr` | 固定 96 GiB、固定 UUID 的 DBRDISK1 Data 种子 |
+| `.cache/inputs/debugserver` | 同版原始 OS 的 `/usr/libexec/debugserver`，作为开发副本签名输入 |
+| `.cache/inputs/os-root` | 同版只读 OS 挂载目录或链接，提供 J120 静态壁纸 |
+| `.cache/firmware/vendor/T733ZCS9DYE1/vendor/firmware/tsp_focaltech/ft8203_gts7xllite.bin` | 本机 FT8203 触屏固件 |
 
-已有输入用一个入口导入：
+已有输入可通过统一导入器复制：
 
 ```sh
 python3 scripts/import-build-inputs.py \
@@ -53,108 +62,66 @@ python3 scripts/import-build-inputs.py \
   --policies /path/signed-policies \
   --trust-cache /path/original-static-system.bundle \
   --data-seed /path/fixed-data.dbr
+mkdir -p .cache/inputs
+cp /path/os-mount/usr/libexec/debugserver .cache/inputs/debugserver
+ln -s /path/os-mount .cache/inputs/os-root
 ```
 
-各参数可单独使用；已有输入只有显式 `--replace` 才会覆盖。导入器只复制签名清单和公钥锚，不复制私钥。厂商文件通过 `scripts/import-vendor-inputs.py --extraction /path/extracted --inventory /path/inventory.json` 导入，或按 `proprietary-files.txt` 的路径放入缓存。
+导入参数可单独使用；显式 `--replace` 才覆盖已有输入。导入器只复制签名清单及公钥锚。厂商文件使用 `scripts/import-vendor-inputs.py --extraction /path/extracted --inventory /path/inventory.json`，完整输入清单见 [proprietary-files.txt](../proprietary-files.txt)。原始 IPSW 提取、签名策略和首次 Data 种子的具体生成过程保留在 [输入准备归档](archive/BUILDING_2026-10-24.md#从原始-ipsw-准备输入)。
 
-构建入口建立 `.cache/firmware/t733-inputs -> ../inputs`。官方组装过程把设备的 `.cache/firmware` 接入构建树，因此 archive 命令从树内的 `.cache/firmware/t733-inputs/` 读取私有文件。archive 命令采用脚本名和相对构建树路径，设备 C/C++ 源码从官方挂载的 `kits/gts7fewifi/` 读取。ADT 通过 `UNIXNU_HARDWARE_INPUT` 读取设备的 `local.toml`。
+官方组装树将设备 `.cache/firmware` 共享进去；`.cache/firmware/t733-inputs -> ../inputs` 让 archive recipe 读取相同私有输入。设备 `package/` 在树中为 `kits/gts7fewifi/`。普通更新使用现有 `data.dbr`、Data UUID `09A342FC-CB72-44DE-A10E-B89F14508869` 及 [data-layout.toml](../package/data-layout.toml)；首次创建新种子产生的新 UUID 要与私有 defconfig 一起使用。
 
-### 从原始 IPSW 准备输入
-
-```sh
-python3 "$UNIXNU_BASE/unixnu" build userdata -D . --out build/work
-python3 "$UNIXNU_BASE/unixnu" ipsw fetch StaticTrustCache Cryptex1,SystemTrustCache -D . --out build/work
-python3 scripts/prepare-system-trust.py \
-  --static /path/StaticTrustCache.im4p --system /path/SystemTrustCache.im4p \
-  --output build/trust
-```
-
-提取出的实际成员名见 `proprietary-files.txt`；`ipsw fetch` 输出实际路径。`build userdata` 生成 `build/work/gts7fewifi/userdata/userdata-root.img` 与 `userdata-root.json`。根卷窗口中保存原始 OS/SystemOS，后续签名策略必须基于同一镜像。
-
-21H461 的两个卷 UUID 已保存在 `package/root-volumes.json`。用 VerifiedRoot 工具生成本地签名策略：
+## 3. 统一构建与输出
 
 ```sh
-python3 scripts/prepare-root-policies.py \
-  --root-image build/work/gts7fewifi/userdata/userdata-root.img \
-  --layout build/work/gts7fewifi/userdata/userdata-root.json \
-  --volumes package/root-volumes.json \
-  --manifest-tool "$UNIXNU_BASE/kits/VerifiedRoot/tools/manifest.py" \
-  --output build/policies
-```
-
-`--manifest-tool` 使用对应公共基线中的清单生成程序，见其 `kits/VerifiedRoot` 文档。签名私钥保存在所选本地输出目录，公开源码只保留生成程序。
-
-Data 由原始 OS 的 `private/var` 初始化。将 OS 只读挂载到本地目录，再执行：
-
-```sh
-python3 scripts/prepare-owner-data-fixture.py --source-root /path/os-mount --output build/data-seed
-python3 drivers/DarwinBoot/Test/packed_ramdisk.py build/data-seed/owner-data-32.cdr build/data-seed/base.dbr
-python3 "$UNIXNU_BASE/scripts/seed-data-grow.py" --gib 96 build/data-seed/base.dbr build/data-seed/grown.dbr
-python3 scripts/seed-data-skip-setup.py build/data-seed/grown.dbr build/data-seed/data.dbr --no-auto-dim
-```
-
-新建 APFS 种子产生新 UUID。将 `build/data-seed/seed.json` 的 `volume_uuid` 填入一份私有 defconfig 的 `CONFIG_XNU_OWNER_DATA_VOLUME_UUID`，构建时用 `--defconfig /absolute/path/private_defconfig`。当前默认 UUID 对应原有设备 Data，不能用新 UUID 的种子更新已有设备。日常更新持续使用同一 `data.dbr`，容量、UUID 与 `package/data-layout.toml` 保持一致。
-
-## 3. 单一构建入口
-
-```sh
-# 完整系统，默认八核，生成日常更新用的 512 MiB FAT。
 bash scripts/build.sh system-local-1
-
-# 单核平台诊断，生成 64 MiB FAT，可用作 recovery 中的备用载荷。
 bash scripts/build.sh platform-local-1 --platform
 ```
 
-入口依次调用官方 `defconfig`、`build kernel`、`build package` 和 `build payload`。`build kernel` 内部完成编译与预链接；`build payload` 生成 ADT、复制 trust bundle 和固定 Data 种子，并完成菜单与 FAT。缺少绑定内核时先完成平台构建；该过程与系统构建使用不同输出目录。默认中间文件为 `build/work/`，可用 `--out /path/work` 选择。
+系统入口依次执行 configure、resolve、kernel、menu、wallpaper、debug-tools、payload。kernel 内部完成源码准备、头文件导出、编译记录、按序 archive、最终链接和预链接；wallpaper 与 debug-tools 生成壁纸、开发调试工具、addon 及 trust bundle；payload 调用共用 DTS 转换器生成 ADT，再组装菜单、固定种子及 FAT。构建命令只生成产物。
 
-系统构建使用设备根目录的 `board.toml`。平台构建在忽略的 `build/platform-device/` 写入完整的 `board.platform.toml`，以 `board.toml` 为文件名，并链接设备模块、scripts、configs、缓存和身份文件。官方命令通过 `-D build/platform-device` 选择该配置；平台配置没有 Data 安装菜单。
-
-`[payload] files` 声明将菜单构建产物复制为 FAT 内的 `UpdatedMenu.efi`；`extra_entries` 声明菜单 EFI、1/2/4 核备用启动项和返回固件。CPU 项继承最终启动参数，再覆盖 `cpus` 与 `sheng-smp`。安装确认、重启和关机项由官方 payload 生成。系统配置显式保留 `sheng-data-persist=2` 和 `sheng-log-reserve=1024`，tag 通过官方 `--kernel-arg t733-build=TAG` 传入。
-
-每次使用新 tag，输出为 `build/releases/TAG/`：
+默认 `--out` 为 `build/work`。format 2 的中间目录为：
 
 ```text
-kernel.macho
-kernel.json
-UniXNU.efi
-payload.img
-payload.json
-logs/
-stages.tsv
+build/work/gts7fewifi/ipados-17.7.11-21H461/gts7fewifi/
+  tree/
+  kernel/
+  package/
+  payload/
+  xnu-patches.list
 ```
 
-`stages.tsv` 记录已执行阶段和退出码，失败日志保留在该 tag 下。`payload.json` 保存官方组装记录；FAT 的临时目录由官方命令清理。构建入口设置 `UNIXNU_RECORD_HASHES=0`。原始系统签名和磁盘格式所需的密码学处理属于对应格式的生成过程。
+平台配置最后一级是 `gts7fewifi_platform/`。`scripts/build.py` 在 defconfig 后读取官方 `status --json` 的 `output`，从该目录复制内核、菜单和 FAT。`--out /path/work` 改变输出根；自动绑定内核使用独立 `build/bindings/` 输出根及相同 format 2 层级。平台板通过忽略的 `build/platform-device/board.toml` 传给官方 `-D`，该目录同时链接 DTS、组件表、feed、模块和私有身份。
 
-## 4. 固件与首次安装包
+每次使用新 TAG，交付统一保存在：
 
-Samsung UEFI 独立维护，按其 `notes/RELEASE_STRUCTURE.md` 准备 vendor 模块、原厂 DTB/DTBO、工具及匹配的 boot/recovery。
-
-```sh
-git clone --recurse-submodules --branch unixnu-sm-t733 https://github.com/RigoLigoRLC/unixnu-mu-silicium.git ../uefi-gts7fewifi
-git -C ../uefi-gts7fewifi checkout --detach "$(cat support/Mu-Silicium.rev)"
-git -C ../uefi-gts7fewifi submodule update --init --recursive
-bash scripts/build.sh system-install-1 --install \
-  --uefi ../uefi-gts7fewifi \
-  --stock-recovery /path/stock/recovery.img \
-  --stock-boot /path/stock/boot.img \
-  --root-image build/work/gts7fewifi/userdata/userdata-root.img \
-  --recovery-payload build/releases/platform-local-1/payload.img
+```text
+build/releases/TAG/
+  kernel.macho
+  kernel.json
+  UniXNU.efi
+  payload.img
+  payload.json
+  logs/
+  stages.tsv
 ```
 
-`--install` 生成系统 FAT、固件、原厂 recovery 恢复包、含 FAT 的 userdata sparse 镜像及完整系统 tar。该包用于首次安装，会覆盖 userdata；日常更新只使用 FAT。只需重新打包固件时使用 `--firmware`，同时提供 `--uefi`、`--stock-recovery` 与 `--recovery-payload`。
+`stages.tsv` 记录实际阶段和退出码，每个日志旁保存命令 JSON。系统 FAT 为 512 MiB，平台 FAT 为 64 MiB。额外菜单项与安装确认由 board 声明；构建 TAG 通过官方 `--kernel-arg t733-build=TAG` 传入。构建始终保持 `UNIXNU_RECORD_HASHES=0`。
 
-本脚本不执行刷机。MSC 更新由主机部署工具重新识别平板 userdata，只在分区内 `9382658048` 字节偏移写入 `536870912` 字节 FAT，完成 dd 与 sync 后完整重启固件。保留 OS/SystemOS 与持久 Data；当前固件不使用 eject。Odin sparse 不能用作保留数据的 FAT-only 更新方式。
+## 4. 补丁与编译输入
 
-## 5. USB 日志
+两份 board 的 `kernel.patch_series` 显式选择设备 ARM64 series、SM7325 series、设备 OS series、设备功能 series 和诊断清单。普通数组替换继承值，因此完整 components、fragments、series 和 archives 都写在 board 中。社区 NativeUfs、NativeRamBlock、NativeMobileDisplay 与 NativePrelink 保持各自来源身份。
 
-```sh
-python3 -m pip install -r tools/requirements-usb-console.txt
-python3 tools/t733-usb-console.py --output logs/usb
-# 另一个终端通过同一采集器查询，无需重新打开串口。
-python3 tools/t733-usb-console.py --output logs/usb --command tasks --process SpringBoard
-python3 tools/t733-symbolicate-stacks.py logs/usb/capture.raw \
-  --cache /path/systemos/System/Library/Caches/com.apple.dyld \
-  --root /path/os --root /path/systemos --output logs/stacks.txt
-```
+设备 ARM64 series 直接引用公共补丁和本机逐文件替换，保留 `native-smp-secondary.patch` 对 SM7325 三簇调度的前置关系；SoC 仓库提供时钟、CPU startup、managed RT memory、调度 topology 与虚拟定时器补丁；OS series 引用本机启动进度替换及 NativePrelink 两项补丁。设备 `diagnostics.list` 由 board 明确列入；当前两个 defconfig 的 early marker 均为 `n`。新增功能补丁同时维护功能清单与实际选中的 series。
 
-调用栈符号化使用同版原始系统文件；实际 raw 文件名由采集器打印并记录在 `events.jsonl`。
+共用构建器生成最终有序 `UNIXNU_PATCH_LIST`，源码准备和设备 baseline 使用同一列表。选择记录包含 XNU 提交、补丁路径、大小与修改时间。输入改变时保存旧 `.cache/xnu-work` 和 `build/xnu/ios-obj`，清除配套头文件完成标记，再准备源码、导出头文件并生成编译记录。源码准备成功后才构建依赖 archive。失败日志及旧目录保留在所选输出根。
+
+交付前读取本轮 `tree/.cache/xnu-patches.list` 或 `tree/.cache/xnu-patch-selection.json`，确认要求的补丁进入当前内核。源码、头文件、编译记录和最终补丁清单共同属于这一轮构建。
+
+## 5. 固件、首次安装与更新
+
+固件变化时用 `--firmware` 或 `--install`，按配套 UEFI 的输入要求提供 `--uefi`、`--stock-recovery`、`--recovery-payload` 等参数。首次完整安装的原始命令和 Samsung 封装关系保存在 [安装归档](archive/BUILDING_2026-10-24.md#4-固件与首次安装包)；其中旧 `build/work/gts7fewifi/` 路径须改成当前解析所得的 format 2 输出目录。
+
+日常更新部署 `build/releases/TAG/payload.img`。工作区 MSC 入口每次重新枚举 userdata，在相对 `9382658048` 字节处写入完整 `536870912` 字节 FAT 并 sync，随后完整重启固件，选择 `Boot UniXNU`。OS/SystemOS、固定 Data 种子、UUID、96 GiB 容量和尾部位置保持当前布局。`Install / erase Data` 执行明确的 Data 重建。
+
+USB 采集入口为 `tools/t733-usb-console.py`；原生调试入口为 `tools/t733-lldb.py` 和 `tools/t733-ios-diagnostics.py`。原生附加前在主机准备符号，暂停期间完成短读取后立即 continue/detach。采集命令及原始输出路径记录到对应 build TAG 的专题记录。

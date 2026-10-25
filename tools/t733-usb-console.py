@@ -29,7 +29,7 @@ def timestamp():
 
 
 def is_device_command(command):
-    if command in ("status", "replay", "ping", "help", "tasks", "cpus"):
+    if command in ("status", "replay", "ping", "help", "tasks", "cpus", "ufs", "gpio", "dvfs", "network", "display"):
         return True
 
     if not command.startswith("tasks "):
@@ -210,7 +210,7 @@ def collect(args, output, control):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path, help="Persistent capture directory")
-    parser.add_argument("--command", choices=("host-status", "stop", "status", "replay", "ping", "help", "tasks", "cpus"))
+    parser.add_argument("--command", choices=("host-status", "stop", "status", "replay", "ping", "help", "tasks", "cpus", "ufs", "gpio", "dvfs", "network", "display"))
     parser.add_argument("--process", help="Exact process name to sample with --command tasks")
     parser.add_argument("--echo", action="store_true", help="Also write raw received bytes to stdout")
     parser.add_argument("--replay-on-connect", action="store_true", help="Replay retained RAM after every connection")

@@ -1,0 +1,35 @@
+name: Device documentation
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  porting-record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: device
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare pinned UniXNU tools
+        run: bash device/scripts/bootstrap-base.sh tools
+      - name: Resolve pinned SoC metadata
+        run: |
+          python3 tools/unixnu fetch sm7325 -D device --out tools/out
+          python3 tools/unixnu status --json -D device --out tools/out > tools/resolved-device.json
+      - name: Validate structure and changed areas
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          UNIXNU_RECORD_HASHES: '0'
+        run: |
+          if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
+            BASE="refs/remotes/origin/$DEFAULT_BRANCH"
+          fi
+          SOC_DIR=$(python3 -c 'import json; print(json.load(open("tools/resolved-device.json"))["profiles"]["soc"])')
+          python3 tools/scripts/porting-record.py check --device device --soc "$SOC_DIR" --base "$BASE"

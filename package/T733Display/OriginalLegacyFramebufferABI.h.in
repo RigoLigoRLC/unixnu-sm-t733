@@ -14,6 +14,15 @@ class IOMobileFramebufferLegacy : public IOService {
     unsigned char originalPrivate[0x18a0 - sizeof(IOService)];
 
 public:
+    bool requestedAndPowered() const {
+        uint32_t requested = 0;
+        uint32_t powered = 0;
+        const auto bytes = reinterpret_cast<const unsigned char *>(this);
+        memcpy(&requested, bytes + 0x16cc, sizeof(requested));
+        memcpy(&powered, bytes + 0x16d0, sizeof(powered));
+        return requested != 0 && powered != 0;
+    }
+
     void installBootDimensions(uint32_t width, uint32_t height) {
         auto bytes = reinterpret_cast<unsigned char *>(this);
         memcpy(bytes + 5808, &width, sizeof(width));

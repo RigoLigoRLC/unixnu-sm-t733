@@ -1,9 +1,26 @@
+schema_version = 2
+
 # SM-T733 system configuration for the upstream UniXNU build driver.
 [board]
 name = "gts7fewifi"
 soc = "SM7325"
+soc_source = "sm7325"
+os_profile = "ipados-17.7.11-21H461"
 description = "Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733)"
 kit = "gts7fewifi"
+
+[components]
+include = [
+  "ArmDTPlatform", "ArmCpu", "DarwinBoot", "NativePrelink",
+  "VerifiedRoot", "VirtioMmioBlock", "SoftwareAES", "NativeUfs", "NativeRamBlock",
+  "NativeMobileDisplay", "NativeGeniSpi", "NativeFocaltechTouch",
+  "NativeQcomTsens", "NativeQcomSpmi", "NativePmicKeys",
+  "NativeGeniI2c", "NativeQcomDsi", "NativeUsbDebug", "NativeUsbNetwork", "device",
+]
+
+[device_tree]
+source = "device:dts/board.dts"
+include_dirs = ["soc:dts"]
 
 [ipsw]
 url = "https://updates.cdn-apple.com/2025SpringFCS/fullrestores/122-77166/DCA6CFE8-90E9-4B92-880D-3DE171798E40/iPad_Pro_HFR_17.7.11_21H461_Restore.ipsw"
@@ -26,19 +43,31 @@ windows = [
 
 [kernel]
 defconfig = "gts7fewifi_defconfig"
+config_fragments = ["arch:configs/common.config", "soc:configs/sm7325.config", "os:configs/ipados.config"]
+patch_series = [
+  "device:patches/arch/arm64/series",
+  "soc:patches/xnu/series",
+  "device:patches/os/ipados-17.7.11-21H461/series",
+  "device:patches/t733-xnu/series",
+  "device:patches/t733-xnu/diagnostics.list",
+]
 archives = [
   "build-corecrypto-14.py",
   "build-corecrypto-14.py --namespace",
-  "build-arm-driver.py ArmDTPlatform",
-  "build-arm-driver.py ArmCpu",
+  "component:ArmDTPlatform",
+  "component:ArmCpu",
   "build-root-policy-archive.py --tree . --policies .cache/firmware/t733-inputs/policies --output build/verified-root",
   "build-platform-power.py --tree . --kernelcache .cache/firmware/t733-inputs/kernelcache.decompressed --layout .cache/firmware/t733-inputs/bindings/kernel.json",
-  "build-data-storage.py --component NativeAES --tree . --output build/native-aes --kernelcache .cache/firmware/t733-inputs/kernelcache.decompressed --layout .cache/firmware/t733-inputs/bindings/kernel.json",
+  "build-cpu-power.py --tree .",
+  "component:NativeUsbNetwork",
+  "component:SoftwareAES",
   "build-arm-driver.py NativeUfs --owner-root --storage-kernel .cache/firmware/t733-inputs/bindings/kernel.macho --storage-layout .cache/firmware/t733-inputs/bindings/kernel.json",
-  "build-data-storage.py --component NativeRamBlock --tree . --output build/native-ram-block --kernel .cache/firmware/t733-inputs/bindings/kernel.macho --layout .cache/firmware/t733-inputs/bindings/kernel.json",
+  "component:NativeRamBlock",
   "build-software-display.py --tree . --kernelcache .cache/firmware/t733-inputs/kernelcache.decompressed --layout .cache/firmware/t733-inputs/bindings/kernel.json",
   "build-touch-input.py --tree . --kernelcache .cache/firmware/t733-inputs/kernelcache.decompressed --layout .cache/firmware/t733-inputs/bindings/kernel.json",
   "build-battery.py --tree .",
+  "build-pmic-keys.py --tree .",
+  "build-display-power.py --tree . --sources .",
   "build-libpthread-kernel.py",
   "build-boot-log.py --tree .",
 ]
@@ -111,19 +140,22 @@ files = [
 ]
 extra_entries = [
   { id = "updated-menu", title = "Updated menu", type = "efi", path = "UpdatedMenu.efi" },
+  { id = "xnu-ufs-poll", title = "Boot UFS polling", type = "xnu", kernel_args = ["native-ufs-queue-depth=1", "native-ufs-poll=1"] },
   { id = "xnu-1-cpus", title = "Boot 1 CPU", type = "xnu", kernel_args = ["cpus=1", "sheng-smp=0"] },
   { id = "xnu-2-cpus", title = "Boot 2 CPUs", type = "xnu", kernel_args = ["cpus=2", "sheng-smp=1"] },
   { id = "xnu-4-cpus", title = "Boot 4 CPUs", type = "xnu", kernel_args = ["cpus=4", "sheng-smp=1"] },
   { id = "exit", title = "Return to firmware", type = "action", action = "exit" },
 ]
 kernel_args = [
-  "-v", "serial=3", "debug=0x14e", "kt_fixed_zones=120",
+  "serial=3", "debug=0x14e", "kt_fixed_zones=120",
+  "darwinboot-handoff-diagnostics=0",
   "sheng-smp=1", "cpus=8",
   "armcpu-redist-ipi=1",
-  "native-ufs-root=1", "native-ufs-diagnostics=1", "native-ufs-metadata=1",
+  "native-ufs-root=1", "native-ufs-diagnostics=0", "native-ufs-metadata=1",
   "sheng-pmgr=2",
   "native-usb-debug=1",
-  "native-process-logs=1",
+  "sheng-gpu-addon=1",
+  "native-process-logs=0",
   "sheng-log=1",
   "sheng-data-persist=2", "sheng-log-reserve=1024",
   "sheng-disable-watchdogd=1",
@@ -138,6 +170,8 @@ kernel_args = [
   "t733-display-bind-big=1",
   "t733-touch=1",
   "t733-battery=1",
+  "t733-cpu-dvfs=1",
+  "t733-display-power=1",
   "t733-managed-rt-normal=1",
 ]
 
@@ -180,14 +214,40 @@ text_fixups = [
 ]
 
 [payload.adt]
-tool = "scripts/make-gts7fewifi-adt.py"
+chip_id = "733"
 cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
 psci_method = "smc"
-owned_memory_size = "0x40000000"
+owned_memory_size = "auto"
 root_match_volume_uuid = "04769D26-2CA0-4825-B443-E2E5F88300F2"
 packed_data_ramdisk = true
 persistent_data = true
 ipad_identity = true
+
+[adt.chosen.u32]
+display-scale = 2
+
+[adt.chosen.bytes]
+native-usb-debug-config = "010000000000600a00e0000000886f0a00308e0800208e0800f01000001000000000001500001000e00000008000000003000000000000000000000000000000"
+
+[adt.defaults.u32]
+sleep-disabled = 1
+"kern.maxvnodes" = 10240
+
+[adt.product.string]
+model = "SM-T733"
+
+[adt.product.u32]
+thin-bezel = 1
+
+[adt.buttons.string]
+compatible = "buttons"
+device_type = "buttons"
+
+[adt.buttons.strings]
+button-names = ["hold", "voldown", "volup"]
+
+[adt.buttons.u32]
+home-button-type = 2
 
 [payload.install]
 title = "Install / erase Data"

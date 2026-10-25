@@ -1,0 +1,34 @@
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -7474,7 +7474,17 @@ native_gpu_addon_install(proc_t p, user_addr_t scratch)
+ 		at += 24;
+ 		const char *name = (const char *)(addon + at);
+ 		at += (name_bytes + 7) & ~7ULL;
+-		snprintf(path, sizeof(path), "/private/var/ngpu/%s", name);
++		int brightness_preferences = !strcmp(name, "preferences/backboardd-brightness.plist");
++		if (brightness_preferences) {
++			/* CoreFoundation reads this mobile managed domain before ordinary
++			 * backboardd preferences. Installation precedes launchd and cfprefsd,
++			 * so QuartzCore selects the existing synchronous brightness API on
++			 * its first query while ordinary user preferences retain their keys. */
++			snprintf(path, sizeof(path),
++			    "/private/var/Managed Preferences/mobile/com.apple.backboardd.plist");
++		} else {
++			snprintf(path, sizeof(path), "/private/var/ngpu/%s", name);
++		}
+ 		uint8_t *data = kalloc_data(size ? size : 1, Z_WAITOK);
+ 		int error = data ? native_gpu_addon_inflate(addon + at, packed, data, size) : ENOMEM;
+ 		if (!error) {
+@@ -7483,6 +7493,11 @@ native_gpu_addon_install(proc_t p, user_addr_t scratch)
+ 				error = native_gpu_addon_write(path, data, size, mode, ctx);
+ 			}
+ 		}
++		if (brightness_preferences) {
++			printf("T733 brightness: managed preferences path=%s result=%d unchanged=%d\n",
++			    path, error < 0 ? 0 : error, error < 0);
++		}
++
+ 		if (data) {
+ 			kfree_data(data, size ? size : 1);
+ 		}

@@ -22,9 +22,9 @@
 +		}
 +	}
 +
- 	if (p->p_crash_behavior != 0 || p == initproc) {
- 		proc_handle_critical_exit(p, rv);
- 	}
+ 	boot_progress_exit(proc_getpid(p),p->p_name,rv,
+ 	    p->p_exit_reason ? p->p_exit_reason->osr_namespace : 0,
+ 	    p->p_exit_reason ? p->p_exit_reason->osr_code : 0);
 --- a/osfmk/kern/exception.c
 +++ b/osfmk/kern/exception.c
 @@ -102,6 +102,18 @@

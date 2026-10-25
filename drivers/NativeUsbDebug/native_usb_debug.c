@@ -8,10 +8,11 @@
  * The board supplies SM7325 register windows and stream identifiers in /chosen.
  * Firmware supplies PHY power and clocks; this driver stops its old DMA before
  * assigning the USB stream a private disabled-translation context, initializes
- * CDC ACM, and polls events. Console writers only append to the RAM ring.
+ * CDC ACM and ECM, and polls events. Console writers only append to the RAM ring.
  */
 #if XNU_NATIVE_USB_DEBUG
 #include "native_usb_log.h"
+#include "native_usb_network.h"
 #include "vermeer_usb_protocol.h"
 #include <arm/caches_internal.h>
 #include <kern/clock.h>
@@ -23,6 +24,7 @@
 #include <pexpert/device_tree.h>
 #include <pexpert/pexpert.h>
 #include <sys/param.h>
+#include <sys/errno.h>
 #include <sys/systm.h>
 #include <vm/pmap.h>
 #include <vm/vm_kern.h>
@@ -30,6 +32,16 @@
 extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
 extern ppnum_t pmap_find_phys(pmap_t, addr64_t);
 extern void armcpu_dump_smp(void) __attribute__((weak_import));
+extern void native_ufs_dump_stats(void) __attribute__((weak_import));
+extern void t733_cpu_power_dump_stats(void) __attribute__((weak_import));
+extern void native_ram_block_dump_stats(void) __attribute__((weak_import));
+extern void t733_tlmm_dump_stats(void) __attribute__((weak_import));
+extern void t733_pmic_keys_dump(void) __attribute__((weak_import));
+extern void t733_display_dump(void) __attribute__((weak_import));
+extern void native_usb_net_receive(const void *, unsigned) __attribute__((weak_import));
+extern void native_usb_net_set_link(int) __attribute__((weak_import));
+extern void native_usb_net_start(void) __attribute__((weak_import));
+extern void native_usb_net_dump_stats(void) __attribute__((weak_import));
 
 #define GCTL 0xc110
 #define GEVNTADRLO 0xc400
@@ -45,6 +57,7 @@ extern void armcpu_dump_smp(void) __attribute__((weak_import));
 #define RUN (1u << 31)
 #define RESET (1u << 30)
 #define HALTED (1u << 22)
+#define KEEP_CONNECT (1u << 19)
 #define ACTIVE (1u << 10)
 #define FORCE_REMOVE (1u << 11)
 #define SET_CONFIG 1
@@ -64,16 +77,36 @@ extern void armcpu_dump_smp(void) __attribute__((weak_import));
 #define EVENTS 0
 #define EVENT_SIZE 4096
 /* Separate cache lines: hardware never shares a dirty CPU-owned TRB line. */
-#define SETUP 0x1200
-#define DATA 0x1300
-#define NOTIFY 0x1500
+#define SETUP 0x1300
+#define DATA 0x1400
+#define NOTIFY 0x1700
 #define RX 0x1800
 #define TX 0x2000
 #define RX_SIZE 512
 #define TX_SIZE 2048
 #define DMA_SIZE 0x4000
-static const unsigned trb_off[6] = {0x1000, 0x1040, 0x1080, 0x10c0, 0x1100, 0x1140};
-static const char *const usb_strings[] = {NULL, "UniXNU", "T733 Kernel Log", "T733DBG001"};
+#define NET_RX 0x2800
+#define NET_TX 0x3000
+#define NET_NOTIFY 0x3800
+#define NET_BUFFER_SIZE 2048
+#define NET_FRAME_SIZE 1514
+#define NET_QUEUE_SIZE 32
+#define ENDPOINTS 10
+static const unsigned trb_off[ENDPOINTS] = {
+    0x1000, 0x1040, 0x1080, 0x10c0, 0x1100, 0x1140, 0x1180, 0x11c0, 0x1200, 0x1240
+};
+static const char *const usb_strings[] = {
+    NULL, "UniXNU", "T733 Kernel Log and Ethernet", "T733DBG001", "027330000001"
+};
+/* The transmit queue owns copies until the USB worker copies one into DMA. */
+static struct {
+    uint32_t _Atomic lock, link, generation;
+    unsigned head, count;
+    struct {
+        unsigned length, generation;
+        uint8_t frame[NET_FRAME_SIZE];
+    } entries[NET_QUEUE_SIZE];
+} net_queue;
 /* UsbBoard contains the versioned little-endian /chosen property. */
 static struct {
     uint32_t version, core, core_size, scratch, phy, eud;
@@ -86,13 +119,21 @@ static bool panicking;
 static bool tasks_requested;
 static char tasks_process_name[64];
 static bool cpus_requested;
+static bool ufs_requested;
+static bool gpio_requested;
+static bool dvfs_requested;
+static bool display_requested;
+static bool network_requested;
 static uint64_t panic_deadline;
 static struct {
     vm_offset_t regs, dma, smmu;
     uint64_t pa, cursor, tx_bytes, rx_bytes;
     uint32_t pos, events, setups, mps;
-    unsigned resource[6], requested[6];
-    bool busy[6], failed, configured, dtr, notify, reconnect;
+    unsigned resource[ENDPOINTS], requested[ENDPOINTS];
+    bool busy[ENDPOINTS], failed, configured, dtr, notify, reconnect;
+    unsigned net_alt, net_filter, net_notice;
+    bool net_reconfigure, net_discard, net_zlp, net_active;
+    uint64_t net_tx_frames, net_rx_frames, net_dropped;
     enum { SETUP_PHASE, DATA_PHASE, WAIT2, WAIT3, STATUS_PHASE } phase;
     bool data_in, set_line;
     uint8_t coding[7];
@@ -100,8 +141,11 @@ static struct {
     unsigned command_n;
     bool command_overflow;
     int sleep_channel;
-    uint64_t tx_start, reset_count;
+    uint64_t tx_start, reset_count, recovery_attempts, recovery_deadline, failures;
+    uint32_t last_event, failure_event;
+    const char *last_failure;
 } u;
+static void network_link(bool up);
 
 static uint32_t read_reg(vm_offset_t base, unsigned off)
 {
@@ -125,13 +169,20 @@ static void sync_dma(unsigned off, unsigned size)
 }
 static void fail(const char *why)
 {
-    if (!u.failed && !panicking)
-        printf("NativeUsbDebug: stopped: %s; DMA retained\n", why);
+    if (!u.failed) {
+        ++u.failures;
+        u.last_failure = why;
+        u.failure_event = u.last_event;
+        if (!panicking) {
+            printf("NativeUsbDebug: recovery needed: %s; DMA retained\n", why);
+        }
+    }
     u.failed = true;
+    network_link(false);
 }
 static int epcmd(unsigned ep, unsigned cmd, uint32_t p0, uint32_t p1, uint32_t p2)
 {
-    if (u.failed || ep >= 6)
+    if ((u.failed && (cmd & 15) != END) || ep >= ENDPOINTS)
         return -1;
     wr(EPBASE(ep) + 8, p0);
     wr(EPBASE(ep) + 4, p1);
@@ -159,7 +210,7 @@ static void transfer(unsigned ep, unsigned buf, unsigned length, unsigned kind)
 {
     if (u.failed)
         return;
-    if (ep >= 6 || u.busy[ep] || buf > DMA_SIZE || length > DMA_SIZE - buf) {
+    if (ep >= ENDPOINTS || u.busy[ep] || buf > DMA_SIZE || length > DMA_SIZE - buf) {
         fail("transfer ownership/bounds");
         return;
     }
@@ -179,7 +230,7 @@ static void transfer(unsigned ep, unsigned buf, unsigned length, unsigned kind)
 }
 static int complete(unsigned ep)
 {
-    if (ep >= 6 || !u.busy[ep]) {
+    if (ep >= ENDPOINTS || !u.busy[ep]) {
         fail("unexpected completion");
         return -1;
     }
@@ -207,16 +258,77 @@ static void receive_arm(void)
 {
     transfer(2, RX, RX_SIZE, T_NORMAL);
 }
-static void stop_data(void)
+static void network_link(bool up)
 {
-    for (unsigned ep = 2; ep < 6; ep++) {
-        if (u.busy[ep]) {
-            if (!u.resource[ep] || epcmd(ep, END | FORCE_REMOVE | (u.resource[ep] << 16), 0, 0, 0))
+    os_atomic_store(&net_queue.link, up ? 1 : 0, release);
+    if (!up) {
+        os_atomic_inc(&net_queue.generation, relaxed);
+    }
+}
+
+int native_usb_net_transmit(const void *frame, unsigned length)
+{
+    if (!frame || length < 14 || length > NET_FRAME_SIZE) {
+        return EMSGSIZE;
+    }
+    unsigned generation = os_atomic_load(&net_queue.generation, acquire);
+    if (!os_atomic_load(&net_queue.link, acquire)) {
+        return ENETDOWN;
+    }
+    if (!os_atomic_cmpxchg(&net_queue.lock, 0, 1, acquire)) {
+        return EAGAIN;
+    }
+    int error = 0;
+    if (!os_atomic_load(&net_queue.link, acquire) ||
+        generation != os_atomic_load(&net_queue.generation, acquire)) {
+        error = ENETDOWN;
+    } else if (net_queue.count == NET_QUEUE_SIZE) {
+        error = ENOBUFS;
+    } else {
+        unsigned slot = (net_queue.head + net_queue.count) % NET_QUEUE_SIZE;
+        net_queue.entries[slot].generation = generation;
+        net_queue.entries[slot].length = length;
+        memcpy(net_queue.entries[slot].frame, frame, length);
+        ++net_queue.count;
+    }
+    os_atomic_store(&net_queue.lock, 0, release);
+    return error;
+}
+
+static void network_alt(unsigned alt)
+{
+    network_link(false);
+    u.net_reconfigure = true;
+    for (unsigned ep = 6; ep <= 7; ++ep) {
+        if (u.busy[ep] && u.resource[ep]) {
+            if (epcmd(ep, END | FORCE_REMOVE | (u.resource[ep] << 16), 0, 0, 0)) {
                 return;
+            }
             u.busy[ep] = false;
         }
     }
-    wr(DALEPENA, 3);
+    wr(DALEPENA, rd(DALEPENA) & ~((1u << 6) | (1u << 7)));
+    u.net_alt = alt;
+    u.net_filter = alt ? 0x0e : 0;
+    u.net_active = u.net_zlp = u.net_discard = false;
+    u.net_notice = 1;
+}
+
+static void stop_transfers(void)
+{
+    network_link(false);
+    u.net_alt = u.net_notice = 0;
+    u.net_reconfigure = u.net_active = u.net_zlp = u.net_discard = false;
+    if (u.busy[3]) {
+        u.cursor = u.tx_start;
+    }
+    for (unsigned ep = 0; ep < ENDPOINTS; ep++) {
+        if (u.busy[ep]) {
+            if (u.resource[ep] && !epcmd(ep, END | FORCE_REMOVE | (u.resource[ep] << 16), 0, 0, 0)) {
+                u.busy[ep] = false;
+            }
+        }
+    }
     u.configured = false;
     u.dtr = false;
     u.notify = false;
@@ -232,12 +344,21 @@ static void configure(void)
         epcmd(3, SET_RESOURCE, 1, 0, 0) ||
         epcmd(5, SET_CONFIG, (3u << 1) | (16u << 3) | (2u << 17),
               (1u << 8) | (8u << 16) | (5u << 25), 0) ||
-        epcmd(5, SET_RESOURCE, 1, 0, 0))
+        epcmd(5, SET_RESOURCE, 1, 0, 0) ||
+        epcmd(6, SET_CONFIG, (2u << 1) | (u.mps << 3), (1u << 8) | (6u << 25), 0) ||
+        epcmd(6, SET_RESOURCE, 1, 0, 0) ||
+        epcmd(7, SET_CONFIG, (2u << 1) | (u.mps << 3) | (3u << 17),
+              (1u << 8) | (7u << 25), 0) ||
+        epcmd(7, SET_RESOURCE, 1, 0, 0) ||
+        epcmd(9, SET_CONFIG, (3u << 1) | (16u << 3) | (4u << 17),
+              (1u << 8) | (8u << 16) | (9u << 25), 0) ||
+        epcmd(9, SET_RESOURCE, 1, 0, 0))
         return;
-    wr(DALEPENA, 3 | (1u << 2) | (1u << 3) | (1u << 5));
+    wr(DALEPENA, 3 | (1u << 2) | (1u << 3) | (1u << 5) | (1u << 9));
     u.configured = true;
     receive_arm();
-    printf("NativeUsbDebug: CDC ACM configured, bulk MPS %u\n", u.mps);
+    u.net_notice = 1;
+    printf("NativeUsbDebug: CDC ACM/ECM configured, bulk MPS %u\n", u.mps);
 }
 static unsigned string_desc(unsigned index, uint8_t *data)
 {
@@ -333,10 +454,28 @@ static void handle_setup(void)
         n = 2;
         break;
     case VUSB_INTERFACE:
+        if (!u.configured) {
+            stall();
+            return;
+        }
+        if (index == 3) {
+            network_alt(value);
+        }
         break;
     case VUSB_GET_INTERFACE:
-        data[0] = 0;
+        if (!u.configured) {
+            stall();
+            return;
+        }
+        data[0] = index == 3 ? u.net_alt : 0;
         n = 1;
+        break;
+    case VUSB_PACKET_FILTER:
+        if (!u.configured) {
+            stall();
+            return;
+        }
+        u.net_filter = value;
         break;
     case VUSB_SET_LINE:
         u.set_line = true;
@@ -357,6 +496,17 @@ static void handle_setup(void)
     case VUSB_BREAK:
         break;
     case VUSB_CLEAR_HALT:
+        if (!u.configured || ((index == 3 || index == 0x83) && !u.net_alt)) {
+            stall();
+            return;
+        }
+        if (index == 3 || index == 0x83) {
+            unsigned filter = u.net_filter;
+            network_alt(u.net_alt);
+            u.net_filter = filter;
+            (void)epcmd((index & 15) * 2 + ((index >> 7) & 1), CLEAR_STALL, 0, 0, 0);
+            break;
+        }
         if (u.busy[(index & 15) * 2 + ((index >> 7) & 1)]) {
             u.reconnect = true;
             return;
@@ -388,12 +538,29 @@ static void command_line(void)
         printf("T733 DEBUG: command too long\n");
     else if (!strcmp(u.command, "ping"))
         printf("T733 DEBUG: pong T733DBG001\n");
-    else if (!strcmp(u.command, "status"))
+    else if (!strcmp(u.command, "status")) {
         printf("T733 DEBUG: T733DBG001 events=%u tx=%llu rx=%llu log=%llu dropped=%llu "
                "overwritten=%llu resets=%llu\n",
                u.events, u.tx_bytes, u.rx_bytes, native_usb_log_total(), native_usb_log_dropped(),
                native_usb_log_overwritten(), u.reset_count);
-    else if (!strcmp(u.command, "tasks")) {
+        printf("T733 USB: recoveries=%llu failures=%llu last_event=%08x failure_event=%08x last_failure=%s DCTL=%08x DSTS=%08x\n",
+               u.recovery_attempts, u.failures, u.last_event, u.failure_event,
+               u.last_failure ? u.last_failure : "none", rd(DCTL), rd(DSTS));
+        ufs_requested = true;
+        gpio_requested = true;
+        dvfs_requested = true;
+        network_requested = true;
+    } else if (!strcmp(u.command, "network")) {
+        network_requested = true;
+    } else if (!strcmp(u.command, "ufs")) {
+        ufs_requested = true;
+    } else if (!strcmp(u.command, "gpio")) {
+        gpio_requested = true;
+    } else if (!strcmp(u.command, "dvfs")) {
+        dvfs_requested = true;
+    } else if (!strcmp(u.command, "display")) {
+        display_requested = true;
+    } else if (!strcmp(u.command, "tasks")) {
         tasks_process_name[0] = '\0';
         tasks_requested = true;
     } else if (!strncmp(u.command, "tasks ", 6) && u.command[6]) {
@@ -408,7 +575,7 @@ static void command_line(void)
         u.cursor = 0;
         printf("T733 DEBUG: replay retained RAM log\n");
     } else if (u.command_n)
-        printf("T733 DEBUG: commands help status ping replay tasks [process-name] cpus\n");
+        printf("T733 DEBUG: commands help status ping replay tasks [process-name] cpus ufs gpio dvfs display network\n");
     u.command_n = 0;
     u.command_overflow = false;
 }
@@ -453,8 +620,127 @@ static void transmit(void)
         u.tx_bytes += n;
     }
 }
+static bool network_accept(const uint8_t *frame)
+{
+    const uint8_t host[6] = {2, 0x73, 0x30, 0, 0, 1};
+    const uint8_t broadcast[6] = {255, 255, 255, 255, 255, 255};
+    if (u.net_filter & 1) {
+        return true;
+    }
+    if (!memcmp(frame, broadcast, 6)) {
+        return (u.net_filter & 8) != 0;
+    }
+    if (frame[0] & 1) {
+        return (u.net_filter & 2) != 0;
+    }
+    return (u.net_filter & 4) && !memcmp(frame, host, 6);
+}
+
+static void network_receive(unsigned length)
+{
+    sync_dma(NET_RX, NET_BUFFER_SIZE);
+    /* A short packet, including a ZLP, terminates exactly one ECM frame.
+     * Oversized transfers are discarded through their terminating packet. */
+    if (length == NET_BUFFER_SIZE) {
+        u.net_discard = true;
+    } else {
+        if (!u.net_discard && length >= 14 && length <= NET_FRAME_SIZE && native_usb_net_receive) {
+            native_usb_net_receive((const void *)(u.dma + NET_RX), length);
+            ++u.net_rx_frames;
+        } else if (length || u.net_discard) {
+            ++u.net_dropped;
+        }
+        u.net_discard = false;
+    }
+}
+
+static void network_poll(void)
+{
+    if (panicking || u.failed || u.reconnect || !u.configured) {
+        return;
+    }
+    if (u.net_reconfigure) {
+        /* END completion events must be drained before these TRBs are reused. */
+        if (rd(GEVNTCOUNT) & 0xffff) {
+            return;
+        }
+        u.net_reconfigure = false;
+        if (u.net_alt) {
+            if (epcmd(6, SET_CONFIG, (2u << 1) | (u.mps << 3),
+                      (1u << 8) | (6u << 25), 0) ||
+                epcmd(7, SET_CONFIG, (2u << 1) | (u.mps << 3) | (3u << 17),
+                      (1u << 8) | (7u << 25), 0)) {
+                return;
+            }
+            wr(DALEPENA, rd(DALEPENA) | (1u << 6) | (1u << 7));
+            network_link(native_usb_net_receive != NULL);
+        }
+    }
+    if (u.net_notice && !u.busy[9]) {
+        uint8_t msg[16] = {0xa1, 0, 0, 0, 2, 0, 0, 0};
+        unsigned size = 8;
+        if (u.net_notice == 1) {
+            msg[2] = os_atomic_load(&net_queue.link, acquire) ? 1 : 0;
+            u.net_notice = msg[2] ? 2 : 0;
+        } else {
+            msg[1] = 0x2a;
+            msg[6] = 8;
+            unsigned rate = u.mps == 512 ? 480000000 : 12000000;
+            for (unsigned i = 0; i < 4; ++i) {
+                msg[8 + i] = msg[12 + i] = (uint8_t)(rate >> (8 * i));
+            }
+            size = 16;
+            u.net_notice = 0;
+        }
+        memcpy((void *)(u.dma + NET_NOTIFY), msg, size);
+        transfer(9, NET_NOTIFY, size, T_NORMAL);
+    }
+    if (!u.net_alt) {
+        return;
+    }
+    if (!u.busy[6]) {
+        transfer(6, NET_RX, NET_BUFFER_SIZE, T_NORMAL);
+    }
+    if (u.busy[7]) {
+        return;
+    }
+    if (u.net_active) {
+        if (u.net_zlp) {
+            u.net_zlp = false;
+            transfer(7, NET_TX, 0, T_NORMAL);
+            return;
+        }
+        ++u.net_tx_frames;
+        u.net_active = false;
+    }
+    if (!os_atomic_cmpxchg(&net_queue.lock, 0, 1, acquire)) {
+        return;
+    }
+    unsigned length = 0;
+    while (net_queue.count) {
+        unsigned slot = net_queue.head;
+        net_queue.head = (slot + 1) % NET_QUEUE_SIZE;
+        --net_queue.count;
+        if (net_queue.entries[slot].generation != os_atomic_load(&net_queue.generation, relaxed) ||
+            !network_accept(net_queue.entries[slot].frame)) {
+            ++u.net_dropped;
+            continue;
+        }
+        length = net_queue.entries[slot].length;
+        memcpy((void *)(u.dma + NET_TX), net_queue.entries[slot].frame, length);
+        break;
+    }
+    os_atomic_store(&net_queue.lock, 0, release);
+    if (length) {
+        u.net_active = true;
+        u.net_zlp = (length % u.mps) == 0;
+        transfer(7, NET_TX, length, T_NORMAL);
+    }
+}
+
 static void event(uint32_t e)
 {
+    u.last_event = e;
     if (e & 1) {
         if ((e & 0xfe) != 0) {
             fail("unexpected device event format");
@@ -462,7 +748,7 @@ static void event(uint32_t e)
         }
         unsigned type = (e >> 8) & 15;
         if (type == 1) {
-            if (u.configured) {
+            if (u.configured || u.phase != SETUP_PHASE) {
                 u.reconnect = true;
                 return;
             }
@@ -487,18 +773,32 @@ static void event(uint32_t e)
     }
     unsigned ep = (e >> 1) & 31, type = (e >> 6) & 15, status = (e >> 12) & 15;
     if (type == 1) {
-        if (ep >= 6 || !u.busy[ep])
+        if (ep >= ENDPOINTS || !u.busy[ep] ||
+            (u.net_reconfigure && (ep == 6 || ep == 7)))
             return;
         int n = complete(ep);
         if (n < 0)
             return;
         if (status & 1) {
+            if (ep == 3) {
+                u.cursor = u.tx_start;
+            }
             fail("USB transfer bus error");
+            return;
+        }
+        if (ep == 7 && (unsigned)n != u.requested[ep]) {
+            fail("ECM incomplete transmit");
             return;
         }
         if (ep == 2) {
             if (!panicking)
                 receive_done((unsigned)n);
+            return;
+        }
+        if (ep == 6) {
+            if (!panicking) {
+                network_receive((unsigned)n);
+            }
             return;
         }
         if (ep > 1)
@@ -618,8 +918,18 @@ static bool configure_stream(void)
 static bool stop_controller(void)
 {
     wr(DEVTEN, 0);
-    wr(DCTL, rd(DCTL) & ~RUN);
-    for (unsigned i = 0; i < 500 && !(rd(DSTS) & HALTED); ++i) {
+    /* DWC3 must retire active endpoints and their command events before halt.
+     * END does not release DMA for reuse; start_controller also completes reset. */
+    stop_transfers();
+    wr(DCTL, rd(DCTL) & ~(RUN | KEEP_CONNECT));
+    for (unsigned i = 0; i < 500; ++i) {
+        unsigned pending = rd(GEVNTCOUNT) & 0xffff;
+        if (pending) {
+            wr(GEVNTCOUNT, pending);
+        }
+        if (rd(DSTS) & HALTED) {
+            return true;
+        }
         delay(1000);
     }
     return (rd(DSTS) & HALTED) != 0;
@@ -628,21 +938,22 @@ static bool stop_controller(void)
 static bool start_controller(void)
 {
     if (!stop_controller()) {
-        fail("controller halt timeout");
-        return false;
+        /* The SM7325 gadget driver also uses device core reset after halt times
+         * out. DMA remains untouched until reset completes and HALTED is set. */
+        fail("controller halt timeout; resetting core");
     }
-    if (u.busy[3]) {
-        u.cursor = u.tx_start;
-    }
-    wr(DCTL, RESET);
+    wr(DCTL, (rd(DCTL) & ~(RUN | KEEP_CONNECT)) | RESET);
     for (unsigned i = 0; i < 500 && (rd(DCTL) & RESET); ++i) {
         delay(1000);
     }
-    if (rd(DCTL) & RESET) {
+    if ((rd(DCTL) & RESET) || !(rd(DSTS) & HALTED)) {
         fail("controller reset timeout");
         return false;
     }
+    /* The board's DWC3 driver requires a 50 ms PHY synchronization interval. */
+    delay(50000);
     /* The reset completes before any memory referenced by old TRBs is reused. */
+    u.failed = false;
     memset((void *)u.dma, 0, DMA_SIZE);
     memset(u.busy, 0, sizeof(u.busy));
     memset(u.resource, 0, sizeof(u.resource));
@@ -687,35 +998,66 @@ static void poll_events(void)
     }
     if (count) {
         sync_dma(EVENTS, EVENT_SIZE);
-        for (unsigned i = 0; i < count && !u.failed && !u.reconnect; i += 4) {
+        unsigned consumed = 0;
+        while (consumed < count && !u.failed && !u.reconnect) {
             uint32_t e = *(volatile uint32_t *)(u.dma + u.pos);
             u.pos = (u.pos + 4) % EVENT_SIZE;
+            consumed += 4;
             ++u.events;
             event(e);
         }
-        wr(GEVNTCOUNT, count);
+        wr(GEVNTCOUNT, consumed);
     }
     if (!u.reconnect) {
         transmit();
+        network_poll();
     }
 }
 
 static void usb_thread(void *arg __unused, wait_result_t result __unused)
 {
-    while (!u.failed) {
+    unsigned reported_generation = 0;
+    bool reported_link = false;
+    if (native_usb_net_start) {
+        native_usb_net_start();
+    }
+    for (;;) {
         if (os_atomic_cmpxchg(&controller_owner, 0, 1, acquire)) {
-            poll_events();
-            if (u.reconnect && !panicking) {
-                /* A visible disconnect interval allows the host to discard
-                 * its old configuration before the fresh event ring starts. */
-                if (stop_controller()) {
-                    delay(20000);
-                    (void)start_controller();
+            if (!u.failed && !u.reconnect) {
+                poll_events();
+            }
+            if ((u.reconnect || u.failed) && !panicking && mach_absolute_time() >= u.recovery_deadline) {
+                ++u.recovery_attempts;
+                if (start_controller()) {
+                    clock_interval_to_deadline(250, NSEC_PER_MSEC, &u.recovery_deadline);
+                    printf("NativeUsbDebug: controller restarted attempt=%llu; waiting for host enumeration\n",
+                           u.recovery_attempts);
                 } else {
-                    fail("disconnect halt timeout");
+                    clock_interval_to_deadline(1, NSEC_PER_SEC, &u.recovery_deadline);
                 }
             }
             os_atomic_store(&controller_owner, 0, release);
+        }
+        if (!panicking && native_usb_net_set_link) {
+            unsigned generation = os_atomic_load(&net_queue.generation, acquire);
+            bool link = os_atomic_load(&net_queue.link, acquire) != 0;
+            if (generation != reported_generation && reported_link) {
+                native_usb_net_set_link(0);
+                reported_link = false;
+            }
+            if (link != reported_link) {
+                native_usb_net_set_link(link);
+                reported_link = link;
+            }
+            reported_generation = generation;
+        }
+        if (network_requested && !panicking) {
+            network_requested = false;
+            printf("T733 ECM: alt=%u filter=%x tx=%llu rx=%llu dropped=%llu\n",
+                   u.net_alt, u.net_filter, u.net_tx_frames, u.net_rx_frames, u.net_dropped);
+            if (native_usb_net_dump_stats) {
+                native_usb_net_dump_stats();
+            }
         }
         if (tasks_requested && !panicking) {
             tasks_requested = false;
@@ -729,13 +1071,47 @@ static void usb_thread(void *arg __unused, wait_result_t result __unused)
                 printf("T733 CPUS: ArmCpu diagnostics unavailable\n");
             }
         }
+        if (ufs_requested && !panicking) {
+            ufs_requested = false;
+            if (native_ufs_dump_stats) {
+                native_ufs_dump_stats();
+            } else {
+                printf("T733 UFS: NativeUfs diagnostics unavailable\n");
+            }
+            if (native_ram_block_dump_stats) {
+                native_ram_block_dump_stats();
+            }
+        }
+        if (gpio_requested && !panicking) {
+            gpio_requested = false;
+            if (t733_tlmm_dump_stats) {
+                t733_tlmm_dump_stats();
+            } else {
+                printf("T733 GPIO: TLMM diagnostics unavailable\n");
+            }
+            if (t733_pmic_keys_dump) {
+                t733_pmic_keys_dump();
+            }
+        }
+        if (dvfs_requested && !panicking) {
+            dvfs_requested = false;
+            if (t733_cpu_power_dump_stats) {
+                t733_cpu_power_dump_stats();
+            } else {
+                printf("T733 DVFS: CPU power driver unavailable\n");
+            }
+        }
+        if (display_requested && !panicking) {
+            display_requested = false;
+            if (t733_display_dump) {
+                t733_display_dump();
+            }
+        }
         uint64_t deadline;
         clock_interval_to_deadline(1, NSEC_PER_MSEC, &deadline);
         (void)assert_wait_deadline(&u.sleep_channel, THREAD_UNINT, deadline);
         thread_block(THREAD_CONTINUE_NULL);
     }
-    ready = false;
-    thread_terminate(current_thread());
 }
 
 void native_usb_debug_panic(const char *message, unsigned long caller)
@@ -829,6 +1205,14 @@ void native_usb_debug_start(void)
     unsigned width = rd(0xc140) >> 24;
     printf("NativeUsbDebug: id=%08x width=%u GCTL=%08x DCTL=%08x\n", id, width, rd(GCTL), rd(DCTL));
     if (((id >> 16) != 0x5533 && (id >> 16) != 0x3331) || ((rd(GCTL) >> 12) & 3) != 2) {
+        return;
+    }
+    unsigned hardware = rd(0xc14c);
+    unsigned inputs = (hardware >> 18) & 31;
+    unsigned endpoints = (hardware >> 12) & 63;
+    if (inputs < 5 || endpoints < inputs + 4) {
+        printf("NativeUsbDebug: insufficient composite endpoint resources in=%u total=%u\n",
+               inputs, endpoints);
         return;
     }
     unsigned dma_bits = width < 44 ? width : 44;

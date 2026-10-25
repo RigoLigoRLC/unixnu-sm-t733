@@ -3,6 +3,8 @@
 #include <IOKit/IODeviceMemory.h>
 #include <IOKit/IOLib.h>
 #include <IOKit/IOMemoryDescriptor.h>
+#include "T733Tlmm.h"
+#include <kern/sched_prim.h>
 #include <kern/thread.h>
 #include <pexpert/pexpert.h>
 
@@ -30,6 +32,11 @@ struct TouchBoard {
 
 static TouchBoard board;
 static uint32_t started;
+static uint32_t displayAwake = 1;
+static uint32_t touchReady;
+static uint32_t powerRequest;
+static uint32_t powerCompleted;
+static int powerResult;
 
 static uint32_t read32(uintptr_t base, uint32_t offset)
 {
@@ -253,18 +260,35 @@ static void reportFrameFailure(int result, unsigned failures)
         head[8], head[9], head[10], head[11], head[12], head[13], head[14], head[15]);
 }
 
-static void armTouchEdge(void)
+static uint32_t touchPending;
+
+static void touchInterrupt(unsigned, void *)
 {
-    const uint32_t configOffset = 81 * 0x1000 + 8;
-    const uint32_t statusOffset = 81 * 0x1000 + 12;
-    uint32_t before = read32(board.tlmm, configOffset);
-    // Yupik raw falling-edge status latches while the CPU summary interrupt is masked.
-    uint32_t config = (before & ~0xffu) | (3u << 5) | (1u << 4) | (2u << 2) | (1u << 1);
-    write32(board.tlmm, configOffset, config);
-    write32(board.tlmm, statusOffset, read32(board.tlmm, statusOffset) & ~1u);
-    printf("T733 touch: IRQ81 falling latch config=%x->%x status=%x level=%u\n",
-        before, read32(board.tlmm, configOffset), read32(board.tlmm, statusOffset),
-        read32(board.tlmm, 81 * 0x1000 + 4) & 1);
+    __atomic_store_n(&touchPending, 1u, __ATOMIC_RELEASE);
+    thread_wakeup(reinterpret_cast<event_t>(&touchPending));
+}
+
+static void armTouchAfterFirmware(void)
+{
+    // A low line gets one initial read; a completed pulse retains its raw latch.
+    t733_tlmm_irq_mask(81);
+    if (t733_tlmm_level(81) == 0) {
+        t733_tlmm_irq_ack(81);
+        touchInterrupt(81, nullptr);
+    } else {
+        t733_tlmm_irq_rearm(81);
+    }
+}
+
+static void waitForTouchEvent(void)
+{
+    while (!__atomic_exchange_n(&touchPending, 0u, __ATOMIC_ACQ_REL)) {
+        assert_wait(reinterpret_cast<event_t>(&touchPending), THREAD_UNINT);
+        if (__atomic_load_n(&touchPending, __ATOMIC_ACQUIRE)) {
+            clear_wait(current_thread(), THREAD_AWAKENED);
+        }
+        thread_block(THREAD_CONTINUE_NULL);
+    }
 }
 
 static void worker(void *, wait_result_t)
@@ -288,33 +312,59 @@ static void worker(void *, wait_result_t)
         thread_terminate(current_thread());
         return;
     }
-    armTouchEdge();
-    bool initialLow = !(read32(board.tlmm, 81 * 0x1000 + 4) & 1);
-    printf("T733 touch: FT8203 scanning 1600x2560 SPI=4800000 PIO IRQ81-latch poll=1ms\n");
+    result = t733_tlmm_irq_register(81, T733_TLMM_EDGE_FALLING, touchInterrupt, nullptr);
+    if (result) {
+        printf("T733 touch: GPIO81 TLMM registration failed=%d\n", result);
+        thread_terminate(current_thread());
+        return;
+    }
+    armTouchAfterFirmware();
+    __atomic_store_n(&touchReady, 1u, __ATOMIC_RELEASE);
+    touchInterrupt(81, nullptr);
+    printf("T733 touch: FT8203 scanning 1600x2560 SPI=4800000 PIO IRQ81 worker\n");
 
     unsigned failures = 0;
     unsigned recoveries = 0;
     unsigned frames = 0;
     uint16_t lastActive = 0;
     struct Fts8203Frame frame = {};
+    bool awake = true;
     for (;;) {
-        uint32_t pending = read32(board.tlmm, 81 * 0x1000 + 12);
-        if (!(pending & 1) && !initialLow) {
-            IOSleep(1);
+        waitForTouchEvent();
+        const uint32_t request = __atomic_load_n(&powerRequest, __ATOMIC_ACQUIRE);
+        const bool wanted = __atomic_load_n(&displayAwake, __ATOMIC_ACQUIRE) != 0;
+        if (wanted != awake) {
+            t733_tlmm_irq_mask(81);
+            frame = {};
+            frame.up = lastActive;
+            t733_touch_hid_frame(&frame);
+            lastActive = 0;
+            if (wanted) {
+                result = fts8203_start(&board.chip, t733_touch_firmware, t733_touch_firmware_size);
+            } else {
+                result = fts8203_sleep(&board.chip);
+            }
+            awake = wanted && !result;
+            failures = 0;
+            recoveries = 0;
+            __atomic_store_n(&powerResult, result, __ATOMIC_RELEASE);
+            printf("T733 touch: display awake=%u result=%d\n", awake, result);
+            if (awake) {
+                armTouchAfterFirmware();
+            }
+        }
+        __atomic_store_n(&powerCompleted, request, __ATOMIC_RELEASE);
+        if (!awake) {
             continue;
         }
-        initialLow = false;
-        // Ack before the SPI read so an edge arriving during the read stays pending.
-        if (pending & 1) {
-            write32(board.tlmm, 81 * 0x1000 + 12, pending & ~1u);
-        }
+        // The dispatcher acknowledged this frame; raw capture remains enabled during SPI.
         result = fts8203_frame(&board.chip, &frame);
         if (!result) {
             failures = 0;
             t733_touch_hid_frame(&frame);
             if (frame.active != lastActive || frame.down || frame.up || (frame.active && !(frames % 128))) {
-                printf("T733 touch: frame=%u contacts=%x down=%x up=%x x0=%u y0=%u latch=%x irq=%u head=%02x%02x%02x%02x%02x%02x%02x%02x\n", frames,
-                    frame.active, frame.down, frame.up, frame.x[0], frame.y[0], pending,
+                printf("T733 touch: frame=%u contacts=%x down=%x up=%x x0=%u y0=%u delivered=%u irq=%u head=%02x%02x%02x%02x%02x%02x%02x%02x\n", frames,
+                    frame.active, frame.down, frame.up, frame.x[0], frame.y[0], t733_tlmm_irq_count(81),
                     read32(board.tlmm, 81 * 0x1000 + 4) & 1,
                     board.chip.frame_head[1], board.chip.frame_head[2], board.chip.frame_head[3],
                     board.chip.frame_head[4], board.chip.frame_head[5], board.chip.frame_head[6],
@@ -337,25 +387,45 @@ static void worker(void *, wait_result_t)
                 if (state == 1) {
                     if (++recoveries > 3) {
                         printf("T733 touch: confirmed ROM recovery limit reached\n");
-                        break;
+                        t733_tlmm_irq_mask(81);
+                        awake = false;
+                        continue;
                     }
                     result = fts8203_start(&board.chip, t733_touch_firmware, t733_touch_firmware_size);
                     printf("T733 touch: recovery=%u result=%d\n", recoveries, result);
                     if (result) {
-                        break;
+                        t733_tlmm_irq_mask(81);
+                        awake = false;
+                        continue;
                     }
                     failures = 0;
-                    armTouchEdge();
-                    initialLow = !(read32(board.tlmm, 81 * 0x1000 + 4) & 1);
+                    armTouchAfterFirmware();
+                    continue;
                 }
             }
         }
-        IOSleep(1);
+        t733_tlmm_irq_rearm(81);
     }
-    thread_terminate(current_thread());
 }
 
 } // namespace
+
+extern "C" int t733_touch_display_power(bool awake)
+{
+    __atomic_store_n(&displayAwake, awake ? 1u : 0u, __ATOMIC_RELEASE);
+    const uint32_t request = __atomic_add_fetch(&powerRequest, 1u, __ATOMIC_ACQ_REL);
+    if (!__atomic_load_n(&touchReady, __ATOMIC_ACQUIRE)) {
+        return 0;
+    }
+    touchInterrupt(81, nullptr);
+    for (unsigned i = 0; i < 600; ++i) {
+        if (__atomic_load_n(&powerCompleted, __ATOMIC_ACQUIRE) == request) {
+            return __atomic_load_n(&powerResult, __ATOMIC_ACQUIRE);
+        }
+        IOSleep(5);
+    }
+    return -60;
+}
 
 extern "C" void t733_touch_start(void)
 {

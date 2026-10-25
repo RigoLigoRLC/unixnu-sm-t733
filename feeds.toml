@@ -1,1 +1,7 @@
 # Common drivers and pinned Apple sources come from UniXNU/feeds.toml.
+
+[[source]]
+name = "sm7325"
+kind = "soc"
+git = "https://github.com/RigoLigoRLC/unixnu-sm7325-common.git"
+commit = "fed432d64a198fdffe4e435fc4d2c28b96b8590f"

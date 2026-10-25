@@ -107,11 +107,13 @@ def main():
     methods = struct.unpack("<358Q", read_reference(vptr, 358 * 8))
 
     declarations = {
+        178: "IOReturn submitSwap(const void *, void *, void *)",
         184: "bool isMainDisplay()", 188: "IOReturn getDotPitch(uint32_t *)",
         213: "IOReturn supportedFrameInfo(uint32_t, uint32_t *, char *, uint32_t *) = 0",
         249: "void getDisplayDimensions(uint32_t *, uint32_t *)",
         288: "bool startHardware()", 290: "void kickSwapQueue()",
         295: "void completeCurrentSwap()", 296: "bool validateSwap(const OriginalLegacySwapRequest *)",
+        298: "IOReturn applyDisplayState()",
         301: "bool getRefreshAttributes(uint64_t *, bool)",
         337: "IOReturn collectCompletionReports(uint32_t, void *, uint32_t *, uint32_t) = 0",
     }
@@ -126,6 +128,15 @@ def main():
     template = package / "T733Display/OriginalLegacyFramebufferABI.h.in"
     (output / "OriginalLegacyFramebufferABI.h").write_text(
         template.read_text().replace("@VIRTUAL_METHODS@", "\n".join(virtuals)))
+    (output / "OriginalAppleARMBacklightABI.h").write_text(
+        (package / "T733Display/OriginalAppleARMBacklightABI.h.in").read_text())
+
+    backlight_constructor = 0xfffffff0059abc1c
+    backlight_destructor = 0xfffffff0059abc84
+    backlight_metaclass = 0xfffffff007ade638
+    backlight_vptr = 0xfffffff006ccbd18
+    backlight_methods = struct.unpack("<169Q",
+        read_reference(backlight_vptr + REFERENCE_SLIDE, 169 * 8))
 
     recipe = tree / "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOPlatformExpert.cpo.json"
     record = json.loads(recipe.read_text().strip().rstrip(","))
@@ -151,10 +162,13 @@ def main():
     raw = (output / "NativeLegacyDisplay.o").read_bytes()
     compiled_image, names = symbols(np, raw)
     vtable = next(address for name, address, _ in names if name == "__ZTV19NativeLegacyDisplay")
+    backlight_vtable = next(address for name, address, _ in names
+                           if name == "__ZTV19NativeT733Backlight")
     imported = {}
     for segment in compiled_image["segments"]:
         for section in segment["sections"]:
-            if not section["va"] <= vtable < section["va"] + section["size"]:
+            if not any(section["va"] <= table < section["va"] + section["size"]
+                       for table in (vtable, backlight_vtable)):
                 continue
             relocations, count = struct.unpack_from("<2I", raw, section["command_offset"] + 56)
             for index in range(count):
@@ -170,8 +184,13 @@ def main():
         "__ZN25IOMobileFramebufferLegacyD2Ev": relocated(0xfffffff005786618),
         "__ZN25IOMobileFramebufferLegacy10gMetaClassE": relocated(0xfffffff006b35940),
         "__ZTV25IOMobileFramebufferLegacy": relocated(vptr - 16),
+        "__ZN17AppleARMBacklightC2EPK11OSMetaClass": backlight_constructor + slide,
+        "__ZN17AppleARMBacklightD2Ev": backlight_destructor + slide,
+        "__ZN17AppleARMBacklight10gMetaClassE": backlight_metaclass + slide,
+        "__ZTV17AppleARMBacklight": backlight_vptr - 16 + slide,
         "_native_legacy_vsync_notify": relocated(0xfffffff005796720),
         "_native_legacy_set_refresh_properties": relocated(0xfffffff00579ebb8),
+        "_native_legacy_set_properties": methods[44] + slide,
     }
     for slot in range(358):
         name = imported.get(vtable + 16 + slot * 8)
@@ -179,6 +198,13 @@ def main():
             raise ValueError(f"Missing compiled dispatch entry {slot}")
         if "25IOMobileFramebufferLegacy" in name:
             bindings[name] = methods[slot] + slide
+
+    for slot in range(169):
+        name = imported.get(backlight_vtable + 16 + slot * 8)
+        if name is None:
+            raise ValueError(f"Missing compiled backlight dispatch entry {slot}")
+        if "17AppleARMBacklight" in name:
+            bindings[name] = backlight_methods[slot] + slide
 
     for name, address, field, wide in [
         ("descriptor", 0xfffffff004b9ead0, 48, True),
@@ -209,6 +235,7 @@ def main():
         "slide": slide, "sources": [str(source) for source in components],
         "bindings": {name: hex(address) for name, address in bindings.items()},
         "virtual_entries": 358, "framebuffer_width": 1600, "framebuffer_height": 2560,
+        "backlight_base_extent": 0x370, "backlight_virtual_entries": 169,
         "hashes_recorded": False,
     }, indent=2) + "\n")
     print(archive)

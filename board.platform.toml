@@ -1,9 +1,20 @@
+schema_version = 2
+
 # SM-T733 board inputs for the upstream UniXNU build driver.
 [board]
 name = "gts7fewifi"
 soc = "SM7325"
+soc_source = "sm7325"
+os_profile = "ipados-17.7.11-21H461"
 description = "Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733)"
 kit = "gts7fewifi"
+
+[components]
+include = ["ArmDTPlatform", "ArmCpu", "DarwinBoot", "NativePrelink", "VirtioMmioBlock", "NativeUfs", "NativeUsbDebug", "device"]
+
+[device_tree]
+source = "device:dts/board.dts"
+include_dirs = ["soc:dts"]
 
 # These identifiers select the Apple restore components consumed by prelinking.
 [ipsw]
@@ -28,11 +39,19 @@ windows = [
 
 [kernel]
 defconfig = "gts7fewifi_platform_defconfig"
+config_fragments = ["arch:configs/common.config", "soc:configs/sm7325.config", "os:configs/ipados.config"]
+patch_series = [
+  "device:patches/arch/arm64/series",
+  "soc:patches/xnu/series",
+  "device:patches/os/ipados-17.7.11-21H461/series",
+  "device:patches/t733-xnu/series",
+  "device:patches/t733-xnu/diagnostics.list",
+]
 archives = [
   "build-corecrypto-14.py",
   "build-corecrypto-14.py --namespace",
-  "build-arm-driver.py ArmDTPlatform",
-  "build-arm-driver.py ArmCpu",
+  "component:ArmDTPlatform",
+  "component:ArmCpu",
   "build-arm-driver.py NativeUfs",
   "build-libpthread-kernel.py",
 ]
@@ -86,12 +105,26 @@ text_fixups = []
 kernel_args = ["-v", "serial=3", "debug=0x14e", "cpus=1", "armcpu-diagnostics=1", "kt_fixed_zones=120", "native-ufs-discover=1", "native-ufs-diagnostics=1"]
 
 [payload.adt]
-tool = "scripts/make-gts7fewifi-adt.py"
+chip_id = "733"
 cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
 psci_method = "smc"
-owned_memory_size = "0x10000000"
+owned_memory_size = "auto"
 packed_data_ramdisk = false
 persistent_data = false
 ipad_identity = false
+
+[adt.chosen.bytes]
+native-usb-debug-config = "010000000000600a00e0000000886f0a00308e0800208e0800f01000001000000000001500001000e00000008000000003000000000000000000000000000000"
+
+[adt.defaults.u32]
+sleep-disabled = 1
+"kern.maxvnodes" = 10240
+
+[adt.root.string]
+model = "SM-T733"
+
+[adt.product.string]
+product-name = "Samsung Galaxy Tab S7 FE Wi-Fi"
+model = "SM-T733"
 
 # Runtime FDT memory spans 0x80000000..0x200000000; UEFI excludes its holes.

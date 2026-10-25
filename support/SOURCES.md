@@ -1,12 +1,12 @@
 # Source provenance and licenses
 
-Recorded on 2026-10-24 for the SM-T733 device repository. The table below identifies upstream baselines. Eight driver and kit submodules pin the published SM-T733 adaptation commits listed in [repositories.json](repositories.json). The device Git tree records each module commit needed for this release.
+Recorded on 2026-10-24 for the SM-T733 device repository. The table below identifies upstream baselines. Thirteen driver and kit submodules pin the published SM-T733 adaptation commits listed in [repositories.json](repositories.json). The source inventory contains sixteen public repositories: nine forks and seven new repositories. NativeQcomTsens, NativeQcomSpmi, NativePmicKeys, NativeGeniI2c, NativeQcomDsi and the updated core pin are registered in the device working tree; the next device commit records those references.
 
 ## Module origins and published adaptations
 
 These directories were copied from the corresponding paths in the development checkout of [UniXNU](https://github.com/UniXNU/UniXNU), whose base revision was `5fdbd5d08518bc2d5c196264c56a377dd80cf5ca`.
 
-The published core fork is fixed at `63f6920d552daacd050b4af65e45d6df16cfc332` by `UniXNU.rev`. Its official baseline is fixed by `UniXNU.upstream.rev`; `UniXNU.patch` records the changes between those revisions. The UEFI fork is fixed at `799544f93bfffd0e7eae38efb53a08fb996d4af5` by `Mu-Silicium.rev`. Bootstrap clones the adapted core directly.
+The published core fork is fixed at `e2b07a50de0ae208fb28129d51990dc02576f6b8` by `UniXNU.rev`. Its official baseline is fixed by `UniXNU.upstream.rev`; `UniXNU.patch` records the changes between those revisions. The UEFI fork is fixed at `799544f93bfffd0e7eae38efb53a08fb996d4af5` by `Mu-Silicium.rev`. Bootstrap clones the adapted core directly.
 
 On 2026-10-24, NativeMobileDisplay was merged with the version fixed by official UniXNU main `1a01c2afa197d975d04da892325c56b6b14aaecb`: `8666a9950c9699b368931d18cac92c0fdb2ce9c0`. This adds GPU swap retirement on acceptance and fixed refresh intervals while retaining the T733 CPU copy, source mapping cache and performance CPU binding. The other six module revisions in this table are unchanged in that official main revision. Synchronization follows the main repository's module revisions.
 
@@ -25,6 +25,33 @@ On 2026-10-24, NativeMobileDisplay was merged with the version fixed by official
 `kits/EarlyEntry` contains the SM-T733 early framebuffer diagnostics. `drivers/NativeFocaltechTouch/Fts8203.c` and `.h` declare BSD-2-Clause-Patent. The protocol research used the [FocalTech FT820x Android source](https://github.com/Bush-cat/android_kernel_samsung_sm7225/tree/lineage-22.2/drivers/input/touchscreen/focaltech/ft820x), whose files carry FocalTech copyright notices and GPL version 2 terms. Those reference notices must be retained with any copied reference code; the SPDX declarations on the new module do not relicense Android source. The research checkout did not record a fixed Git revision for those downloaded reference files.
 
 The ADT encoder and parts of the board workflow use [UniXNU-sheng](https://github.com/UniXNU/UniXNU-sheng), checked out at `b06f2df186c8967fe0cd791d6598d7d86f320d77`, under BSD-2-Clause-Patent. Keep the existing copyright and SPDX notice in `scripts/make-gts7fewifi-adt.py` and notices in other retained sources.
+
+## NativeQcomTsens
+
+`drivers/NativeQcomTsens` is an original BSD-2-Clause-Patent implementation published at [RigoLigoRLC/unixnu-nativeqcomtsens](https://github.com/RigoLigoRLC/unixnu-nativeqcomtsens), commit `8b2fb5e610eaed8fb7c0dc368da9e379adc0e12f`. Its [NOTICE](../drivers/NativeQcomTsens/NOTICE) records the Samsung SM7325 kernel register references and the selected stock device-tree inputs. It reads firmware-calibrated TSENS v2 samples through caller-supplied MMIO addresses. Sensor grouping and frequency caps belong to the device's `package/T733Thermal.cpp`; the driver owns no CPU policy or register writes.
+
+## SPMI, PMIC keys, GENI I2C and DSI modules
+
+These four modules contain original BSD-2-Clause-Patent code and retain their
+own LICENSE and NOTICE files. Their published commits are fixed by the device
+submodules and recorded in [repositories.json](repositories.json).
+
+| Module and repository | Published commit | Hardware references and device-owned configuration |
+| --- | --- | --- |
+| [NativeQcomSpmi](https://github.com/RigoLigoRLC/unixnu-nativeqcomspmi) | `ce3ccf0d2369048ec01372183c8e34dcc519c35f` | Samsung SM7325 `drivers/spmi/spmi-pmic-arb.c` provides v5 register and ownership facts. UniXNU-sheng `ButtonProbe.cpp` and `BootResetCore.h` provide v7/PDC references. The board supplies windows, EE and interrupt route. See [NOTICE](../drivers/NativeQcomSpmi/NOTICE). |
+| [NativePmicKeys](https://github.com/RigoLigoRLC/unixnu-nativepmickeys) | `746935724ffc409c423d8d90636f32246d55988c` | Samsung SM7325 `qpnp-power-on.c` and `pinctrl-spmi-gpio.c` document input status and debounce encoding. UniXNU-sheng and NativeHidInput provide Consumer usage references. The board supplies PMIC addresses, polarity, timings and the original HID registration. See [NOTICE](../drivers/NativePmicKeys/NOTICE). |
+| [NativeGeniI2c](https://github.com/RigoLigoRLC/unixnu-nativegenii2c) | `c9185a7a469cd0297608633e30ab875e9a7c5e03` | Samsung SM7325 `i2c-msm-geni.c`, `i2c-qcom-geni.c` and `qcom-geni-se.h` document commands, FIFO, timing and error status. The board prepares SE10 clocks and pins and configures MAX77816. Optional board callbacks provide open-drain GPIO operation. See [NOTICE](../drivers/NativeGeniI2c/NOTICE). |
+| [NativeQcomDsi](https://github.com/RigoLigoRLC/unixnu-nativeqcomdsi) | `d486690195683e169343ee316af0f45842a2107a` | Qualcomm `techpack/display/msm/dsi/dsi_ctrl.c`, `dsi_ctrl_hw_cmn.c`, `dsi_ctrl_hw_2_2.c` and `dsi_ctrl_reg.h` in the SM7325 reference tree document command FIFO and video-mode scheduling. Panel commands, brightness and power sequencing remain in the device package. See [NOTICE](../drivers/NativeQcomDsi/NOTICE). |
+
+The Samsung kernel references for SPMI, keys and I2C are under
+[Bush-cat/android_kernel_samsung_sm7325](https://github.com/Bush-cat/android_kernel_samsung_sm7325).
+The DSI reference is
+[Bush-cat/android_kernel_samsung_sm7325-devicetrees](https://github.com/Bush-cat/android_kernel_samsung_sm7325-devicetrees).
+These reference files retain their GPL-2.0 notices. UniXNU-sheng's ButtonProbe
+retains BSD-2-Clause-Patent and BootResetCore retains MIT. Each module's NOTICE
+identifies the consulted files; the module license does not replace reference
+source licenses. Vendor binaries and extracted device-tree inputs remain outside
+the published module sources.
 
 ## NativeUsbDebug source chain and retained rights
 

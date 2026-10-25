@@ -1,0 +1,3 @@
+device:patches/t733-xnu/zzz-boot-progress.patch
+component:NativePrelink/patches/xnu-10063.141.1-security-init.patch
+component:NativePrelink/patches/xnu-10063.141.1-sparse-index.patch

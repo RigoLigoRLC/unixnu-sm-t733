@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 #include "T733FuelGauge.h"
-#include <IOKit/IODeviceMemory.h>
+#include "T733Tlmm.h"
 #include <IOKit/IOLib.h>
 #include <IOKit/IOLocks.h>
 #include <IOKit/IOMemoryDescriptor.h>
@@ -16,79 +16,22 @@
 extern "C" {
 void t733_battery_static_init(void) __asm__("__GLOBAL__sub_I_T733Battery.cpp");
 extern kmod_info_t g_kernel_kmod_info;
-IOReturn armcpu_spi_attach(uint32_t intid, bool edge, void (*handler)(void *),
-    void *context, uint32_t *readback, uint64_t *router);
 }
 
-// BatteryInterrupt owns the TLMM summary interrupt and GPIO54 for the SM5714.
-// The interrupt callback masks pending lines and wakes the battery worker. The
-// worker clears SM5714 status over I2C before re-enabling GPIO54. Other pending
-// APPS GPIO sources are masked and reported because no driver owns them here.
+// BatteryInterrupt records worker wakeups for the shared SM5714 GPIO54 source.
+// T733Tlmm owns masking and dispatch; the worker drains I2C status before rearm.
 struct BatteryInterrupt {
-    IOMemoryMap *mapping;
-    IOSimpleLock *lock;
-    uintptr_t base;
     bool attached;
     uint32_t pending;
-    uint32_t count;
-    uint32_t unownedCount;
-    uint32_t lastUnownedPin;
 };
 
 static BatteryInterrupt batteryInterrupt;
 static constexpr unsigned kBatteryGPIO = 54;
-static constexpr unsigned kTlmmGPIOCount = 176;
-static constexpr uint32_t kTlmmEnable = 1u;
-static constexpr uint32_t kTlmmRawStatus = 1u << 4;
-static constexpr uint32_t kTlmmApps = 3u << 5;
 
-static uint32_t gpioRead(unsigned pin, unsigned offset)
+static void batteryInterruptHandler(unsigned, void *)
 {
-    uint32_t value = *reinterpret_cast<volatile uint32_t *>(
-        batteryInterrupt.base + pin * 0x1000 + offset);
-    __asm__ volatile("dmb oshld" ::: "memory");
-    return value;
-}
-
-static void gpioWrite(unsigned pin, unsigned offset, uint32_t value)
-{
-    *reinterpret_cast<volatile uint32_t *>(
-        batteryInterrupt.base + pin * 0x1000 + offset) = value;
-    __asm__ volatile("dsb sy" ::: "memory");
-}
-
-static void maskGPIO(unsigned pin)
-{
-    gpioWrite(pin, 8, gpioRead(pin, 8) & ~(kTlmmEnable | kTlmmRawStatus));
-    gpioWrite(pin, 12, gpioRead(pin, 12) & ~1u);
-}
-
-static void batteryInterruptHandler(void *)
-{
-    bool wake = false;
-    IOSimpleLockLock(batteryInterrupt.lock);
-    for (unsigned pin = 0; pin < kTlmmGPIOCount; ++pin) {
-        uint32_t config = gpioRead(pin, 8);
-        if (!(config & kTlmmEnable) || (config & (7u << 5)) != kTlmmApps ||
-            !(gpioRead(pin, 12) & 1u)) {
-            continue;
-        }
-
-        maskGPIO(pin);
-        if (pin == kBatteryGPIO) {
-            ++batteryInterrupt.count;
-        } else {
-            ++batteryInterrupt.unownedCount;
-            batteryInterrupt.lastUnownedPin = pin;
-        }
-        wake = true;
-    }
-    IOSimpleLockUnlock(batteryInterrupt.lock);
-
-    if (wake) {
-        __atomic_store_n(&batteryInterrupt.pending, 1u, __ATOMIC_RELEASE);
-        thread_wakeup(reinterpret_cast<event_t>(&batteryInterrupt.pending));
-    }
+    __atomic_store_n(&batteryInterrupt.pending, 1u, __ATOMIC_RELEASE);
+    thread_wakeup(reinterpret_cast<event_t>(&batteryInterrupt.pending));
 }
 
 static bool attachBatteryInterrupt(void)
@@ -96,58 +39,22 @@ static bool attachBatteryInterrupt(void)
     if (batteryInterrupt.attached) {
         return true;
     }
-    if (!batteryInterrupt.mapping) {
-        IODeviceMemory *memory = IODeviceMemory::withRange(0x0f100000,
-            kTlmmGPIOCount * 0x1000);
-        if (!memory) {
-            return false;
-        }
-        batteryInterrupt.mapping = memory->map(kIOMapAnywhere | kIOMapInhibitCache);
-        memory->release();
-        if (!batteryInterrupt.mapping) {
-            return false;
-        }
-        batteryInterrupt.base = batteryInterrupt.mapping->getVirtualAddress();
-    }
-    if (!batteryInterrupt.lock) {
-        batteryInterrupt.lock = IOSimpleLockAlloc();
-        if (!batteryInterrupt.lock) {
-            return false;
-        }
-    }
-
-    maskGPIO(kBatteryGPIO);
-    gpioWrite(kBatteryGPIO, 0, gpioRead(kBatteryGPIO, 0) & ~0x3ffu);
-    gpioWrite(kBatteryGPIO, 8, (gpioRead(kBatteryGPIO, 8) & ~0xffu) | kTlmmApps);
-
-    uint32_t readback = 0;
-    uint64_t router = 0;
-    IOReturn result = armcpu_spi_attach(240, false, batteryInterruptHandler,
-        nullptr, &readback, &router);
-    batteryInterrupt.attached = result == kIOReturnSuccess;
-    printf("T733 battery: GPIO54 IRQ attach=%x GIC=240 config=%x router=%llx level=%u\n",
-        result, readback, router, gpioRead(kBatteryGPIO, 4) & 1u);
+    int result = t733_tlmm_irq_register(kBatteryGPIO, T733_TLMM_LEVEL_LOW,
+        batteryInterruptHandler, nullptr);
+    batteryInterrupt.attached = result == 0;
+    printf("T733 battery: GPIO54 TLMM register=%d level=%d\n",
+        result, t733_tlmm_level(kBatteryGPIO));
     return batteryInterrupt.attached;
 }
 
 static void maskBatteryInterrupt(void)
 {
-    IOInterruptState state = IOSimpleLockLockDisableInterrupt(batteryInterrupt.lock);
-    maskGPIO(kBatteryGPIO);
-    IOSimpleLockUnlockEnableInterrupt(batteryInterrupt.lock, state);
+    t733_tlmm_irq_mask(kBatteryGPIO);
 }
 
 static bool rearmBatteryInterrupt(void)
 {
-    IOInterruptState state = IOSimpleLockLockDisableInterrupt(batteryInterrupt.lock);
-    bool high = (gpioRead(kBatteryGPIO, 4) & 1u) != 0;
-    if (high) {
-        gpioWrite(kBatteryGPIO, 12, gpioRead(kBatteryGPIO, 12) & ~1u);
-        gpioWrite(kBatteryGPIO, 8,
-            gpioRead(kBatteryGPIO, 8) | kTlmmRawStatus | kTlmmEnable);
-    }
-    IOSimpleLockUnlockEnableInterrupt(batteryInterrupt.lock, state);
-    return high;
+    return t733_tlmm_irq_rearm(kBatteryGPIO);
 }
 
 static void waitForBatteryEvent(unsigned milliseconds)
@@ -338,7 +245,6 @@ static void batteryWorker(void *, wait_result_t)
     unsigned attempts = 0;
     unsigned irqAttempts = 0;
     uint32_t lastIRQCount = 0;
-    uint32_t lastUnownedCount = 0;
     unsigned drainFailures = 0;
     for (;;) {
         __atomic_exchange_n(&batteryInterrupt.pending, 0u, __ATOMIC_ACQ_REL);
@@ -380,11 +286,7 @@ static void batteryWorker(void *, wait_result_t)
         unsigned waitMilliseconds = 5000;
         if (irqConfigured) {
             bool armed = !drainResult && rearmBatteryInterrupt();
-            IOInterruptState state = IOSimpleLockLockDisableInterrupt(batteryInterrupt.lock);
-            uint32_t count = batteryInterrupt.count;
-            uint32_t unowned = batteryInterrupt.unownedCount;
-            uint32_t unownedPin = batteryInterrupt.lastUnownedPin;
-            IOSimpleLockUnlockEnableInterrupt(batteryInterrupt.lock, state);
+            uint32_t count = t733_tlmm_irq_count(kBatteryGPIO);
 
             if (!armed) {
                 ++drainFailures;
@@ -399,11 +301,7 @@ static void batteryWorker(void *, wait_result_t)
                     irq.charger[0], irq.charger[1], irq.charger[2], irq.charger[3], irq.charger[4],
                     irq.muic[0], irq.muic[1], irq.fuel_gauge, drainResult, armed, drainFailures);
             }
-            if (unowned != lastUnownedCount) {
-                printf("T733 battery: masked unowned TLMM IRQ GPIO=%u count=%u\n", unownedPin, unowned);
-            }
             lastIRQCount = count;
-            lastUnownedCount = unowned;
         }
         waitForBatteryEvent(waitMilliseconds);
     }

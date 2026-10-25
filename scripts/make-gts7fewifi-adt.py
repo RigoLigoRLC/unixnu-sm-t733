@@ -84,7 +84,8 @@ def parse_arguments():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--hardware-input", type=Path)
     parser.add_argument("--dram-size", default="required")
-    parser.add_argument("--owned-memory-size")
+    parser.add_argument("--owned-memory-size",
+                        help="Exact contiguous allocation in bytes, or auto for the largest available UEFI range")
     parser.add_argument("--cpu-regs", default="0")
     parser.add_argument("--psci-method", choices=("smc",), default="smc")
     parser.add_argument("--unique-chip-id")
@@ -96,6 +97,7 @@ def parse_arguments():
     parser.add_argument("--persistent-data", action="store_true")
     parser.add_argument("--ipad-identity", action="store_true")
     parser.add_argument("--trust-cache", action="store_true")
+    parser.add_argument("--gpu-addon", action="store_true")
     parser.add_argument("--text-fixup", action="append", default=[],
                         help="Signed-page replacement: filename,offset,original,replacement in hex")
     args = parser.parse_args()
@@ -126,7 +128,7 @@ def parse_arguments():
         args.dram_size = integer(args.dram_size)
         args.cpu_regs = [integer(value) for value in args.cpu_regs.split(",")]
 
-        if args.owned_memory_size is not None:
+        if args.owned_memory_size not in (None, "auto"):
             args.owned_memory_size = integer(args.owned_memory_size)
 
         if args.unique_chip_id is not None and args.chip_id is not None:
@@ -138,7 +140,10 @@ def parse_arguments():
     if not 0 < args.dram_size < (1 << 64) - DRAM_BASE:
         parser.error("DRAM size must fit the 64-bit physical address range")
 
-    if args.owned_memory_size is not None:
+    if args.owned_memory_size == "auto":
+        if args.dram_size < 0x40000000:
+            parser.error("Automatic memory allocation requires at least 1 GiB of DRAM")
+    elif args.owned_memory_size is not None:
         if not 0x10000000 <= args.owned_memory_size <= min(0x200000000, args.dram_size):
             parser.error("Owned memory must be 256 MiB to 8 GiB and fit DRAM")
 
@@ -175,7 +180,10 @@ def make_tree(args):
         *empty_nvram_proxy(),
     ]
 
-    if args.owned_memory_size is not None:
+    if args.owned_memory_size == "auto":
+        maximum = min(args.dram_size, 0x200000000) & ~0x1fffff
+        chosen.append(("darwinboot-memory-range", struct.pack("<QQ", 0x40000000, maximum)))
+    elif args.owned_memory_size is not None:
         chosen.append(("darwinboot-memory-size", struct.pack("<Q", args.owned_memory_size)))
 
     if args.text_fixup:
@@ -220,13 +228,17 @@ def make_tree(args):
     if args.trust_cache:
         memory_map.append(("TrustCache", bytes(16)))
 
+    if args.gpu_addon:
+        memory_map.append(("GpuAddon", bytes(16)))
+
     cpus = []
     for index, affinity in enumerate(args.cpu_regs):
         cpus.append(node(f"cpu{index}", [
             ("state", b"running\0" if index == 0 else b"waiting\0"),
             ("reg", struct.pack("<I", affinity)),
-            ("die-cluster-id", struct.pack("<I", 0)),
-            ("cluster-core-id", struct.pack("<I", index)),
+            ("cluster-type", struct.pack("<I", ord("E") if index < 4 else ord("P"))),
+            ("die-cluster-id", struct.pack("<I", 0 if index < 4 else (1 if index < 7 else 2))),
+            ("cluster-core-id", struct.pack("<I", index if index < 4 else (index - 4 if index < 7 else 0))),
             ("device_type", b"cpu\0"),
             ("compatible", b"qcom,kryo\0"),
             ("timebase-frequency", struct.pack("<I", TIMEBASE)),
@@ -270,6 +282,7 @@ def make_tree(args):
                 ("reg", struct.pack("<QQ", 0x01D84000, 0x3000)),
                 ("native-ufs-smmu-reg", struct.pack("<QQ", 0x15000000, 0x100000)),
                 ("native-ufs-stream-id", struct.pack("<I", 0x80)),
+                ("native-ufs-interrupt", struct.pack("<I", 297)),
             ]),
         ]),
     ]

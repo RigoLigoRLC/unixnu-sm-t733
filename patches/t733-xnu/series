@@ -1,0 +1,14 @@
+device:patches/t733-xnu/kalloc-type-zone-budget-diagnostic.patch
+device:patches/t733-xnu/native-build-label.patch
+device:patches/t733-xnu/native-console-debug-output.patch
+device:patches/t733-xnu/native-debugger-entry-state.patch
+device:patches/t733-xnu/native-t733-display-bind.patch
+device:patches/t733-xnu/native-t733-framebuffer.patch
+device:patches/t733-xnu/native-text-repage.patch
+device:patches/t733-xnu/native-union-root-reference.patch
+device:patches/t733-xnu/native-usb-debug.patch
+device:patches/t733-xnu/native-usb-exec-events.patch
+device:patches/t733-xnu/native-usb-stack-region.patch
+device:patches/t733-xnu/native-usb-tasks.patch
+device:patches/t733-xnu/zzzy-native-t733-brightness-preferences.patch
+device:patches/t733-xnu/zzzz-native-usb-debug-addon.patch

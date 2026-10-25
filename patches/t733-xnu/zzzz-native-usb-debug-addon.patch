@@ -1,0 +1,62 @@
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -7488,6 +7488,7 @@ native_gpu_addon_install(proc_t p, user_addr_t scratch)
+ 		} else if (error) {
+ 			native_gpu_addon_failed++;
+ 			native_gpu_addon_error = error;
++			printf("T733 addon: install path=%s result=%d\n", path, error);
+ 		} else {
+ 			native_gpu_addon_written++;
+ 		}
+@@ -7505,6 +7506,10 @@ native_gpu_addon_prepare(proc_t p, user_addr_t scratch)
+ 		return;
+ 	}
+ 	native_gpu_addon_install(p, scratch);
++	printf("T733 addon: files=%d written=%d same=%d failed=%d error=%d\n",
++	    native_gpu_addon_files, native_gpu_addon_written, native_gpu_addon_same,
++	    native_gpu_addon_failed, native_gpu_addon_error);
++
+ 	static const char extensions_source[] = "/private/var/ngpu/addons", extensions_point[] = "/System/Library/Extensions";
+ 	static const char daemons_source[] = "/private/var/ngpu/daemons", daemons_point[] = "/System/Library/LaunchDaemons";
+ 	native_gpu_addon_mount(p, scratch, 0x400, extensions_source, sizeof(extensions_source), extensions_point,
+@@ -7531,3 +7536,39 @@ native_gpu_addon_prepare(proc_t p, user_addr_t scratch)
+ 	    "7570.iPadOS_17_Flat_Background-1024w-1366h@2x~ipad.ca/J120.png", &native_gpu_addon3_stage, &native_gpu_addon3_status);
++	printf("T733 addon: extensions=%d/%d daemons=%d/%d wallpaper=%d/%d\n",
++	    native_gpu_addon_stage, native_gpu_addon_status, native_gpu_addon2_stage,
++	    native_gpu_addon2_status, native_gpu_addon3_stage, native_gpu_addon3_status);
++
++	/* The cached launchd job opens this executable path directly. */
++	static const char bin_source[] = "/private/var/ngpu/bin", bin_point[] = "/usr/bin";
++	static const char executable[] = "/usr/bin/IOMFB_FDR_Loader";
++	volatile int bin_stage = 0, bin_status = -1;
++	if (native_gpu_addon_files > 0 && !native_gpu_addon_failed && !native_gpu_addon_error) {
++		native_gpu_addon_mount(p, scratch, 0x400, bin_source, sizeof(bin_source),
++		    bin_point, sizeof(bin_point), "/usr/bin/hidutil", executable,
++		    &bin_stage, &bin_status);
++	}
++	printf("T733 addon: bin mount stage=%d result=%d selected=%s\n",
++	    bin_stage, bin_status, executable);
++
++	vfs_context_t ctx = vfs_context_current();
++	vnode_t probe = NULLVP;
++	int error = vnode_open(executable, FREAD | O_NOFOLLOW, 0, 0, &probe, ctx);
++	if (!error) {
++		uint32_t magic = 0;
++		int resid = 0;
++		struct vnode_attr va;
++		VATTR_INIT(&va);
++		VATTR_WANTED(&va, va_data_size);
++		int attr_error = vnode_getattr(probe, &va, ctx);
++		error = vn_rdwr(UIO_READ, probe, (caddr_t)&magic, sizeof(magic), 0,
++		    UIO_SYSSPACE, IO_NOAUTH, vfs_context_ucred(ctx), &resid, p);
++		printf("T733 addon: executable fs=%s bytes=%llu attr=%d read=%d resid=%d magic=%x\n",
++		    vfs_statfs(vnode_mount(probe))->f_fstypename,
++		    attr_error ? 0ULL : (unsigned long long)va.va_data_size,
++		    attr_error, error, resid, magic);
++		vnode_close(probe, FREAD, ctx);
++	} else {
++		printf("T733 addon: executable open=%d\n", error);
++	}
+ }
+ 

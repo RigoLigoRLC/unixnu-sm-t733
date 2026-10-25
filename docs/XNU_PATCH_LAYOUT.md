@@ -1,5 +1,7 @@
 # XNU 补丁来源与诊断选择
 
+本文保留 2026-10-24 的选择器与缓存处理记录。当前 format 2 使用 board 显式 series 和统一 `UNIXNU_PATCH_LIST`，操作说明见 [现行构建说明](BUILDING.md#4-补丁与编译输入)，48f 实际构建、写入和启动记录见 [format 2 记录](archive/FORMAT2_2026-10-25.md)。
+
 2026-10-24 源码整理。此次未构建、未执行补丁应用检查、未部署。
 
 `scripts/build-xnu-4k-baseline.sh` 在公共构建树内读取官方

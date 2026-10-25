@@ -2,6 +2,7 @@
 // The writer saves kernel messages and the console ring in NativeUfs's final
 // 32 MiB window. The SHLOG001 header is compatible with the sheng log reader.
 #include <kern/thread.h>
+#include <kern/clock.h>
 #include <kern/startup.h>
 #include <machine/atomic.h>
 #include <pexpert/pexpert.h>
@@ -45,6 +46,10 @@ static uint8_t header_buffer[LogBlock] __attribute__((aligned(LogBlock)));
 static uint8_t panic_buffer[LogBlock] __attribute__((aligned(LogBlock)));
 static uint32_t _Atomic panic_claimed;
 static uint32_t _Atomic window_ready;
+static uint32_t _Atomic shutdown_requested;
+static uint32_t _Atomic writer_running;
+static uint32_t _Atomic shutdown_result = 1;
+static uint64_t _Atomic shutdown_deadline;
 static uint64_t boot_id;
 
 static uint64_t
@@ -98,6 +103,25 @@ native_boot_log_panic(const char *message, unsigned long caller)
     native_ufs_log_panic_write(panic_buffer);
 }
 
+// The shutdown caller leaves UFS admission open while the existing writer saves
+// its final bounded console snapshot. Only that writer owns the shared buffers.
+int
+native_boot_log_shutdown(void)
+{
+    uint64_t deadline;
+    clock_interval_to_deadline(30, NSEC_PER_SEC, &deadline);
+    (void)os_atomic_cmpxchg(&shutdown_deadline, 0, deadline, acq_rel);
+    deadline = os_atomic_load(&shutdown_deadline, acquire);
+    os_atomic_store(&shutdown_requested, 1, release);
+    while (os_atomic_load(&writer_running, acquire)) {
+        if (mach_absolute_time() >= deadline) {
+            return 0;
+        }
+        IOSleep(10);
+    }
+    return os_atomic_load(&shutdown_result, acquire) != 0;
+}
+
 static void
 writer(void *argument, wait_result_t result)
 {
@@ -107,6 +131,9 @@ writer(void *argument, wait_result_t result)
     uint64_t first = 0, blocks = 0;
     const char *reason = "";
     while (!native_ufs_log_open(&first, &blocks, &reason)) {
+        if (os_atomic_load(&shutdown_requested, acquire)) {
+            goto done;
+        }
         if (strcmp(reason, "no root layout")) {
             printf("T733 BootLog: open refused: %s\n", reason);
             goto done;
@@ -144,12 +171,22 @@ writer(void *argument, wait_result_t result)
         goto done;
     }
     uint64_t cursor = 0;
+    uint64_t final_cursor = 0;
+    bool finishing = false;
     uint32_t errors = 0;
     os_atomic_store(&window_ready, 1, release);
     printf("T733 BootLog: LUN0 LBA %llu, %llu blocks, interval %ums\n",
         first, blocks, (unsigned)LogPeriodMs);
 
     for (;;) {
+        if (os_atomic_load(&shutdown_requested, acquire) &&
+            mach_absolute_time() >= os_atomic_load(&shutdown_deadline, acquire)) {
+            break;
+        }
+        if (!finishing && os_atomic_load(&shutdown_requested, acquire)) {
+            finishing = true;
+            final_cursor = &native_usb_log_total ? native_usb_log_total() : cursor;
+        }
         header.uptime_s = (uint32_t)((ticks() - boot_id) / frequency);
         memset(slot_buffer, 0, sizeof(slot_buffer));
         int count = snprintf((char *)slot_buffer, sizeof(slot_buffer),
@@ -157,11 +194,14 @@ writer(void *argument, wait_result_t result)
             header.slots_written, header.uptime_s, header.tag);
         unsigned used = (unsigned)count;
         if (&native_usb_log_copy && &native_usb_log_total) {
-            uint64_t end = native_usb_log_total();
+            uint64_t end = finishing ? final_cursor : native_usb_log_total();
             while (cursor < end && used < sizeof(slot_buffer) - 1) {
                 unsigned capacity = (unsigned)sizeof(slot_buffer) - 1 - used;
                 if (capacity > LogBlock) {
                     capacity = LogBlock;
+                }
+                if (capacity > end - cursor) {
+                    capacity = (unsigned)(end - cursor);
                 }
                 unsigned copied = native_usb_log_copy(&cursor,
                     (char *)slot_buffer + used, capacity);
@@ -194,15 +234,28 @@ writer(void *argument, wait_result_t result)
         ok = native_ufs_log_write(0, 1, header_buffer) && ok;
         ok = native_ufs_log_sync() && ok;
         errors = ok ? 0 : errors + 1;
+        if (finishing) {
+            if (!ok || header.state == 4) {
+                break;
+            }
+            if (!&native_usb_log_copy || cursor >= final_cursor) {
+                os_atomic_store(&shutdown_result, 1, release);
+                break;
+            }
+            continue;
+        }
         if (errors >= 3 || header.state == 4) {
             printf("T733 BootLog: stopped errors=%u GPT=%u\n", errors, header.gpt_last);
             break;
         }
-        IOSleep(LogPeriodMs);
+        for (unsigned waited = 0; waited < LogPeriodMs && !os_atomic_load(&shutdown_requested, acquire); waited += 100) {
+            IOSleep(100);
+        }
     }
 
 done:
     os_atomic_store(&window_ready, 0, release);
+    os_atomic_store(&writer_running, 0, release);
     thread_terminate(current_thread());
 }
 
@@ -214,10 +267,17 @@ start(const void *argument)
     if (!PE_parse_boot_argn("sheng-log", &enabled, sizeof(enabled)) || enabled != 1) {
         return;
     }
+    if (os_atomic_load(&shutdown_requested, acquire)) {
+        return;
+    }
     boot_id = ticks();
+    os_atomic_store(&shutdown_result, 0, release);
+    os_atomic_store(&writer_running, 1, release);
     thread_t thread;
     if (kernel_thread_start(writer, NULL, &thread) == KERN_SUCCESS) {
         thread_deallocate(thread);
+    } else {
+        os_atomic_store(&writer_running, 0, release);
     }
 }
 STARTUP_ARG(EARLY_BOOT, STARTUP_RANK_LAST, start, NULL);

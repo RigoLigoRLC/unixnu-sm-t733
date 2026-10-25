@@ -1,17 +1,17 @@
 diff --git a/package/UniXNUPkg/Library/UniXNULib/Internal.h b/package/UniXNUPkg/Library/UniXNULib/Internal.h
-index 71aa4b8..d38c80f 100644
+index 2524c40..fd1945a 100644
 --- a/package/UniXNUPkg/Library/UniXNULib/Internal.h
 +++ b/package/UniXNUPkg/Library/UniXNULib/Internal.h
-@@ -512,6 +512,7 @@ typedef struct {
-   UINTN                           MenuWidth;
-   UINTN                           FooterTop;
+@@ -516,6 +516,7 @@ typedef struct {
+   UINTN                           ContentTop;       ///< Top of the plugin content region.
+   UINTN                           ContentBottom;    ///< Bottom of the plugin content region.
    UINTN                           VisibleRows;
 +  UINTN                           FirstVisible;     ///< Entry index drawn in the first visible row.
    UINTN                           TextColumns;      ///< Text mode only.
    UINTN                           TextRows;
    CHAR16                          Info[96];         ///< Injection summary line.
 diff --git a/package/UniXNUPkg/Library/UniXNULib/Menu.c b/package/UniXNUPkg/Library/UniXNULib/Menu.c
-index 4f7fd52..f178505 100644
+index e3e4619..84629ed 100644
 --- a/package/UniXNUPkg/Library/UniXNULib/Menu.c
 +++ b/package/UniXNUPkg/Library/UniXNULib/Menu.c
 @@ -20,6 +20,70 @@
@@ -89,7 +89,7 @@ index 4f7fd52..f178505 100644
    UniXNUUiDrawStatus (Ui, 0, Line);
  }
  
-+// The visible entry range follows selection; each card retains its original entry number.
++// The visible entry range follows selection; cards retain their entry numbers.
 +STATIC
 +VOID
 +DrawSelection (
@@ -219,7 +219,7 @@ index 4f7fd52..f178505 100644
      }
    }
  
-@@ -299,6 +408,8 @@ UniXNUMenuConfirm (
+@@ -453,6 +562,8 @@ UniXNUMenuConfirm (
        continue;
      }
  
@@ -228,7 +228,7 @@ index 4f7fd52..f178505 100644
      if (Items > 0) {
        if (Key.ScanCode == SCAN_UP) {
          Shown = (Shown + Items - 1) % Items;
-@@ -311,7 +422,7 @@ UniXNUMenuConfirm (
+@@ -465,7 +576,7 @@ UniXNUMenuConfirm (
        }
      }
  
@@ -238,10 +238,10 @@ index 4f7fd52..f178505 100644
          if (Shown + 1 == Items) {
            return FALSE;
 diff --git a/package/UniXNUPkg/Library/UniXNULib/Ui.c b/package/UniXNUPkg/Library/UniXNULib/Ui.c
-index d4599b7..95b1ece 100644
+index 4b06ab4..3b2da2e 100644
 --- a/package/UniXNUPkg/Library/UniXNULib/Ui.c
 +++ b/package/UniXNUPkg/Library/UniXNULib/Ui.c
-@@ -573,7 +573,7 @@ DrawEntryPortrait (
+@@ -576,7 +576,7 @@ DrawEntryPortrait (
    Fch   = UNIXNU_GLYPH_HEIGHT * Fs;
    Pad   = Ch / 2;
    X     = Ui->Margin;
@@ -250,7 +250,7 @@ index d4599b7..95b1ece 100644
    Width = Ui->Width - 2 * Ui->Margin;
    Bg    = Selected ? mAccent : mRow;
  
-@@ -711,6 +711,8 @@ UniXNUUiDrawFrame (
+@@ -714,6 +714,8 @@ UniXNUUiDrawFrame (
    EFI_GRAPHICS_OUTPUT_BLT_PIXEL  *Buffer;
    CHAR16                         Line[128];
  
@@ -259,7 +259,7 @@ index d4599b7..95b1ece 100644
    if (Ui->Mode == UniXNUUiText) {
      gST->ConOut->EnableCursor (gST->ConOut, FALSE);
      gST->ConOut->ClearScreen (gST->ConOut);
-@@ -825,7 +827,8 @@ UniXNUUiDrawEntry (
+@@ -830,7 +832,8 @@ UniXNUUiDrawEntry (
    CONST CHAR16                   *Tag;
    CHAR16                         Line[160];
  
@@ -269,7 +269,7 @@ index d4599b7..95b1ece 100644
      return;
    }
  
-@@ -834,7 +837,7 @@ UniXNUUiDrawEntry (
+@@ -839,7 +842,7 @@ UniXNUUiDrawEntry (
      UnicodeSPrint (Line, sizeof (Line), L" %c %u. %s  [%s]", Selected ? L'>' : L' ', (UINT32)Index + 1, Entry->Title, TypeTag (Entry));
      TextPrintAt (
        Ui,
@@ -278,7 +278,7 @@ index d4599b7..95b1ece 100644
        Selected ? (EFI_WHITE | EFI_BACKGROUND_RED) : (EFI_LIGHTGRAY | EFI_BACKGROUND_BLACK),
        Line
        );
-@@ -852,7 +855,7 @@ UniXNUUiDrawEntry (
+@@ -857,7 +860,7 @@ UniXNUUiDrawEntry (
  
    Cw  = UNIXNU_GLYPH_WIDTH * Ui->Scale;
    Ch  = UNIXNU_GLYPH_HEIGHT * Ui->Scale;
@@ -287,8 +287,213 @@ index d4599b7..95b1ece 100644
    Pad = (Ui->RowHeight - Ch) / 2;
    Bg  = Selected ? mAccent : mRow;
    Tag = TypeTag (Entry);
+diff --git a/scripts/porting-record.py b/scripts/porting-record.py
+index a315b3f..5accd95 100644
+--- a/scripts/porting-record.py
++++ b/scripts/porting-record.py
+@@ -4,12 +4,15 @@ import argparse
+ import fnmatch
+ from html import escape
+ from pathlib import Path
++import os
+ import re
+ import subprocess
+ import sys
+ import tomllib
+ from urllib.request import urlopen
+ 
++from unixnu.components import catalog_files
++
+ ROOT = Path(__file__).resolve().parents[1]
+ AREAS = {
+     'configuration': ('Configuration', '配置'),
+@@ -55,7 +58,7 @@ def strings(value):
+     return isinstance(value, list) and bool(value) and all(text(item) for item in value)
+ 
+ 
+-def validate(record, board, label):
++def validate(record, board, label, component_catalog=None):
+     need(record.get('schema_version') == 1, f'{label}: schema_version must be 1')
+     info = record.get('device', {})
+     for key in ('name', 'soc', 'os_profile', 'summary'):
+@@ -68,7 +71,7 @@ def validate(record, board, label):
+     need(len(ids) == len(set(ids)), f'{label}: duplicate area ID')
+     need(set(AREAS).issubset(ids), f'{label}: missing areas: {sorted(set(AREAS) - set(ids))}')
+     selected = set(board.get('components', {}).get('include', []))
+-    catalog = {c['id']: c for c in tomllib.loads((ROOT / 'components.toml').read_text())['component']}
++    catalog = component_catalog if component_catalog is not None else catalog_files([ROOT / 'components.toml'])
+     pending = list(selected)
+     while pending:
+         component = pending.pop()
+@@ -113,10 +116,29 @@ def validate(record, board, label):
+     return record
+ 
+ 
+-def check(device, base=None):
++def check(device, base=None, soc=None):
+     record = tomllib.loads((device / 'porting.toml').read_text())
+     board = tomllib.loads((device / 'board.toml').read_text())
+-    validate(record, board, str(device))
++    sources = [ROOT / 'components.toml', ROOT / 'profiles/arch/arm64/components.toml']
++    for filename in ('feeds.toml', 'local.toml'):
++        path = device / filename
++        if not path.is_file():
++            continue
++        for entry in tomllib.loads(path.read_text()).get('source', []):
++            if entry.get('kind') != 'soc' or entry.get('name') != board.get('board', {}).get('soc_source'):
++                continue
++            if entry.get('local'):
++                local_soc = Path(os.path.expandvars(entry['local'])).expanduser()
++                if not local_soc.is_absolute():
++                    local_soc = device / local_soc
++                sources.append(local_soc / 'components.toml')
++    if soc is not None:
++        sources.append(soc / 'components.toml')
++    profile = board.get('board', {}).get('os_profile')
++    if profile:
++        sources.append(ROOT / 'profiles/os' / profile / 'components.toml')
++    sources.append(device / 'components.toml')
++    validate(record, board, str(device), catalog_files(sources))
+     for area in record['area']:
+         for item in area['evidence']:
+             if not item['reference'].startswith('https://'):
+@@ -207,12 +229,13 @@ def main():
+     check_parser = commands.add_parser('check')
+     check_parser.add_argument('--device', type=Path, required=True)
+     check_parser.add_argument('--base', help='compare code changes with this Git revision')
++    check_parser.add_argument('--soc', type=Path, help='SoC source directory whose components.toml is included')
+     site_parser = commands.add_parser('site')
+     site_parser.add_argument('--local', action='append', default=[], metavar='DEVICE=PATH')
+     args = parser.parse_args()
+     try:
+         if args.command == 'check':
+-            check(args.device, args.base)
++            check(args.device, args.base, args.soc)
+         else:
+             site(args.local)
+     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
+diff --git a/scripts/unixnu/components.py b/scripts/unixnu/components.py
+index 6d17038..fa99309 100644
+--- a/scripts/unixnu/components.py
++++ b/scripts/unixnu/components.py
+@@ -7,13 +7,25 @@ from .util import Error, git
+ 
+ 
+ def catalog(ctx):
+-    entries = load_toml(ctx.root / 'components.toml').get('component', [])
++    sources = [ctx.root / 'components.toml']
++    if ctx.schema_version == 2:
++        sources += [ctx.profile_roots[layer] / 'components.toml' for layer in ('arch', 'soc', 'os', 'device')]
++    return catalog_files(sources)
++
++
++def catalog_files(sources):
++    """Component tables are read in order; each later table owns its complete entry."""
+     result = {}
+-    for entry in entries:
+-        identifier = entry.get('id')
+-        if not identifier or identifier in result:
+-            raise Error(f'components.toml: missing or duplicate component id {identifier!r}')
+-        result[identifier] = entry
++    for source in sources:
++        if not source.is_file():
++            continue
++        identifiers = set()
++        for entry in load_toml(source).get('component', []):
++            identifier = entry.get('id')
++            if not identifier or identifier in identifiers:
++                raise Error(f'{source}: missing or duplicate component id {identifier!r}')
++            identifiers.add(identifier)
++            result[identifier] = entry
+     return result
+ 
+ 
+diff --git a/scripts/unixnu/config.py b/scripts/unixnu/config.py
+index 0d96c63..78439e6 100644
+--- a/scripts/unixnu/config.py
++++ b/scripts/unixnu/config.py
+@@ -149,6 +149,8 @@ class Context:
+             configurations = state.get('configurations', {})
+             selected = (getattr(args, 'name', None) if args.command == 'defconfig' else None)
+             selected = selected or configurations.get(str(self.device)) or self.board.get('kernel', {}).get('defconfig')
++            if selected and Path(selected).is_absolute():
++                selected = Path(selected).name
+             if not selected or Path(selected).name != selected or selected in ('.', '..'):
+                 raise Error('schema_version = 2 needs [kernel] defconfig or a selected defconfig')
+             self.config_name = selected
+diff --git a/scripts/unixnu/devicetree.py b/scripts/unixnu/devicetree.py
+index cdf0f90..02c82bb 100644
+--- a/scripts/unixnu/devicetree.py
++++ b/scripts/unixnu/devicetree.py
+@@ -203,7 +203,8 @@ def arm_io_window(hardware):
+ 
+ 
+ STRINGS = {'compatible', 'device_type', 'reg-names', 'interrupt-names', 'clock-names', 'method'}
+-U32 = {'phandle', 'linux,phandle', '#interrupt-cells', '#iommu-cells', '#clock-cells', 'clock-frequency', 'timebase-frequency'}
++U32 = {'phandle', 'linux,phandle', '#interrupt-cells', '#iommu-cells', '#clock-cells', 'clock-frequency', 'timebase-frequency',
++       'native-ufs-stream-id', 'native-ufs-interrupt', 'cluster-type', 'die-cluster-id', 'cluster-core-id'}
+ U64 = {'redistributor-stride'}
+ FLAGS = {'interrupt-controller', 'dma-coherent'}
+ REFERENCES = {'interrupt-parent': None, 'iommus': '#iommu-cells', 'clocks': '#clock-cells'}
+@@ -222,6 +223,11 @@ def hardware_properties(entry, handles, base=0):
+             if len(cells) not in (1, 2):
+                 raise Error(f'{entry.name}: {key} requires one or two cells')
+             properties.append((key, struct.pack('<Q', number(cells))))
++        elif key == 'native-ufs-smmu-reg':
++            cells = entry.cells(key)
++            if len(cells) != 4:
++                raise Error(f'{entry.name}: {key} requires a physical u64 address and u64 size')
++            properties.append((key, struct.pack('<QQ', number(cells[:2]), number(cells[2:]))))
+         elif key in FLAGS:
+             if raw:
+                 raise Error(f'{entry.name}: {key} is a flag')
+@@ -303,10 +309,14 @@ def generate(dtb, config, *, unique_chip_id=None, data=False, trust=False, addon
+     elif options.get('unique_chip_id') == 'required':
+         raise Error('Pass --unique-chip-id HEX for this board')
+     if options.get('owned_memory_size'):
+-        size = int(str(options['owned_memory_size']), 0)
+-        if not 0x10000000 <= size <= 0x200000000 or size % 0x200000:
+-            raise Error('Owned memory must be 256 MiB to 8 GiB in 2 MiB steps')
+-        chosen.append(('darwinboot-memory-size', struct.pack('<Q', size)))
++        if options['owned_memory_size'] == 'auto':
++            maximum = min(dram_size, 0x200000000) & ~0x1fffff
++            chosen.append(('darwinboot-memory-range', struct.pack('<QQ', 0x40000000, maximum)))
++        else:
++            size = int(str(options['owned_memory_size']), 0)
++            if not 0x10000000 <= size <= 0x200000000 or size % 0x200000:
++                raise Error('Owned memory must be 256 MiB to 8 GiB in 2 MiB steps')
++            chosen.append(('darwinboot-memory-size', struct.pack('<Q', size)))
+     if options.get('root_match_volume_uuid'):
+         volume = str(uuid.UUID(options['root_match_volume_uuid'])).upper()
+         chosen.append(('root-matching', ('<dict><key>IOProviderClass</key><string>IOMedia</string>'
+@@ -336,7 +346,9 @@ def generate(dtb, config, *, unique_chip_id=None, data=False, trust=False, addon
+         cpu_nodes.append(node(f'cpu{len(cpu_nodes)}', [('reg', struct.pack('<I', values[0][0])),
+                          ('state', b'running\0' if not cpu_nodes else b'waiting\0'), ('device_type', b'cpu\0'),
+                          ('compatible', entry.properties['compatible']),
+-                         ('timebase-frequency', struct.pack('<I', cpus.scalar('timebase-frequency')))]))
++                         ('timebase-frequency', struct.pack('<I', cpus.scalar('timebase-frequency'))),
++                         *[(key, struct.pack('<I', entry.scalar(key))) for key in
++                           ('cluster-type', 'die-cluster-id', 'cluster-core-id') if key in entry.properties]]))
+     if not cpu_nodes:
+         raise Error('Hardware DTS requires an enabled boot CPU')
+     children.append(node('cpus', children=cpu_nodes))
+diff --git a/scripts/unixnu/feeds.py b/scripts/unixnu/feeds.py
+index 76e6716..268fa8a 100644
+--- a/scripts/unixnu/feeds.py
++++ b/scripts/unixnu/feeds.py
+@@ -191,6 +191,10 @@ def resolve(ctx):
+                     add('package', 'main' if base == ctx.root else 'device', base / 'package', label)
+                 continue
+             for name in _children(base / folder):
++                # SoC XNU patches are selected by series paths; the assembled
++                # patches/xnu module supplies the common ARM64 patch files.
++                if ctx.schema_version == 2 and label == 'soc' and kind == 'patch' and name == 'xnu':
++                    continue
+                 add(kind, name, base / folder / name, label)
+     # 7: git sources
+     for (kind, name), entry in sources.items():
 diff --git a/scripts/unixnu/ipsw.py b/scripts/unixnu/ipsw.py
-index 2175be3..f4d813a 100644
+index 6cc76de..8be6422 100644
 --- a/scripts/unixnu/ipsw.py
 +++ b/scripts/unixnu/ipsw.py
 @@ -10,6 +10,7 @@ chip_id, board_id, and the components the steps use.
@@ -296,10 +501,10 @@ index 2175be3..f4d813a 100644
  import io
  import json
 +import os
+ import platform
  import plistlib
  import struct
- import subprocess
-@@ -139,31 +140,36 @@ class Ipsw:
+@@ -140,31 +141,36 @@ class Ipsw:
  
      def extract(self, component):
          """Extract a component into the cache (skipped when it is there and matches its pin); returns its path."""
@@ -342,7 +547,7 @@ index 2175be3..f4d813a 100644
          return destination
  
      def read(self, component):
-@@ -197,10 +203,11 @@ def im4p_payload(data):
+@@ -198,10 +204,11 @@ def im4p_payload(data):
  
  def kernelcache(ctx, source):
      """The decompressed arm64 kernelcache Mach-O of the IPSW, in out/ipsw (checked against the board pin)."""
@@ -353,9 +558,9 @@ index 2175be3..f4d813a 100644
 -    if out.is_file() and (pin is None or sha256_file(out) == pin):
 +    if out.is_file() and (not record_hashes or pin is None or sha256_file(out) == pin):
          return out
-     tool('compression_tool', 'macOS /usr/bin/compression_tool decodes the LZFSE kernelcache')
-     source.cache.mkdir(parents=True, exist_ok=True)
-@@ -224,7 +231,7 @@ def kernelcache(ctx, source):
+     if platform.system() == 'Linux':
+         decode = [lzfse(), '-decode']
+@@ -229,7 +236,7 @@ def kernelcache(ctx, source):
      if fat[:4] != b'\xcf\xfa\xed\xfe':
          raise Error('the decompressed kernelcache is not a 64-bit Mach-O')
      out.write_bytes(fat)
@@ -365,14 +570,25 @@ index 2175be3..f4d813a 100644
          raise Error(f'the kernelcache of this IPSW does not match the pin of board.toml (sha256 {pin})')
      return out
 diff --git a/scripts/unixnu/kernel.py b/scripts/unixnu/kernel.py
-index 65e52bc..0fe115d 100644
+index 19558bd..23aad20 100644
 --- a/scripts/unixnu/kernel.py
 +++ b/scripts/unixnu/kernel.py
-@@ -81,7 +81,19 @@ def build(ctx, modules):
-     env.update(version_env(modules))
+@@ -168,20 +168,34 @@ def build(ctx, modules):
+         env['UNIXNU_GENERATED_DIR'] = str(generated)
      env['JOBS'] = str(ctx.jobs)
      record = ctx.tree / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/osfmk/DEVELOPMENT/startup.o.json'
 -    if not record.is_file():
+-        # The archive builders and the boot progress layer read compile records of the XNU build, which only an earlier
+-        # pass leaves behind. A first build from scratch therefore runs one pass without them; XNU_BOOTSTRAP makes it
+-        # skip the archive checks and link without the archives, so it stops at the link and only the records are
+-        # required of it.
+-        log('kernel: bootstrap pass for the compile records')
+-        subprocess_env = {**env, 'XNU_BOOT_PROGRESS': '0', 'XNU_BOOTSTRAP': '1'}
+-        try:
+-            run(['bash', script], cwd=ctx.tree, env=subprocess_env, log_file=ctx.logs / 'kernel-bootstrap.log')
+-        except Error:
+-            if not record.is_file():
+-                raise
 +    link_filelist = ctx.tree / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/link.filelist'
 +
 +    def compile_inputs_missing():
@@ -385,17 +601,18 @@ index 65e52bc..0fe115d 100644
 +
 +        return False
 +
-+    if compile_inputs_missing():
-         # The archive builders and the boot progress layer read compile records of the XNU build, which only an earlier
-         # pass leaves behind. A first build from scratch therefore runs one pass without them; XNU_BOOTSTRAP makes it
-         # skip the archive checks and link without the archives, so it stops at the link and only the records are
-@@ -91,10 +103,12 @@ def build(ctx, modules):
-         try:
-             run(['bash', script], cwd=ctx.tree, env=subprocess_env, log_file=ctx.logs / 'kernel-bootstrap.log')
-         except Error:
--            if not record.is_file():
-+            if compile_inputs_missing():
-                 raise
++    # The baseline prepares patched sources and headers before archive builders
++    # consume its compile records and link.filelist.
++    log('kernel: bootstrap pass for source, headers and compile records')
++    subprocess_env = {**env, 'XNU_BOOT_PROGRESS': '0', 'XNU_BOOTSTRAP': '1'}
++    record.unlink(missing_ok=True)
++    record.with_suffix('').unlink(missing_ok=True)
++    link_filelist.unlink(missing_ok=True)
++    try:
++        run(['bash', script], cwd=ctx.tree, env=subprocess_env, log_file=ctx.logs / 'kernel-bootstrap.log')
++    except Error:
++        if compile_inputs_missing():
++            raise
      storage = ctx.tree / 'build/storage-abi/include/IOKit/storage'
 -    if (ctx.tree / 'refer/IOStorageFamily').is_dir() and not storage.is_dir():
 +    needs_storage = any(ctx.need_config().get(name) for name in (
@@ -404,7 +621,7 @@ index 65e52bc..0fe115d 100644
          log('kernel: prepare storage headers')
          run(['python3', ctx.tree / 'scripts/prepare-storage-headers.py'], cwd=ctx.tree, env=env,
              log_file=ctx.logs / 'storage-headers.log')
-@@ -115,7 +129,8 @@ def prelink(ctx):
+@@ -202,7 +216,8 @@ def prelink(ctx):
      if not cache.is_file():
          raise Error(f'kernelcache not found: {cache}')
      wanted = spec.get('kernelcache_sha256')
@@ -414,7 +631,7 @@ index 65e52bc..0fe115d 100644
          raise Error(f'{cache} does not match the kernelcache this board was qualified against (sha256 {wanted})')
      kernel = ctx.tree / spec['kernel']
      if not kernel.is_file():
-@@ -133,5 +148,8 @@ def prelink(ctx):
+@@ -220,5 +235,8 @@ def prelink(ctx):
          command += ['--early-security-init', spec['early_security_init']]
      command += spec.get('extra_args', [])
      run(command, cwd=ctx.tree, log_file=ctx.logs / 'prelink.log')
@@ -424,11 +641,76 @@ index 65e52bc..0fe115d 100644
 +    else:
 +        log(f'kernel: {output} ({output.stat().st_size} bytes)')
      return output
+diff --git a/scripts/unixnu/patches.py b/scripts/unixnu/patches.py
+index a044142..26652d4 100644
+--- a/scripts/unixnu/patches.py
++++ b/scripts/unixnu/patches.py
+@@ -1,7 +1,9 @@
+ """Ordered XNU patch series and target-local source preparation."""
+ import hashlib
+ import json
++import os
+ import shutil
++import time
+ 
+ from .profiles import resolve_path
+ from .util import Error, git, log, run
+@@ -36,20 +38,33 @@ def prepare(ctx, modules):
+     if not module or module.path is None:
+         raise Error('XNU source missing; run unixnu fetch')
+     revision = git(module.path, 'rev-parse', 'HEAD').strip()
+-    signature = {'source': str(module.path), 'commit': revision,
+-                 'patches': [{'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+-                             for path in selected]}
++    records = []
++    for path in selected:
++        stat = path.stat()
++        records.append([str(path), stat.st_size, stat.st_mtime_ns])
++    signature = {'xnu_commit': revision, 'patches': records}
++    if os.environ.get('UNIXNU_RECORD_HASHES', '1') != '0':
++        signature['sha256'] = [hashlib.sha256(path.read_bytes()).hexdigest() for path in selected]
+     work = ctx.tree / '.cache/xnu-work'
+-    stamp = ctx.work / 'xnu-inputs.json'
++    cache = work.parent
++    stamp = work / '.unixnu-patch-selection.json'
+     try:
+         previous = json.loads(stamp.read_text())
+     except (FileNotFoundError, ValueError):
+         previous = None
+     if previous != signature or not (work / '.git').is_dir():
+         log(f'kernel: prepare XNU {revision[:12]}')
+-        stamp.unlink(missing_ok=True)
+         if work.exists():
+-            shutil.rmtree(work)
++            saved = cache / f'xnu-work-before-patch-update-{time.time_ns()}'
++            work.rename(saved)
++            log(f'kernel: preserved previous XNU source at {saved}')
++        objects = ctx.tree / 'build/xnu/ios-obj'
++        if objects.exists():
++            saved = objects.with_name(f'ios-obj-before-patch-update-{time.time_ns()}')
++            objects.rename(saved)
++            log(f'kernel: preserved previous XNU objects at {saved}')
++        for header_stamp in (cache / 'fakeroot').glob('.xnu-*-headers'):
++            header_stamp.unlink()
+         work.parent.mkdir(parents=True, exist_ok=True)
+         run(['git', 'clone', '--quiet', '--shared', '--no-checkout', module.path, work])
+         git(work, 'checkout', '--quiet', '--detach', revision)
+@@ -61,6 +76,10 @@ def prepare(ctx, modules):
+                 shutil.rmtree(work)
+                 raise Error(f'XNU patch {path}: {error}') from error
+         stamp.write_text(json.dumps(signature, indent=2) + '\n')
++    selection = json.dumps(signature, indent=2) + '\n'
++    (ctx.work / 'xnu-inputs.json').write_text(selection)
++    (cache / 'xnu-patch-selection.json').write_text(selection)
+     patch_list = ctx.work / 'xnu-patches.list'
+     patch_list.write_text(''.join(str(path) + '\n' for path in selected))
++    (cache / 'xnu-patches.list').write_text(patch_list.read_text())
+     return patch_list
 diff --git a/scripts/unixnu/payload.py b/scripts/unixnu/payload.py
-index 3de810c..1d39294 100644
+index 1bb9ad0..39b1e17 100644
 --- a/scripts/unixnu/payload.py
 +++ b/scripts/unixnu/payload.py
-@@ -37,6 +37,56 @@ def check_args(arguments):
+@@ -37,6 +37,55 @@ def check_args(arguments):
      return line
  
  
@@ -438,11 +720,10 @@ index 3de810c..1d39294 100644
 +
 +
 +def extra_entries(spec, arguments, initrd):
-+    """Render board entries after the default kernel entry, before installation.
++    """Board menu entries reuse the default kernel, Data seed and final arguments.
 +
-+    XNU entries reuse the default kernel, Data seed and final command line.
-+    Their kernel_args replace arguments by name, including command-line overrides.
-+    EFI and action entries supply the fields consumed by the existing boot menu.
++    Each XNU entry replaces arguments by name. EFI and action entries pass their
++    configured path or action to the firmware menu.
 +    """
 +    config = ''
 +    for entry in spec.get('extra_entries', []):
@@ -468,7 +749,7 @@ index 3de810c..1d39294 100644
 +
 +
 +def copy_payload_files(ctx, spec, stage):
-+    """Copy selected build outputs into board-specified paths inside the FAT."""
++    """Selected build outputs are copied into configured paths inside the FAT."""
 +    for entry in spec.get('files', []):
 +        source = ctx.work / entry['source']
 +        relative = Path(entry['destination'])
@@ -485,16 +766,16 @@ index 3de810c..1d39294 100644
  def check_native_root(kernel, arguments):
      """Refuse the known bare-metal AMFI panic before the volume is written."""
      values = {}
-@@ -65,24 +115,44 @@ def write_volume(stage, image, label, size_mib):
+@@ -65,24 +114,44 @@ def write_volume(stage, image, label, size_mib):
  
  
  def skip_setup_seed(ctx, base, tool_path, tool_args=()):
 -    """A copy of the Data seed whose preferences mark Setup (the Hello pages) as done; cached by the hash of the base and the
 -    tool's extra arguments (board.toml [payload] skip_setup_args)."""
-+    """Create a Data copy whose preferences mark Setup as complete.
++    """The Data copy contains preferences that mark Setup as complete.
 +
-+    With file hashes disabled, reuse is based on the source path, size, modification
-+    time and tool arguments recorded beside the generated seed.
++    With file hashes disabled, source path, size, modification time and tool
++    arguments determine whether the generated seed can be reused.
 +    """
      tool('hdiutil')
      out = paths(ctx)[0]
@@ -533,7 +814,7 @@ index 3de810c..1d39294 100644
      spec = ctx.board.get('payload')
      if not spec:
          raise Error('board.toml has no [payload]')
-@@ -92,8 +162,7 @@ def build(ctx, kernel=None):
+@@ -92,8 +161,7 @@ def build(ctx, kernel=None):
          raise Error(f'kernel not found: {kernel}; run "unixnu build kernel" or pass --kernel FILE')
      extra = list(getattr(args, 'kernel_arg', None) or [])
      # An extra NAME=VALUE replaces the board's argument of the same name.
@@ -541,9 +822,9 @@ index 3de810c..1d39294 100644
 -    arguments = [item for item in spec.get('kernel_args', []) if item.split('=', 1)[0] not in names] + extra
 +    arguments = override_args(spec.get('kernel_args', []), extra)
      line = check_args(arguments)
+     log(f'kernel args: {line}')
      check_native_root(kernel, arguments)
-     owner_trust = getattr(args, 'owner_trust_cache', None)
-@@ -102,7 +171,7 @@ def build(ctx, kernel=None):
+@@ -103,7 +171,7 @@ def build(ctx, kernel=None):
          allowed = spec.get('trust_cache_sha256')
          if not trust.is_file():
              raise Error(f'trust cache not found: {trust}')
@@ -552,7 +833,7 @@ index 3de810c..1d39294 100644
              raise Error(f'{trust} is not one of the trust caches this board accepts (board.toml [payload] trust_cache_sha256)')
      data = expand(args.data_ramdisk) if getattr(args, 'data_ramdisk', None) else None
      if data and not data.is_file():
-@@ -174,6 +243,7 @@ def build(ctx, kernel=None):
+@@ -181,6 +249,7 @@ def build(ctx, kernel=None):
      config = (f'version = 1\n[boot]\ntimeout = {spec.get("timeout", 3)}\ndefault = "xnu"\n[kits]\nautoload = false\n{loader}'
                f'[[entry]]\nid = "xnu"\ntitle = "{spec.get("title", "UniXNU")}"\ntype = "xnu"\npath = "Payloads/kernel.macho"\n{initrd}'
                f'args = "{line}"\n')
@@ -560,15 +841,15 @@ index 3de810c..1d39294 100644
      install = spec.get('install')
      if install:
          if not data:
-@@ -189,6 +259,7 @@ def build(ctx, kernel=None):
-     config += ('[[entry]]\nid = "reset"\ntitle = "Restart"\ntype = "action"\naction = "reset"\n'
-                '[[entry]]\nid = "shutdown"\ntitle = "Power off"\ntype = "action"\naction = "shutdown"\n')
+@@ -198,6 +267,7 @@ def build(ctx, kernel=None):
+     if spec.get('tools'):
+         config += ('[[entry]]\nid = "tools"\ntitle = "Tools"\ntype = "action"\naction = "tools"\n')
      (stage / 'EFI/UniXNU/unixnu.toml').write_text(config)
 +    copy_payload_files(ctx, spec, stage)
      for path in [stage, *stage.rglob('*')]:
          os.utime(path, (EPOCH, EPOCH))
      size = int(spec.get('size_mib', 192))
-@@ -196,11 +267,17 @@ def build(ctx, kernel=None):
+@@ -205,11 +275,17 @@ def build(ctx, kernel=None):
      if content > size * 1024 * 1024 * 0.95:
          raise Error(f'the payload files take {content >> 20} MiB; raise size_mib (now {size}) in board.toml [payload]')
      write_volume(stage, image, spec.get('volume', 'UNIXNU')[:11], size)
@@ -592,28 +873,18 @@ index 3de810c..1d39294 100644
      shutil.rmtree(stage)
      log(f'payload: {image} ({image.stat().st_size >> 20} MiB)')
 diff --git a/scripts/unixnu/userdata.py b/scripts/unixnu/userdata.py
-index 6885f51..69b2360 100644
+index f2651c0..5266b0b 100644
 --- a/scripts/unixnu/userdata.py
 +++ b/scripts/unixnu/userdata.py
-@@ -11,12 +11,14 @@ Manifest (little endian): "SHNGROOT", u32 version=1, u32 count, u64 image_bytes,
- {char name[32], u64 offset, u64 size, u32 block_size=512, u32 flags(1=read-only), u8 sha256[32], 40 reserved},
- and at byte 4064 the SHA-256 of bytes 0..4063.
- 
--The images come from the IPSW (a local file or a remote URL, see ipsw.py) and are checked against the pins of
--board.toml. The disk images are attached read-only without mounting (macOS hdiutil). Nothing is flashed: the
--report prints the fastboot command, to be run by the user.
-+The images come from the IPSW (a local file or a remote URL, see ipsw.py). UNIXNU_RECORD_HASHES=0 disables
-+file confirmation and report hashes; the SHNGROOT v1 window and header digests remain part of the disk format.
-+The disk images are attached read-only without mounting (macOS hdiutil). The report prints a generic fastboot
-+example; the board's deployment procedure owns the actual device write.
- """
+@@ -18,6 +18,7 @@ decoded by udif.py on other hosts. Nothing is flashed: the report prints the fas
+ import contextlib
  import hashlib
  import json
 +import os
+ import platform
  import plistlib
  import re
- import struct
-@@ -52,6 +54,7 @@ def attach(dmg):
+@@ -78,6 +79,7 @@ def disk_blocks(dmg, size):
  
  def build(ctx, dry_run=False):
      log('userdata payload')
@@ -621,17 +892,18 @@ index 6885f51..69b2360 100644
      spec = ctx.board.get('userdata')
      if not spec:
          raise Error('board.toml has no [userdata]')
-@@ -85,6 +88,7 @@ def build(ctx, dry_run=False):
-             device = attach(dmg)
-             try:
-                 raw = device.replace('/dev/disk', '/dev/rdisk')
-+                # SHNGROOT v1 stores the actual window digest in each entry.
-                 digest = hashlib.sha256()
-                 target.seek(offset)
-                 done = 0
-@@ -100,19 +104,27 @@ def build(ctx, dry_run=False):
-             finally:
-                 subprocess.run(['hdiutil', 'detach', device], capture_output=True)
+@@ -109,7 +111,7 @@ def build(ctx, dry_run=False):
+     with image.open('wb') as target:
+         target.truncate(total)
+         for (name, offset, size), (_, dmg) in zip(layout, sources):
+-            digest = hashlib.sha256()
++            digest = hashlib.sha256()  # SHNGROOT v1 stores each raw window digest.
+             target.seek(offset)
+             done = 0
+             with contextlib.closing(disk_blocks(dmg, size)) as blocks:
+@@ -120,19 +122,26 @@ def build(ctx, dry_run=False):
+             if done != size:
+                 raise Error(f'{dmg.name}: {done} bytes of raw disk, expected {size}')
              entries.append((name, offset, size, digest.digest()))
 -            log(f'userdata: {name} {size} bytes at {offset:#x} sha256 {digest.hexdigest()}')
 +            log(f'userdata: {name} {size} bytes at {offset:#x}')
@@ -642,8 +914,8 @@ index 6885f51..69b2360 100644
          struct.pack_into('<IIQ', header, 8, 1, len(entries), total)
          for index, (name, offset, size, digest) in enumerate(entries):
              struct.pack_into('<32sQQII32s40s', header, 24 + 128 * index, name.encode(), offset, size, 512, 1, digest, bytes(40))
-+        # NativeUfs checks this on-disk header digest before reading the windows.
-         header[4064:4096] = hashlib.sha256(bytes(header[:4064])).digest()
+-        header[4064:4096] = hashlib.sha256(bytes(header[:4064])).digest()
++        header[4064:4096] = hashlib.sha256(bytes(header[:4064])).digest()  # NativeUfs validates this header on disk.
          target.seek(0)
          target.write(header)
 -    data = {'image_bytes': total, 'image_sha256': sha256_file(image), 'manifest_sha256': hashlib.sha256(bytes(header)).hexdigest(),

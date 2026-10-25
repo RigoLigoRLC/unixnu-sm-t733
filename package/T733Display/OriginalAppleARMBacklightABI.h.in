@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+#pragma once
+#include <IOKit/IOService.h>
+
+// AppleARMBacklight is the existing 21H461 AppleARMPlatform class. Its original
+// constructor initializes the IOService base and reserves its 0x370-byte object
+// layout. The builder binds that constructor, destructor, metaclass and virtual
+// methods to the selected AppleARMPlatform component. NativeT733Backlight owns
+// the T733 property handling and calls IOService for its service lifecycle;
+// DisplayPower owns panel commands and touch sleep or resume.
+class AppleARMBacklight : public IOService {
+    OSDeclareAbstractStructors(AppleARMBacklight)
+    unsigned char originalPrivate[0x370 - sizeof(IOService)];
+
+public:
+    void free() override;
+    bool init(OSDictionary *properties = nullptr) override;
+    IOReturn setProperties(OSObject *) override;
+    IOReturn configureReport(IOReportChannelList *, IOReportConfigureAction, void *, void *) override;
+    IOReturn updateReport(IOReportChannelList *, IOReportUpdateAction, void *, void *) override;
+    bool start(IOService *) override;
+    IOWorkLoop *getWorkLoop() const override;
+    IOReturn callPlatformFunction(const OSSymbol *, bool, void *, void *, void *, void *) override;
+    IOReturn message(UInt32, IOService *, void *) override;
+    IOReturn setPowerState(unsigned long, IOService *) override;
+    virtual void original168();
+};
+static_assert(sizeof(AppleARMBacklight) == 0x370, "Original AppleARMBacklight instance extent");

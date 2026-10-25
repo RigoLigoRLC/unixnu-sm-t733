@@ -45,4 +45,4 @@ CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y
 CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
 CONFIG_XNU_SHENG_PMGR=y
 CONFIG_XNU_BOOT_PROGRESS=n
-CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/t733-boot-log/libT733BootLog.a -Wl,-force_load,{tree}/build/t733-touch-input/libT733Touch.a -Wl,-force_load,{tree}/build/t733-battery/libT733Battery.a"
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/t733-boot-log/libT733BootLog.a -Wl,-force_load,{tree}/build/t733-touch-input/libT733Touch.a -Wl,-force_load,{tree}/build/t733-battery/libT733Battery.a -Wl,-force_load,{tree}/build/t733-cpu-power/libT733CpuPower.a -Wl,-force_load,{tree}/build/native-usb-network/libNativeUsbNetwork.a -Wl,-force_load,{tree}/build/t733-pmic-keys/libT733PmicKeys.a -Wl,-force_load,{tree}/build/t733-display-power/libT733DisplayPower.a"

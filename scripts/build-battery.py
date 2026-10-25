@@ -65,7 +65,8 @@ def main():
     }
     includes = [package, tree / ".cache/xnu-work/osfmk"]
     objects = []
-    for name in ("T733Battery.cpp", "T733BatteryStartup.c", "T733FuelGauge.cpp"):
+    # The system links this archive once; touch references the same TLMM owner.
+    for name in ("T733Battery.cpp", "T733BatteryStartup.c", "T733FuelGauge.cpp", "T733Tlmm.cpp"):
         source = package / name
         obj = output / (source.stem + ".o")
         compile_source(records[source.suffix], source, obj, includes, output)

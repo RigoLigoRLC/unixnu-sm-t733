@@ -1,0 +1,13 @@
+/dts-v1/;
+/include/ "sm7325.dtsi"
+
+/ {
+    model = "Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733)";
+    compatible = "samsung,gts7fewifi", "qcom,sm7325", "qcom,yupik";
+
+    // This span includes reserved holes. DarwinBoot selects UEFI conventional memory.
+    memory@80000000 {
+        device_type = "memory";
+        reg = <0 0x80000000 1 0x80000000>;
+    };
+};

@@ -19,9 +19,9 @@ if [ "$(git -C refer/xnu rev-parse HEAD)" != "$XNU_COMMIT" ]; then
   echo 'error: unexpected XNU reference revision' >&2
   exit 1
 fi
-# Public patches retain their upstream names and ordering. Device replacements
-# take precedence; the device manifests add functional and optional patches.
+# The format 2 driver supplies the resolved ordered patch list.
 python3 - "$XNU_COMMIT" <<'PY'
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -29,44 +29,39 @@ import time
 import sys
 
 root = Path.cwd()
-device = root / 'patches/t733-xnu'
-selected = {}
-for public in sorted((root / 'patches/xnu').glob('*.patch')):
-    replacement = device / public.name
-    selected[public.name] = replacement if replacement.is_file() else public
+resolved_list = os.environ.get('UNIXNU_PATCH_LIST')
+if not resolved_list:
+    raise SystemExit('Build the SM-T733 kernel through the format 2 UniXNU driver')
 
-groups = ['additions.list']
-if os.environ.get('XNU_NATIVE_USB_DEBUG', '0') == '1':
-    groups.append('diagnostics.list')
-early = os.environ.get('XNU_EARLY_ENTRY_MARKER', '0')
-if early not in ('0', '1'):
-    raise SystemExit('XNU_EARLY_ENTRY_MARKER must be 0 or 1')
-if early == '1':
-    groups.append('early-entry.list')
-for group in groups:
-    for line in (device / group).read_text().splitlines():
-        name = line.strip()
-        if name and not name.startswith('#'):
-            patch = device / name
-            selected[patch.name] = patch
-
-patches = [selected[name] for name in sorted(selected)]
-patches.extend(sorted((root / 'kits/NativePrelink/patches').glob('*.patch')))
+patches = [Path(line.strip()).resolve() for line in Path(resolved_list).read_text().splitlines()
+           if line.strip() and not line.lstrip().startswith('#')]
 records = []
 for patch in patches:
     stat = patch.stat()
-    records.append([str(patch.relative_to(root)), stat.st_size, stat.st_mtime_ns])
-selection = json.dumps({'xnu_commit': sys.argv[1], 'patches': records}, indent=2) + '\n'
+    records.append([str(patch), stat.st_size, stat.st_mtime_ns])
+signature = {'xnu_commit': sys.argv[1], 'patches': records}
+if os.environ.get('UNIXNU_RECORD_HASHES', '1') != '0':
+    signature['sha256'] = [hashlib.sha256(path.read_bytes()).hexdigest() for path in patches]
+selection = json.dumps(signature, indent=2) + '\n'
 cache = root / '.cache'
 cache.mkdir(exist_ok=True)
 work = cache / 'xnu-work'
-stamp = work / '.t733-patch-selection.json'
+stamp = work / '.unixnu-patch-selection.json'
 if work.exists() and (not stamp.exists() or stamp.read_text() != selection):
     # The work source may contain local edits. Preserve the whole directory
     # before creating a new source tree for the selected patches.
     saved = cache / f'xnu-work-before-patch-update-{time.time_ns()}'
     work.rename(saved)
     print(f'Preserved previous XNU work source at {saved}')
+    # Headers and compile commands belong to the same patched source generation.
+    # Preserve the old object tree so changed scheduler defines cannot reuse it.
+    objects = root / 'build/xnu/ios-obj'
+    if objects.exists():
+        saved_objects = objects.with_name(f'ios-obj-before-patch-update-{time.time_ns()}')
+        objects.rename(saved_objects)
+        print(f'Preserved previous XNU objects at {saved_objects}')
+    for header_stamp in (cache / 'fakeroot').glob('.xnu-*-headers'):
+        header_stamp.unlink()
 (cache / 'xnu-patch-selection.json').write_text(selection)
 (cache / 'xnu-patches.list').write_text(''.join(f'{path}\n' for path in patches))
 PY
@@ -89,11 +84,11 @@ if [ ! -x .cache/fakeroot/usr/local/libexec/availability.pl ]; then
 fi
 # A changed selection has a fresh work source. An unchanged selection keeps
 # generated files and local edits without reversing overlapping patch hunks.
-if ! cmp -s .cache/xnu-patch-selection.json .cache/xnu-work/.t733-patch-selection.json; then
+if ! cmp -s .cache/xnu-patch-selection.json .cache/xnu-work/.unixnu-patch-selection.json; then
   while IFS= read -r PATCH; do
     git -C .cache/xnu-work apply "$PATCH"
   done < .cache/xnu-patches.list
-  cp .cache/xnu-patch-selection.json .cache/xnu-work/.t733-patch-selection.json
+  cp .cache/xnu-patch-selection.json .cache/xnu-work/.unixnu-patch-selection.json
 fi
 export XNU_AVAILABILITY_PL=$ROOT/.cache/fakeroot/usr/local/libexec/availability.pl
 python3 scripts/prepare-xnu-source.py

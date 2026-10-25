@@ -1,0 +1,60 @@
+--- a/osfmk/kern/debug.c
++++ b/osfmk/kern/debug.c
+@@ -707,12 +707,20 @@
+ 		/*
+-		 * In practice this can only happen if we panicked very early,
+-		 * when only the boot CPU is online and before it has finished
+-		 * initializing the debug and trace infrastructure. We're going
+-		 * to hang soon, so let's at least make sure the message passed
+-		 * to panic() is actually logged.
++		 * Hardware debug may remain unavailable after boot on this platform.
++		 * Debugger entries provide a message without a panic argument list.
+ 		 */
+-		char buf[EARLY_PANIC_BUFLEN];
+-		vsnprintf(buf, EARLY_PANIC_BUFLEN, db_panic_str, *db_panic_args);
+-		paniclog_append_noflush("%s\n", buf);
++		if (db_panic_str != NULL && db_panic_args != NULL) {
++			char buf[EARLY_PANIC_BUFLEN];
++			va_list early_args;
++
++			va_copy(early_args, *db_panic_args);
++			vsnprintf(buf, sizeof(buf), db_panic_str, early_args);
++			va_end(early_args);
++
++			paniclog_append_noflush("%s\n", buf);
++		} else if (db_panic_str != NULL) {
++			paniclog_append_noflush("%s\n", db_panic_str);
++		} else if (db_message != NULL) {
++			paniclog_append_noflush("%s\n", db_message);
++		}
+ 	}
+ #endif
+@@ -885,6 +893,18 @@
+ 	/* track depth of debugger/panic entry */
+ 	CPUDEBUGGERCOUNT++;
+ 
++#if XNU_NATIVE_USB_DEBUG
++	{
++		extern void native_usb_debug_panic(const char *, unsigned long);
++		char usb_message[512];
++		snprintf(usb_message, sizeof(usb_message),
++		    "Debugger entry reason=%u context=0x%lx options=0x%llx: %s",
++		    reason, (unsigned long)ctx, (unsigned long long)debugger_options_mask,
++		    message != NULL ? message : "(no message)");
++		native_usb_debug_panic(usb_message, debugger_caller);
++	}
++#endif
++
+ 	/* emit a tracepoint as early as possible in case of hang */
+ 	SOCD_TRACE_XNU(PANIC, PACK_2X32(VALUE(cpu_number()), VALUE(CPUDEBUGGERCOUNT)), VALUE(debugger_options_mask), ADDR(message), ADDR(debugger_caller));
+ 
+@@ -905,3 +925,3 @@
+ 		DebuggerSaveState(DBOP_DEBUGGER, message,
+-		    NULL, NULL, debugger_options_mask, NULL, TRUE, 0);
++		    NULL, NULL, debugger_options_mask, NULL, TRUE, debugger_caller);
+ 		handle_debugger_trap(reason, 0, 0, ctx);
+@@ -912,3 +932,3 @@
+ 		DebuggerTrapWithState(DBOP_DEBUGGER, message,
+-		    NULL, NULL, debugger_options_mask, NULL, TRUE, 0);
++		    NULL, NULL, debugger_options_mask, NULL, TRUE, debugger_caller);
+ 	}

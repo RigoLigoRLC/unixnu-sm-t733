@@ -30,3 +30,23 @@
 	path = drivers/NativeFocaltechTouch
 	url = https://github.com/RigoLigoRLC/unixnu-nativefocaltechtouch.git
 	branch = unixnu-sm-t733
+[submodule "drivers/NativeQcomTsens"]
+	path = drivers/NativeQcomTsens
+	url = https://github.com/RigoLigoRLC/unixnu-nativeqcomtsens.git
+	branch = unixnu-sm-t733
+[submodule "drivers/NativeQcomSpmi"]
+	path = drivers/NativeQcomSpmi
+	url = https://github.com/RigoLigoRLC/unixnu-nativeqcomspmi.git
+	branch = unixnu-sm-t733
+[submodule "drivers/NativePmicKeys"]
+	path = drivers/NativePmicKeys
+	url = https://github.com/RigoLigoRLC/unixnu-nativepmickeys.git
+	branch = unixnu-sm-t733
+[submodule "drivers/NativeGeniI2c"]
+	path = drivers/NativeGeniI2c
+	url = https://github.com/RigoLigoRLC/unixnu-nativegenii2c.git
+	branch = unixnu-sm-t733
+[submodule "drivers/NativeQcomDsi"]
+	path = drivers/NativeQcomDsi
+	url = https://github.com/RigoLigoRLC/unixnu-nativeqcomdsi.git
+	branch = unixnu-sm-t733

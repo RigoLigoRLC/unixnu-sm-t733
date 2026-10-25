@@ -1,38 +1,42 @@
 # 仓库结构与上游关系
 
-2026-10-24 已根据[上游审计](UPSTREAM_AUDIT.md)收敛公共 CLI 扩展与 FAT 装配，并同步官方 UniXNU `1a01c2a` 及其固定子模块。独立 fork 按剩余模块改动确定。
+当前采用官方 UniXNU `fb5e8ba` 推荐的 format 2。ARM64、SM7325、iPadOS 21H461 与设备配置由公共构建器依次合并；普通数组由后层整体替换。`system-format2-48f` 已完成构建、FAT 部署及对应 USB 启动记录，细节见 [48f 记录](archive/FORMAT2_2026-10-25.md)。
 
-本仓库采用 [UniXNU-sheng](https://github.com/UniXNU/UniXNU-sheng) 的设备目录约定。UniXNU 根据设备 `board.toml`、内核 defconfig 与模块目录组装工作树。设备中的同名 `drivers/`、`kits/`、`patches/` 优先于公共仓库；设备 `scripts/` 覆盖同名公共脚本。设备 `package/` 在组装树中成为 `kits/gts7fewifi`，公共 UniXNU 菜单的 `package/` 仍由公共仓库提供。
+`board.toml` 和 `board.platform.toml` 是两份完整配置，分别选择系统与平台 defconfig。`feeds.toml` 固定公开的 [unixnu-sm7325-common](https://github.com/RigoLigoRLC/unixnu-sm7325-common)；该仓库提供 `soc.toml`、共享组件表、DTSI、config fragment 和五个 SM7325 XNU 补丁。设备 `dts/board.dts` 提供 DRAM 地址跨度，共用转换器结合 board 的 ADT 属性生成载荷。
+
+公共构建器按所选组件组装工作树。设备与 SoC 组件表保留实际仓库来源，设备同名模块优先，设备 `scripts/` 覆盖同名公共脚本。设备 `package/` 在组装树中成为 `kits/gts7fewifi`，公共菜单的 `package/` 由 core 提供。公共 `patches/xnu` 保留；SoC 的 `patches/xnu` 通过 profile 路径直接解析，避免遮盖公共补丁模块。
 
 ## 模块归属
 
 | 内容 | 当前位置 | 独立维护方式 |
 | --- | --- | --- |
+| SM7325 CPU、GIC、定时器、PSCI、UFS 资源和共用内核设置 | 固定的 `unixnu-sm7325-common` feed | SoC 仓库单独版本化 |
 | ArmCpu、NativeUfs、NativeGeniSpi、NativeRamBlock、NativeMobileDisplay | `drivers/` 同名 submodule 覆盖 | 各自 fork 固定适配提交 |
 | DarwinBoot | `drivers/DarwinBoot` | 引导器公共项目，保留设备属性接口 |
-| FT8203 协议实现 | `drivers/NativeFocaltechTouch` submodule | 独立协议驱动；板级总线、固件和 HID 连接由设备配置选择 |
+| FT8203 协议实现 | `drivers/NativeFocaltechTouch` submodule | 独立触屏驱动；待合入 package 中的 SPI/HID 接入，设备提供板级参数和固件输入 |
+| TSENS、SPMI、PMIC keys、GENI I2C、DSI | `drivers/NativeQcomTsens`、`NativeQcomSpmi`、`NativePmicKeys`、`NativeGeniI2c`、`NativeQcomDsi` submodule | 控制器操作独立维护，设备组合资源与策略 |
 | USB 调试控制器和 CDC | `drivers/NativeUsbDebug` | 来源为 ios-vermeer-lab `d68e05df`；文件头与 NOTICE 记录原作者 All Rights Reserved 和未明示许可，当前保留设备内源码 |
+| USB ECM ifnet | `drivers/NativeUsbNetwork` | 由设备 archive recipe 编译并接入已有 USB transport |
 | 预链接、早期入口诊断 | `kits/NativePrelink` submodule、`kits/EarlyEntry` | 预链接在独立 fork 维护，早期诊断留在设备仓库 |
-| XNU 适配 | `patches/t733-xnu/`、构建和准备源码脚本 | 保留官方 `patches/xnu/`，只增加本机补丁及逐文件替换；选择规则见 [XNU_PATCH_LAYOUT.md](XNU_PATCH_LAYOUT.md) |
-| T733 电池服务、触屏 HID、软件显示连接、PMGR 与启动策略 | `package/` | 留在设备仓库，依赖本机板级数据 |
+| XNU 适配 | 设备 ARM64/OS/功能 series、SoC series 与诊断清单 | board 显式按序选择，共用和设备构建器消费同一最终列表 |
+| TLMM、EPSS、电池服务、触屏 HID | `package/` | 待按硬件职责迁移到独立驱动仓库，文件清单见 UPSTREAMING.md |
+| 软件显示注册、PMGR 启动服务与启动策略 | `package/` | 设备负责组件注册、板级数据与启动组合 |
 | 菜单滚动与按键、payload 附加文件和菜单项、构建恢复及禁用文件确认哈希 | `unixnu-core`；差异记录为 `support/UniXNU.patch` | 适配提交由 `support/UniXNU.rev` 固定，官方基线由 `support/UniXNU.upstream.rev` 固定 |
 | Samsung UEFI、BootShim、MSC 固件修正 | 配套 UEFI 仓库 | 与 XNU 设备仓库分别发布 |
 
-独立驱动仓库有利于多个设备复用和独立提交。设备仓库以 Git submodule 固定其提交，或使用 UniXNU 的 `feeds.toml` 固定来源。拆分时保持模块名、路径和接口，构建命令仍由一个设备入口顺序执行。
+按照[官方仓库规范](https://unixnu.com/zh/contributing/repository)，每个硬件驱动必须在独立公开仓库维护，带 `unixnu` topic，并由设备 `drivers/<Name>` 子模块固定提交。上表记录当前源码位置；其中仍在 package 或设备普通目录的硬件驱动，按 [UPSTREAMING.md](UPSTREAMING.md) 的文件清单和依赖次序迁移。拆分时一起更新模块接口、调用方和构建输入，构建命令仍由一个设备入口顺序执行。
 
-官方 sheng 的 [`.gitmodules`](https://github.com/UniXNU/UniXNU-sheng/blob/main/.gitmodules) 直接引用 `NativeNovatekTouch` 和 `ShengPreflight`，其他公共驱动从 UniXNU 基线取得。T733 采用同样的归属原则：已经存在独立上游的驱动通过 fork 承载本机改动；新协议驱动在接口独立后单独维护；板级配置与组合代码保留在设备仓库。
-
-2026-10-24 已发布九个 fork 和两个新仓的适配源码，清单见 [GITHUB_REPOSITORIES.md](GITHUB_REPOSITORIES.md)。七个官方来源模块与 FT8203 协议驱动通过八个 submodule 固定实际适配提交，分支统一为 `unixnu-sm-t733`。没有修改的公共驱动继续使用固定 UniXNU 核心提供的模块。克隆设备仓库时使用 `--recurse-submodules`，更新后执行 `git submodule update --init --recursive`。
-
-2026-10-24 已按官方主仓 `1a01c2a` 固定版本合并 NativeMobileDisplay `c031d882` 至 `8666a995` 的修改：GPU 接收帧后可提前完成 swap，刷新属性支持固定间隔。T733 的 CPU 拷贝、源映射缓存、大核绑定和完成通知保留。其余六个已有来源的模块版本与该官方主仓一致，具体提交和许可证见 [SOURCES.md](../support/SOURCES.md)。USB 的直接来源及原作者权利另见 [NOTICE](../drivers/NativeUsbDebug/NOTICE)。
+设备有 12 个 driver 子模块和 1 个 kit 子模块，共 13 个，适配分支统一为 `unixnu-sm-t733`。克隆使用 `--recurse-submodules`，更新后执行 `git submodule update --init --recursive`。来源见 [GITHUB_REPOSITORIES.md](GITHUB_REPOSITORIES.md)、[SOURCES.md](../support/SOURCES.md) 与 USB [NOTICE](../drivers/NativeUsbDebug/NOTICE)。NativeUfs、NativeMobileDisplay、NativeRamBlock 和 NativePrelink 的社区身份保留在组件表中。
 
 ## 构建文件的职责
 
-`board.toml` 选择 Apple 组件、驱动归档顺序、预链接根、启动参数和菜单；`configs/` 提供 XNU 功能开关。默认配置为完整系统，`board.platform.toml` 是完整的平台配置。平台入口将其放入忽略的设备目录，通过官方 `-D` 选择。
+`board.toml` 选择 SoC、OS profile、完整组件与 archive 顺序、预链接根、启动参数和菜单；`configs/` 提供 XNU 功能开关。`components.toml` 记录组件来源、依赖和 recipe，`porting.toml` 按子系统记录实现与已有证据。CI 从设备固定的 core 准备验证工具，再读取设备和 SoC 的社区组件表。
 
-`scripts/build.py` 顺序调用官方 `defconfig`、`build kernel`、`build package` 和 `build payload`。内核命令拥有编译与预链接；payload 命令生成 ADT、安装确认菜单和 FAT。板级包装器归档产物，并按选项调用 Samsung 固件封装。缺少 IOStorage 绑定输入时，先以平台配置生成绑定内核和布局；这两个文件保存在 `.cache/inputs/bindings/`，后续完整系统构建复用。编译中间文件放在 `build/work/`，按 tag 的交付放在 `build/releases/`。
+`scripts/build.py` 执行 configure、resolve、kernel、menu、wallpaper、debug-tools 和 payload；内核命令拥有 archive 编译、链接和预链接，payload 命令生成 ADT、安装确认菜单和 FAT。包装器从 `status --json` 的 `output` 取得工作目录。默认系统目录为 `build/work/gts7fewifi/ipados-17.7.11-21H461/gts7fewifi/`，平台最后一级为 `gts7fewifi_platform/`，交付目录为 `build/releases/TAG/`。
 
-公共 CLI 保持官方语义，不再提供 `--skip-prelink`、`--board-overlay`、递归 board 合并或额外的 `{device}` 参数展开。本机输入经 `.cache/firmware/t733-inputs` 接入官方共享缓存；新增 payload 配置只声明需要复制的文件和备用菜单项，安装、重启、关机与 FAT 格式由官方实现。
+平台板在忽略的 `build/platform-device/` 中以 `board.toml` 文件名传给官方 `-D`，同时链接 DTS、组件表、feed 和私有输入。缺少 IOStorage 绑定时，入口先在独立的 `build/bindings/` 输出根构建平台内核，将内核与布局存入 `.cache/inputs/bindings/`。
+
+私有输入经 `.cache/firmware/t733-inputs` 接入官方共享缓存。公开 board 中的十六进制 `chip_id = "733"` 与私有 `local.toml` 的 `hardware.unique_chip_id` 共同生成 ADT 身份；包装器将私有值设置到官方 `UNIXNU_UNIQUE_CHIP_ID`。安装、重启、关机和 FAT 格式由公共实现处理。
 
 公共构建工具的本机改动已提交到 `unixnu-core`，实际构建提交由 `support/UniXNU.rev` 固定。`support/UniXNU.patch` 记录相对 `support/UniXNU.upstream.rev` 的差异。设备驱动 submodule、package 和补丁共同构成当前源码；后续公共修改同步维护适配提交、版本 pin 和差异记录。
 

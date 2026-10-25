@@ -1,0 +1,232 @@
+schema_version = 1
+
+[[component]]
+id = "DarwinBoot"
+kind = "driver"
+function = "UEFI XNU loading, conventional-memory allocation and framebuffer handoff"
+scope = "firmware"
+repository = "https://github.com/RigoLigoRLC/unixnu-darwinboot.git"
+revision = "9b7ba0e2174ad486cb6d5884dd831fb73df991b2"
+path = "drivers/DarwinBoot"
+hardware = ["SM-T733 ARM64 UEFI"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["UEFI memory map", "Inherited GOP scanout", "Samsung userdata FAT"]
+verified_devices = ["gts7fewifi"]
+dependencies = []
+source_files = ["DarwinBootPkg/Driver/DarwinBoot.c"]
+runtime_identifiers = ["DarwinBoot"]
+build_stage = "firmware"
+build = []
+outputs = []
+
+[[component]]
+id = "NativePrelink"
+kind = "kit"
+function = "XNU prelinking and original 21H461 storage and display ABI bindings"
+scope = "tool"
+repository = "https://github.com/RigoLigoRLC/unixnu-nativeprelink.git"
+revision = "844512c52e9c9ed3b0edb02d748344f12cdae710"
+path = "kits/NativePrelink"
+hardware = []
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["Original Apple kernelcache and explicit prelink roots"]
+verified_devices = ["gts7fewifi"]
+dependencies = []
+source_files = ["emit_prelink.py", "native_prelink.py"]
+runtime_identifiers = ["NativePrelink"]
+build_stage = "prelink"
+build = []
+outputs = []
+
+[[component]]
+id = "NativeRamBlock"
+kind = "driver"
+function = "Fixed Data seed, sparse backing and persistent userdata writes"
+scope = "storage"
+repository = "https://github.com/RigoLigoRLC/unixnu-nativeramblock.git"
+revision = "3e1f05efe0eb632aa7bc643ee63dd2d9931c8920"
+path = "drivers/NativeRamBlock"
+hardware = ["SM-T733 UFS userdata"]
+os_abi = ["ipados-17.7.11-21H461", "IOStorageFamily"]
+board_dependencies = ["package/data-layout.toml", "Fixed Data UUID and persistent offset"]
+verified_devices = ["gts7fewifi"]
+dependencies = []
+source_files = ["NativeRamBlock.cpp"]
+runtime_identifiers = ["NativeRamBlock"]
+build_stage = "kernel"
+build = ["build-data-storage.py", "--component", "NativeRamBlock", "--tree", "{tree}", "--output", "{tree}/build/native-ram-block", "--kernel", "{tree}/.cache/firmware/t733-inputs/bindings/kernel.macho", "--layout", "{tree}/.cache/firmware/t733-inputs/bindings/kernel.json"]
+outputs = ["build/native-ram-block/libNativeRamBlock.a"]
+
+[[component]]
+id = "NativeMobileDisplay"
+kind = "driver"
+function = "CPU software rendering and inherited GOP framebuffer presentation"
+scope = "display"
+repository = "https://github.com/RigoLigoRLC/unixnu-nativemobiledisplay.git"
+revision = "ecf382bf084b5df2315dd7f96952a3068def00b3"
+path = "drivers/NativeMobileDisplay"
+hardware = ["SM-T733 inherited DSI scanout"]
+os_abi = ["ipados-17.7.11-21H461", "IOMobileGraphicsFamily"]
+board_dependencies = ["GOP framebuffer", "Original MobileFramebuffer ABI", "Board display power"]
+verified_devices = ["gts7fewifi"]
+dependencies = ["AppleKeyStoreState"]
+source_files = ["NativeLegacyDisplay.cpp", "NativeMobileDisplay.cpp"]
+runtime_identifiers = ["NativeLegacyDisplay", "NativeMobileDisplay"]
+build_stage = "embedded"
+build = []
+outputs = ["build/native-mobile-display/libNativeMobileDisplay.late.a"]
+
+[[component]]
+id = "AppleKeyStoreState"
+kind = "driver"
+function = "AppleKeyStore state service registered by the T733 display coordinator"
+scope = "os"
+repository = "https://github.com/UniXNU/AppleKeyStoreState.git"
+revision = "42ff83e08b2265fe741d4adaf084bebe003452ba"
+path = "drivers/AppleKeyStoreState"
+hardware = ["AppleKeyStore ABI"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["T733 late class registration and state callbacks"]
+verified_devices = ["gts7fewifi"]
+dependencies = []
+source_files = ["NativeKeyStoreEvents.cpp"]
+runtime_identifiers = ["NativeKeyStoreEvents", "NativeKeyStoreEvents.cpp"]
+legacy_name = "NativeKeyStoreEvents"
+build_stage = "embedded"
+build = []
+outputs = ["build/native-mobile-display/libNativeMobileDisplay.late.a"]
+
+[[component]]
+id = "NativeFocaltechTouch"
+kind = "driver"
+function = "FT8203 SPI firmware and multitouch frame decoding"
+scope = "controller"
+repository = "https://github.com/RigoLigoRLC/unixnu-nativefocaltechtouch.git"
+revision = "556db40af863a4bec5c4bc23a45069757ca1b5d3"
+path = "drivers/NativeFocaltechTouch"
+hardware = ["Focaltech FT8203"]
+os_abi = []
+board_dependencies = ["GPIO81 interrupt", "GENI SPI clocks and pins", "FT8203 firmware", "Board HID reports"]
+verified_devices = ["gts7fewifi"]
+dependencies = ["NativeGeniSpi"]
+source_files = ["Fts8203.c", "Fts8203.h"]
+runtime_identifiers = ["NativeFocaltechTouch"]
+build_stage = "embedded"
+build = []
+outputs = ["build/t733-touch-input/libT733Touch.a"]
+
+[[component]]
+id = "NativePmicKeys"
+kind = "driver"
+function = "PM7325 power and volume button state and interrupt handling"
+scope = "controller"
+repository = "https://github.com/RigoLigoRLC/unixnu-nativepmickeys.git"
+revision = "746935724ffc409c423d8d90636f32246d55988c"
+path = "drivers/NativePmicKeys"
+hardware = ["PM7325 PON", "PM7325 GPIO6"]
+os_abi = []
+board_dependencies = ["Board HID consumer control reports"]
+verified_devices = ["gts7fewifi"]
+dependencies = ["NativeQcomSpmi"]
+source_files = ["NativePmicKeys.cpp", "NativePmicKeys.h"]
+runtime_identifiers = ["NativePmicKeys"]
+build_stage = "embedded"
+build = []
+outputs = ["build/t733-pmic-keys/libT733PmicKeys.a"]
+
+[[component]]
+id = "NativeUsbDebug"
+kind = "driver"
+function = "SM-T733 DWC3 USB logging, task snapshots and serial protocol"
+scope = "board"
+repository = "https://github.com/RigoLigoRLC/unixnu-sm-t733.git"
+revision = "c2e5e71357764a37cf7eae19cbdc24644d0fd6e9"
+path = "drivers/NativeUsbDebug"
+hardware = ["SM7325 DWC3 and inherited USB PHY"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["native-usb-debug-config ADT property", "Inherited USB clocks and PHY"]
+verified_devices = ["gts7fewifi"]
+dependencies = []
+source_files = ["native_usb_debug.c", "native_usb_log.c", "native_usb_tasks.c", "native_usb_thread_snapshot.c", "NOTICE"]
+runtime_identifiers = ["NativeUsbDebug"]
+build_stage = "embedded"
+build = []
+outputs = []
+
+[[component]]
+id = "NativeUsbNetwork"
+kind = "driver"
+function = "USB ECM Ethernet and XNU ifnet registration"
+scope = "board"
+repository = "https://github.com/RigoLigoRLC/unixnu-sm-t733.git"
+revision = "c2e5e71357764a37cf7eae19cbdc24644d0fd6e9"
+path = "drivers/NativeUsbNetwork"
+hardware = ["SM7325 DWC3"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["NativeUsbDebug USB transport"]
+verified_devices = ["gts7fewifi"]
+dependencies = ["NativeUsbDebug"]
+source_files = ["native_usb_network.c"]
+runtime_identifiers = ["NativeUsbNetwork"]
+build_stage = "kernel"
+build = ["build-usb-network.py", "--tree", "{tree}"]
+outputs = ["build/native-usb-network/libNativeUsbNetwork.a"]
+
+[[component]]
+id = "SoftwareAES"
+kind = "driver"
+function = "Software AES-CBC through original 21H461 IOAESAccelerator bindings"
+scope = "os"
+repository = "https://github.com/UniXNU/SoftwareAES.git"
+revision = "4a45326da5c2cd6fe6813d79ee43db20805628af"
+path = "drivers/SoftwareAES"
+hardware = ["XNU AES routines"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["Original IOCryptoAcceleratorFamily bindings"]
+verified_devices = ["gts7fewifi"]
+dependencies = []
+source_files = ["NativeAES.cpp"]
+runtime_identifiers = ["NativeAES"]
+build_stage = "kernel"
+build = ["build-data-storage.py", "--component", "NativeAES", "--tree", "{tree}", "--output", "{tree}/build/native-aes", "--kernelcache", "{tree}/.cache/firmware/t733-inputs/kernelcache.decompressed", "--layout", "{tree}/.cache/firmware/t733-inputs/bindings/kernel.json"]
+outputs = ["build/native-aes/libNativeAES.a"]
+legacy_name = "NativeAES"
+
+[[component]]
+id = "VirtioMmioBlock"
+kind = "driver"
+function = "Storage ABI declarations consumed by the UFS archive builder"
+scope = "protocol"
+repository = "https://github.com/UniXNU/VirtioMmioBlock.git"
+revision = "8ee3a5ab5a3726b0641990228346aec338246eaf"
+path = "drivers/VirtioMmioBlock"
+hardware = ["VirtIO MMIO ABI"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = []
+verified_devices = []
+dependencies = []
+source_files = ["NativeVirtioBlock.cpp"]
+runtime_identifiers = ["NativeVirtioBlock"]
+build_stage = "embedded"
+build = []
+outputs = []
+legacy_name = "NativeVirtioBlock"
+
+[[component]]
+id = "device"
+kind = "package"
+function = "SM-T733 platform composition, original ABI adapters and hardware policies"
+scope = "board"
+repository = "https://github.com/RigoLigoRLC/unixnu-sm-t733.git"
+revision = "c2e5e71357764a37cf7eae19cbdc24644d0fd6e9"
+path = "package"
+hardware = ["Samsung SM-T733"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["Apple original kernelcache", "Stock firmware inputs", "package/data-layout.toml"]
+verified_devices = ["gts7fewifi"]
+dependencies = []
+source_files = ["ShengPlatformPower.cpp", "T733CpuPower.cpp", "T733Thermal.cpp", "T733Tlmm.cpp", "T733Touch.cpp", "T733TouchHid.cpp", "T733Battery.cpp", "T733FuelGauge.cpp", "T733PmicKeys.cpp", "T733PmicKeysHid.cpp", "T733Display/DisplayPower.cpp", "BootLog.c"]
+runtime_identifiers = ["T733CpuPower", "T733Battery", "T733Touch", "T733PmicKeys"]
+build_stage = "embedded"
+build = []
+outputs = ["build/t733-cpu-power/libT733CpuPower.a", "build/t733-touch-input/libT733Touch.a", "build/t733-battery/libT733Battery.a", "build/t733-pmic-keys/libT733PmicKeys.a", "build/t733-display-power/libT733DisplayPower.a", "build/t733-boot-log/libT733BootLog.a"]

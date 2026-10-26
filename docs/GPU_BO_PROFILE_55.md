@@ -1,6 +1,8 @@
 # 55 BO 缓存原因与慢操作采样
 
-本包保持 54 的分配、缓存容量与 GPU 提交行为，增加两层独立诊断。构建标签为 `system-gpu-bo-profile-55`。实际源码提交号和构建命令随产物记录在 `source-revisions.json`；本文的构建和部署结果以交付入口为准。
+本包保持 54 的分配、缓存容量与 GPU 提交行为，增加两层独立诊断。首次构建标签为 `system-gpu-bo-profile-55`，输出修订包为 `system-gpu-bo-profile-55b`。实际源码提交号和构建命令随产物记录在 `source-revisions.json`；本文的构建和部署结果以交付入口为准。
+
+55已经完成构建、刷入及正常交互采样。实机输出发现长行在约255字节被截断，55b将字段拆为短行，完整保留用途和队列状态。用户态每行的 `s/g/d/q` 分别为连接slot、连接generation、Vulkan device ID、记录sequence；同一组字段按此四项合并。kernel记录按sequence合并。55已完整输出的计数和尺寸字段继续作为有效证据。
 
 ## 采样内容
 

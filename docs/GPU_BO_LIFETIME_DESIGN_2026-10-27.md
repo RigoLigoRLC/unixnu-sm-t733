@@ -162,3 +162,75 @@ close 先禁止新申请/提交，等待已发布 job 的对象 fence，删除�
 - 真实最后 fence 已完成但仍因全局最后 fence 等待的次数；V2 路径应为 0。map_id 无效仍命中、跨 client 未清零入池和未 quiescent 重用次数应为 0。
 
 本设计没有增加测试或开展额外实验。收益以正常交互时保存的有界记录判断，所有阈值和预算更改均记录对应构建版本。
+
+## 12. 55 的缓存原因与 64 MiB block 生命周期
+
+### 12.1 已保存的运行证据
+
+55 使用 `system-gpu-bo-profile-55`，固定输入记录在 `logs/gpu-bo-55-source-revisions.json`：设备 `4942c40e57d091c8533935d0bad52ad691c5c265`，core `65a37862ac62d7763a42ef6567ed0c2a3d02c708`，Adreno6xx `a7cc54003bb0a680fffd7dc94f38440d07572f95`；Mesa 和 Metal 基准仍是第 3 节所列提交。原始记录为 `logs/t733-usb-live/t733-20261026T183119.124446Z.raw`，首次完整诊断从该文件 4775 行附近开始。该轮部分长文本相邻输出被拼接，累计字段及保留下来的慢记录仍提供以下事实。
+
+| 观察窗口 | 实际记录 |
+| --- | --- |
+| 首次 kernel 汇总 | object-limit eviction 13,343，client-close 16；峰值 64 个对象、约 2.62 MiB。小 backing 的淘汰主要由对象数上限触发。 |
+| 首次 backboardd Turnip 汇总 | request 19,814，hit 3,802；miss empty 5,578、size 9,346、flags 810、compatible-pending 278。 |
+| 同一汇总的申请来源 | `cmd cs` 5,603、`draw sub cs` 5,500、`draw cs` 5,276、`tile store cs` 2,437，合计占 request 的 94.96%。这些是命令存储，和 runtime 的资源内存 block 分开分析。 |
+| 同一汇总的 64 MiB 档 | request 23，hit 10，miss 13，compatible-pending 0；requested bytes 为 1,543,503,872。该数是多次申请尺寸之和，包含缓存命中，不能当作同时驻留量。 |
+| kernel 慢记录 | 64 MiB user-owned allocation 的若干样本为 40-46 ms，owned descriptor release 为 19-26 ms；记录标出 40-bit、16,384 spans 和调用进程。另有其他尺寸慢样本，不能把全部释放长尾都归到 64 MiB。 |
+| 后续 170.469 秒增量 | request 6,246，hit 1,050，miss 5,196，命中率 16.81%；miss size 4,061、flags 733、empty 323、pending 79。kernel object-limit eviction 累计升至 17,961，close 仍为 16。 |
+
+这两个窗口确认小 BO 的低复用持续存在，且相邻观察间 object-limit eviction 仍增加。Turnip 的 size miss 表示缓存中没有相同尺寸的匹配候选；它本身没有记录相邻尺寸的空闲容量，因而尚不能量化改用分档后能增加多少命中。64 MiB 档已经有 10 次完整 BO 命中，说明这一层能够实际复用大块；该档 pending 计数为 0，当前窗口的大块 miss 不由已有兼容对象等待 fence 解释。
+
+### 12.2 runtime 如何建立和释放 64 MiB block
+
+以下行号均指 `sources/UniXNU/.cache/gpu-reference/metal2vulkan/crates/metal2vulkan-runtime/src/memory.rs`。 [对应基准源码](https://github.com/steelbrain/metal2vulkan/blob/720ef1ce9ae2a2068999a8675717418b9416283e/crates/metal2vulkan-runtime/src/memory.rs)
+
+- `BLOCK_BYTES:52` 取 64 MiB，`Memory::new:692` 再受 device 最大 allocation size 限制。`place:1376-1377` 确定需要新建时的尺寸：普通小于等于半块的资源采用这一整块尺寸，超过半块或 `Fit::Apart` 采用资源自身尺寸。`Fit::Pooled` 在真正新建前仍会尝试已有池块，包含超过半块但仍能放入已有空间的申请。一个 64 MiB BO 因此可能是池块，也可能是恰好该尺寸的 dedicated resource，现有 native BO 大小不能单独区分它们。
+- `Memory::pool_at:751` 按 `(Holds::Buffers 或 Holds::Images, memory_type_index)` 分池。`Memory::kept:844-874` 将 Private/WriteCombined/Shared 的 buffer 类型去重，另取一个 image 类型；三个 memory class 并不必然产生三份 buffer 池。`keep_room` 对每个选中池要求的是至少 32 MiB 的连续可放置空间，和“保留一个完全空块”是两个不同条件。
+- `Pool::place:292-303` 按块顺序执行 first fit；`has_room:333-335` 使用这个池曾见过的最大 alignment，检查每块最长可用区间。底层 `range.rs:29` 分配对齐区间，`:95` 合并相邻 free，`:126` 求最长对齐后区间。总 free bytes 足够而最长区间小于 32 MiB 时，`keep_room` 仍会申请新块。
+- `BlockMaker::make:1133-1208` 建立整块 `VkDeviceMemory`，host-visible 类型整块 map；需要设备地址时还建立覆盖该块的 buffer 并绑定。这里的 64 MiB 建立成本由一个小 placement 触发也会完整发生。
+- `Pool::release:354-370` 已经保留每个池的一块完全空闲的非 dedicated block；第二块变空时把该块取出释放。dedicated block 在最后 placement 释放后取出。现有实现不是“每块一空就释放”，不能把增加最基本的一块保留作为尚未实现的修复。
+- `Memory::release_range:949-960` 直接调用 `Block::release:458-464`，后者释放地址 buffer 后调用 `vkFreeMemory`。`buffer.rs:449,631` 与 `texture.rs:1129` 等调用者仍持 `shared.memory` 的 mutex，所以这里同步进入 Vulkan 的释放工作会延长其他 resource placement 等待时间。Turnip 随后可以缓存或退休这个 BO；实际 kernel descriptor release 发生在最终淘汰时，runtime 的 `vkFreeMemory` 与 kernel 物理释放不是同一个事件。
+
+`Device::keep_room` 在 `device/mod.rs:634-639` 调用上述函数。`buffer.rs:987` 的 new_buffer、`texture.rs:1413` 的 new_texture、`queue.rs:226`、`heap.rs:468`、`pipeline/render.rs:1500` 等创建路径都会调用它；因此大块增长可在创建小 buffer、texture 或 pipeline 时发生。源码明确给出了这些入口，55 尚未为每次 block 建立保存对应入口。
+
+### 12.3 并发增长与立即丢弃：代码已经证明的行为
+
+`keep_room:1409-1418` 在 mutex 内生成缺少 32 MiB 空间的池列表，随后释放 mutex；`:1422` 在锁外创建 block；`:1425-1432` 回锁检查池是否已有足够空间。若已有，释放 mutex 后立即释放刚建好的、从未放置资源的 block。下面是现有操作允许的具体顺序，不是本次已观测的线程记录：
+
+1. 两个创建线程同时看到同一个 buffer 池缺少 32 MiB 连续空间。
+2. 两者各自在锁外创建一个 64 MiB block，代码没有给该池登记“已有线程正在增长”。
+3. 第一个线程把 block 加入池。第二个线程回锁发现空间已经足够，将自己刚建好的 block 释放。
+
+同样的“创建后释放”也可能由并发普通 `place` 补足空间，或现有资源 free 合并出足够空间触发。`keep_room` 的缺少空间列表还可能包含多个池，排在后面的池在真正调用 make 前也不会重新检查一次。因此即便同一线程只在处理一份旧列表，列表中的较后池也可能已经被其他线程补足。
+
+`place:1381-1392` 的行为不同：先尝试池内 placement，失败后锁外 make，成功回锁后直接 `add_block` 并放入本次资源，没有再次尝试已有块。同一池的两个并发 miss 因而可以各自建立 64 MiB，随后都留在池内供各自 resource 使用。它本身没有“回锁发现重复就立即释放新块”的分支；多建块随后变空时，`Pool::release` 的一块空闲保留规则才可能释放其中一块。
+
+另一个确定的统计边界是 `Memory::allocated` 只在 `add_block:819` 增加。`keep_room` 丢弃新品的分支在 `:1432`，发生于 `:1435` 的 add 之前；这种已经执行过 `vkAllocateMemory` 的重复建立不会进入 `Memory::allocated`，也不会出现在只统计仍存活块的 `census`。旧的 allocated/census 不能用来排除这条路径。
+
+### 12.4 当前能归因到哪里
+
+直接证据有三层：55 记录到 64 MiB BO 的创建/复用以及最终物理释放耗时；源码确认 runtime 默认池块为 64 MiB；源码确认 keep_room 存在创建后立即释放路径、place 存在同池并发重复增长路径。现有记录没有 block ID、pool 类型、增长原因、创建时正在增长的线程数或 never-used release 原因，因此 13 次大块 miss 中有多少属于各路径仍需对应字段。
+
+除并发增长外，顺序执行的资源数量增长、资源释放后再次达到更高使用量、32 MiB 连续空间要求与分散 free、完全空块只留一份，以及专用大资源，都可以产生新的 64 MiB 申请。64 MiB backing 超过 kernel 单对象缓存上限 16 MiB，是当前源码的确定行为：Turnip 一旦最终淘汰它，kernel backing cache 不会继续保留，后续缺少完整 BO 命中时要重新分配。小命令 BO 和大块共用 Turnip 完整 BO LRU；大块成为最旧项且对象数达到限制时，新归还的小 BO 也能将它挤出。55 尚未记录“被哪一类新对象挤出”的归因。
+
+因此小命令 BO 的数量问题与 runtime 大块的增长/保留问题需要分别处理。把小 BO 缓存加大可以降低命令存储周转；它不能消除 runtime 已经走到的重复 `vkAllocateMemory`。大块在 runtime 中继续存活，可以同时保留 placement 管理、CPU map、设备地址 buffer 和下层 native BO。
+
+### 12.5 选定的成熟机制与本项目接入方式
+
+Vulkan Memory Allocator v3.3.0 提供直接参照：`VmaBlockVector::Allocate` 在该池的锁内查找并执行 `AllocatePage`/建块；`Free` 在锁内摘除空块，锁外销毁，结合预算与最低块数决定是否保留空块。`VmaPoolCreateInfo` 同时提供 blockSize、minBlockCount 和 maxBlockCount。 [v3.3.0 实现，Allocate 10387、Free 10622 行](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/v3.3.0/include/vk_mem_alloc.h#L10387)，[池配置](https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/struct_vma_pool_create_info.html)。
+
+本机选定沿用当前 range allocator，接入上述“同池增长有唯一执行者、明确保留量、锁外销毁”的所有权关系，不在此轮替换整个 Vulkan allocator。具体结构如下：
+
+1. 每个 `(Holds, memory_type_index)` 维护增长状态、完成 generation 和全局已预留 bytes。普通 placement 先在短 metadata 锁内查找；需新 block 时，在不持 `Memory` mutex 的状态下取得该池增长权，取得后重新检查现有空间。`keep_room` 遇到该池已有增长者直接结束本池预留工作，避免重复建立；真正需要资源的 placement 等待增长完成事件，醒来后重新查找。其他池和能够命中已有空间的申请继续运行。
+2. 增长者先取得容量预算，再锁外执行 Vulkan 建块，回短锁发布新块、归还 reservation 并通知等待者；失败路径同样结束增长状态和通知。预留增长 bytes 和真正 live bytes 一起参加预算。这个做法保留了 runtime 把慢 driver call 移出全局 mutex 的要求；“短 metadata 锁加每池增长状态”是本项目的适配设计，VMA 的具体实现使用池锁覆盖增长。
+3. 正常 free 在锁内归还 range，并决定保留或摘除 block；摘下的 block 交给独立回收任务，锁外释放。保留一空块的策略已存在，首先保留这一基线。只有按池记录证明反复释放后短期重新增长，才为该热池增加有预算的保留量；每个池的下限、最大块数和全设备 bytes 一起生效。VMA 的 minBlockCount 约束总块数，不能把它等同于“始终额外保持这么多空块”。
+4. `keep_room` 的 32 MiB 目标与 block 保留量共用一次容量决定。多个创建入口只声明所需连续空间，不能各自创建同一份预留。仍因并发 free 使新建块成为多余时，按剩余 idle budget 保留或交给回收任务；不在 creation caller 内做慢销毁。发生 pressure 后主动降低预留，停止没有实际需求的增长。
+5. 本文第 6 节全局 idle budget 必须包含 runtime 的完全空 block。一个 buffer 空块和一个 image 空块已经占 128 MiB，不能另外无条件叠加 Turnip 与 kernel 的完整预算。部分使用 block 仍按 committed bytes 计费，其 free ranges 单列供碎片分析。runtime 持有空块时，下层完整 BO cache 尚未持有它，避免重复物理计数。
+
+现阶段不凭 23 次累计申请改变 64 MiB block 大小。若后续按池记录显示长期只用少量 bytes，则依据真实 placement 尺寸和峰值选择较小 block 或有上限的增长档位；资源需要的 alignment、buffer/image 分池和 dedicated 条件仍保持明确。
+
+### 12.6 归因所需的最小有界记录
+
+在现有慢记录之外，runtime 只需固定计数加一个短环记录 block 变化：`pool_kind/type_index`、单调 block ID、`reason`（普通 placement、keep_room、dedicated）、requested size/alignment、block capacity、增长开始/完成时刻、当时 longest free/total free、live/empty/growing blocks、是否成功发布、从未被 placement 使用即释放、释放原因。计数单列 keep_room 已有增长者、建好后已有空间、place 建好时已有可用空间，以及空块释放后再次增长。
+
+这些记录不需要按每个 resource 输出，也不需要继续拆分 XNU allocation。它们把已确认的 40-46 ms 冷分配和 19-26 ms 物理释放，关联到具体的 runtime 操作；实现与记录在后续统一源码变更中完成。本补充只完成源码研究和设计，没有修改运行时代码、执行测试或提交。

@@ -18,6 +18,7 @@
 | [unixnu-core](https://github.com/RigoLigoRLC/unixnu-core) | [UniXNU/UniXNU](https://github.com/UniXNU/UniXNU) | 公共菜单、payload 扩展与构建修正 |
 | [unixnu-sm7325-common](https://github.com/RigoLigoRLC/unixnu-sm7325-common) | 新建 | format 2 的 SM7325 DTSI、配置、SoC 补丁和共享组件声明 |
 | [unixnu-adreno6xx](https://github.com/RigoLigoRLC/unixnu-adreno6xx) | [UniXNU/Adreno740](https://github.com/UniXNU/Adreno740) | SM7325 A642L 上电、GMU/HFI、SMMU 与 CP 提交；实机执行待记录 |
+| [unixnu-arm-smmu4k](https://github.com/RigoLigoRLC/unixnu-arm-smmu4k) | [UniXNU/ArmSmmu4K](https://github.com/UniXNU/ArmSmmu4K) | BO 范围增量页表更新、TLB 同步和阶段计时；由 core 子模块固定 |
 | [unixnu-mu-silicium](https://github.com/RigoLigoRLC/unixnu-mu-silicium) | [Project-Silicium/Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium) | Samsung UEFI、BootShim、MSC 与 BOOT/recovery 封装 |
 | [unixnu-armcpu](https://github.com/RigoLigoRLC/unixnu-armcpu) | [UniXNU/ArmCpu](https://github.com/UniXNU/ArmCpu) | SM7325 SMP、GIC、timer 与 IPI |
 | [unixnu-darwinboot](https://github.com/RigoLigoRLC/unixnu-darwinboot) | [UniXNU/DarwinBoot](https://github.com/UniXNU/DarwinBoot) | 内核装载窗口、BootVideo 与内核交接 |

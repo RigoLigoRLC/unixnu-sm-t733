@@ -115,8 +115,21 @@ index 0000000..a1b56e0
 +    uses: ./.github/workflows/docs.yml
 +    with:
 +      revision: ${{ needs.sync.outputs.revision }}
+diff --git a/.gitmodules b/.gitmodules
+index dff2ced..7926317 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -48,7 +48,7 @@
+ 	url = https://github.com/UniXNU/AirNir.git
+ [submodule "kits/ArmSmmu4K"]
+ 	path = kits/ArmSmmu4K
+-	url = https://github.com/UniXNU/ArmSmmu4K.git
++	url = https://github.com/RigoLigoRLC/unixnu-arm-smmu4k.git
+ [submodule "kits/XnuPrelink"]
+ 	path = kits/XnuPrelink
+ 	url = https://github.com/UniXNU/XnuPrelink.git
 diff --git a/components.toml b/components.toml
-index 505cf96..ab237a5 100644
+index 505cf96..1802745 100644
 --- a/components.toml
 +++ b/components.toml
 @@ -105,7 +105,7 @@ kind = "driver"
@@ -146,12 +159,14 @@ index 505cf96..ab237a5 100644
  path = "drivers/AppleKeyStoreState"
  hardware = ["AppleKeyStore ABI"]
  os_abi = ["ipados-17.7.11-21H461"]
-@@ -401,7 +401,7 @@ kind = "kit"
+@@ -400,8 +400,8 @@ id = "ArmSmmu4K"
+ kind = "kit"
  function = "ARM SMMU translation with 4 KiB pages"
  scope = "controller"
- repository = "https://github.com/UniXNU/ArmSmmu4K.git"
+-repository = "https://github.com/UniXNU/ArmSmmu4K.git"
 -revision = "8bb168ad058c28d5c04f179ba407875eacba7ef3"
-+revision = "944b7697746662894da93d8bc4d0f2788034beec"
++repository = "https://github.com/RigoLigoRLC/unixnu-arm-smmu4k.git"
++revision = "d92ebe7ee91e2412a40490f9f78a4a927876229a"
  path = "kits/ArmSmmu4K"
  hardware = ["ARM SMMU", "MMU-500"]
  os_abi = []
@@ -24596,12 +24611,12 @@ index 4e0314d..5c8c145 160000
 -Subproject commit 4e0314df8ad29d52f6fa3f9383a540adcd618b87
 +Subproject commit 5c8c1453c67d6ef6b10ec43ab1f8fc570a2f33e1
 diff --git a/drivers/AdrenoMetal b/drivers/AdrenoMetal
-index 454ff2c..5cf8e42 160000
+index 454ff2c..2b0e3e4 160000
 --- a/drivers/AdrenoMetal
 +++ b/drivers/AdrenoMetal
 @@ -1 +1 @@
 -Subproject commit 454ff2ce83766ce7b3e0f355e83f1d72907708b3
-+Subproject commit 5cf8e42eb7d23121f5aea33383b06801f3e7373a
++Subproject commit 2b0e3e4cde15e956146095c7e4ddef7f18309b68
 diff --git a/drivers/AppleKeyStoreState b/drivers/AppleKeyStoreState
 index 42ff83e..635b8f9 160000
 --- a/drivers/AppleKeyStoreState
@@ -24643,12 +24658,12 @@ index eca07cd..474ada6 100644
  
  ```sh
 diff --git a/kits/ArmSmmu4K b/kits/ArmSmmu4K
-index 8bb168a..944b769 160000
+index 8bb168a..d92ebe7 160000
 --- a/kits/ArmSmmu4K
 +++ b/kits/ArmSmmu4K
 @@ -1 +1 @@
 -Subproject commit 8bb168ad058c28d5c04f179ba407875eacba7ef3
-+Subproject commit 944b7697746662894da93d8bc4d0f2788034beec
++Subproject commit d92ebe7ee91e2412a40490f9f78a4a927876229a
 diff --git a/package/UniXNUPkg/Library/UniXNULib/Internal.h b/package/UniXNUPkg/Library/UniXNULib/Internal.h
 index 2524c40..fd1945a 100644
 --- a/package/UniXNUPkg/Library/UniXNULib/Internal.h
@@ -24938,6 +24953,640 @@ index 4b06ab4..3b2da2e 100644
    Pad = (Ui->RowHeight - Ch) / 2;
    Bg  = Selected ? mAccent : mRow;
    Tag = TypeTag (Entry);
+diff --git a/patches/mesa/turnip-darwin-kmd.patch b/patches/mesa/turnip-darwin-kmd.patch
+index aeaab9d..6e75d25 100644
+--- a/patches/mesa/turnip-darwin-kmd.patch
++++ b/patches/mesa/turnip-darwin-kmd.patch
+@@ -171,9 +171,10 @@ index 82efb07..3b512f8 100644
+  tu_allocate_lazy_memory(struct tu_device *dev,
+                          struct tu_device_memory *mem)
+ diff --git a/src/freedreno/vulkan/tu_device.h b/src/freedreno/vulkan/tu_device.h
++index d32a7d8..ce1d494 100644
+ --- a/src/freedreno/vulkan/tu_device.h
+ +++ b/src/freedreno/vulkan/tu_device.h
+-@@ -300,6 +300,7 @@
++@@ -300,6 +300,7 @@ struct tu_device
+  {
+     struct vk_device vk;
+     struct tu_instance *instance;
+@@ -182,7 +183,7 @@ diff --git a/src/freedreno/vulkan/tu_device.h b/src/freedreno/vulkan/tu_device.h
+     struct tu_queue *queues[TU_MAX_QUEUE_FAMILIES];
+     int queue_count[TU_MAX_QUEUE_FAMILIES];
+ diff --git a/src/freedreno/vulkan/tu_knl.cc b/src/freedreno/vulkan/tu_knl.cc
+-index ab27798..9c545c6 100644
++index ab27798..00146a7 100644
+ --- a/src/freedreno/vulkan/tu_knl.cc
+ +++ b/src/freedreno/vulkan/tu_knl.cc
+ @@ -85,6 +85,19 @@ tu_bo_init_new_explicit_iova(struct tu_device *dev,
+@@ -205,7 +206,23 @@ index ab27798..9c545c6 100644
+  VkResult
+  tu_bo_init_dmabuf(struct tu_device *dev,
+                    struct tu_bo **bo,
+-@@ -362,6 +375,14 @@ tu_enumerate_devices(struct vk_instance *vk_instance)
++@@ -134,6 +147,15 @@ tu_bo_finish(struct tu_device *dev, struct tu_bo *bo)
++ VkResult
++ tu_bo_map(struct tu_device *dev, struct tu_bo *bo, void *placed_addr)
++ {
+++#ifdef TU_HAS_DARWIN
+++   if (bo->darwin_reused_map) {
+++      bo->darwin_reused_map = false;
+++      if (bo->map && placed_addr && placed_addr != bo->map) {
+++         return dev->instance->knl->bo_map(dev, bo, placed_addr);
+++      }
+++   }
+++#endif
+++
++    if (bo->map && (placed_addr == NULL || placed_addr == bo->map))
++       return VK_SUCCESS;
++    else if (bo->map)
++@@ -362,6 +384,14 @@ tu_enumerate_devices(struct vk_instance *vk_instance)
+        mesa_logi("Found compatible device '%s'.", path);
+  
+     return result;
+@@ -221,24 +238,30 @@ index ab27798..9c545c6 100644
+     return VK_ERROR_INCOMPATIBLE_DRIVER;
+  #endif
+ diff --git a/src/freedreno/vulkan/tu_knl.h b/src/freedreno/vulkan/tu_knl.h
+-index 4c2bf6a..a8ccd76 100644
++index 4c2bf6a..192ef28 100644
+ --- a/src/freedreno/vulkan/tu_knl.h
+ +++ b/src/freedreno/vulkan/tu_knl.h
+-@@ -58,6 +58,13 @@ struct tu_bo {
++@@ -58,6 +58,19 @@ struct tu_bo {
+     int shared_fd;
+  #endif
+  
+ +#ifdef TU_HAS_DARWIN
+-+   /* The NativeAdreno kernel client's buffer handle (64 bit, gem_handle is its low half) and the token that selects its
+-+    * CPU mapping (IOConnectMapMemory64 memory type). */
+++   /* The kernel handle is opaque. gem_handle indexes this device's BO array. */
+ +   uint64_t darwin_handle;
+++   /* The token selects this BO's IOConnectMapMemory64 descriptor. */
+ +   uint32_t darwin_token;
+++   uint32_t darwin_alloc_flags;
+++   VkMemoryPropertyFlags darwin_mem_property;
+++   uint64_t darwin_alignment;
+++   bool darwin_cacheable;
+++   /* A retained CPU map may be moved by the new owner's first placed map. */
+++   bool darwin_reused_map;
+ +#endif
+ +
+     bool implicit_sync : 1;
+     bool never_unmap : 1;
+     bool cached_non_coherent : 1;
+-@@ -140,6 +147,9 @@ struct tu_knl {
++@@ -140,6 +153,9 @@ struct tu_knl {
+                         const char *name);
+     VkResult (*bo_init_dmabuf)(struct tu_device *dev, struct tu_bo **out_bo,
+                                uint64_t size, enum tu_bo_alloc_flags flags, int prime_fd);
+@@ -248,7 +271,7 @@ index 4c2bf6a..a8ccd76 100644
+     int (*bo_export_dmabuf)(struct tu_device *dev, struct tu_bo *bo);
+     VkResult (*bo_alloc_lazy)(struct tu_device *dev, struct tu_bo *bo);
+     VkResult (*bo_map)(struct tu_device *dev, struct tu_bo *bo, void *placed_addr);
+-@@ -221,6 +231,9 @@ tu_bo_init_dmabuf(struct tu_device *dev,
++@@ -221,6 +237,9 @@ tu_bo_init_dmabuf(struct tu_device *dev,
+  int
+  tu_bo_export_dmabuf(struct tu_device *dev, struct tu_bo *bo);
+  
+@@ -258,7 +281,7 @@ index 4c2bf6a..a8ccd76 100644
+  void
+  tu_bo_finish(struct tu_device *dev, struct tu_bo *bo);
+  
+-@@ -262,6 +275,7 @@ void tu_sparse_vma_finish(struct tu_device *device,
++@@ -262,6 +281,7 @@ void tu_sparse_vma_finish(struct tu_device *device,
+                            struct tu_sparse_vma *vma);
+  
+  VkResult tu_knl_kgsl_load(struct tu_instance *instance, int fd);
+@@ -268,10 +291,10 @@ index 4c2bf6a..a8ccd76 100644
+  VkResult tu_knl_drm_msm_load(struct tu_instance *instance,
+ diff --git a/src/freedreno/vulkan/tu_knl_darwin.cc b/src/freedreno/vulkan/tu_knl_darwin.cc
+ new file mode 100644
+-index 0000000..b03c6ee
++index 0000000..006c40f
+ --- /dev/null
+ +++ b/src/freedreno/vulkan/tu_knl_darwin.cc
+-@@ -0,0 +1,1110 @@
++@@ -0,0 +1,1360 @@
+ +/*
+ + * Native Darwin kernel backend for Turnip: talks to the NativeAdreno IOKit user client (NativeAdrenoABI.h, version 1).
+ + * Modelled on tu_knl_kgsl.cc (no libdrm) and tu_knl_drm_msm.cc (the client chooses GPU addresses).
+@@ -292,6 +315,7 @@ index 0000000..b03c6ee
+ +#include "util/os_time.h"
+ +#include "util/timespec.h"
+ +#include "util/u_debug.h"
+++#include "util/u_idalloc.h"
+ +#include "util/u_vector.h"
+ +#include "vk_util.h"
+ +
+@@ -326,21 +350,40 @@ index 0000000..b03c6ee
+ +   NativeAdrenoAbiParams params;
+ +} dw = { .lock = PTHREAD_MUTEX_INITIALIZER };
+ +
+-+/* Preserve the native handle, CPU view and IOVA until the captured ring fence
+-+ * actually completed. An unrelated later submission never extends this lease.
+-+ * The queue is bounded; pressure may wait, but ordinary destruction does not. */
+-+enum { DARWIN_RETIRED_BOS = 256 };
+++enum {
+++   DARWIN_RETIRED_BOS = 256,
+++   DARWIN_CACHED_BOS = 64,
+++   DARWIN_BO_CACHE_BYTES = 128 * 1024 * 1024,
+++   DARWIN_BO_CACHE_MAX_OBJECT_BYTES = 64 * 1024 * 1024,
+++};
+++
+++/* darwin_retired_bo owns the native allocation, CPU mapping and GPU address
+++ * after the caller releases its tu_bo. The captured fence must complete before
+++ * the allocation can enter the reuse cache or be returned to the kernel. */
+ +struct darwin_retired_bo {
+ +   uint64_t handle, iova, size;
+ +   void *mapping;
+ +   uint32_t token, fence;
+++   uint32_t gem_handle, alloc_flags;
+++   VkMemoryPropertyFlags mem_property;
+++   uint64_t alignment;
+++   bool cacheable;
+ +};
+++
+++/* darwin_retire_state retains unfinished BOs and completed private BOs. Its
+++ * mutex protects both bounded arrays and the independent Mesa ID allocator.
+++ * Fence waits that may block run after releasing this mutex. */
+ +struct darwin_retire_state {
+ +   pthread_mutex_t lock;
+++   struct util_idalloc ids;
+ +   struct darwin_retired_bo entries[DARWIN_RETIRED_BOS];
+++   /* Cache entries are ordered from the oldest completed BO to the newest. */
+++   struct darwin_retired_bo cache[DARWIN_CACHED_BOS];
+ +   unsigned head, count;
+++   unsigned cache_count;
+ +   VkResult failure;
+ +   uint64_t enqueued, reaped, pressure_waits;
+++   uint64_t cache_bytes, cache_peak_bytes, cache_hits, cache_misses, cache_evictions;
+ +};
+ +
+ +static kern_return_t
+@@ -533,8 +576,96 @@ index 0000000..b03c6ee
+ +   mtx_unlock(&dev->vma_mutex);
+ +}
+ +
+-+/* Called under retire->lock. All fence polls are nonblocking. Failed/uncertain
+-+ * releases retain the record and the IOVA; a busy BO is retried by a later sweep. */
+++/* The caller holds retire->lock and has observed this BO's fence completion.
+++ * A busy kernel handle keeps its ID and GPU address for the next collection. */
+++static VkResult
+++darwin_release_bo_locked(struct tu_device *dev, struct darwin_retire_state *retire,
+++                         struct darwin_retired_bo *bo)
+++{
+++   if (bo->token) {
+++      if (bo->mapping) {
+++         kern_return_t kr = IOConnectUnmapMemory64(dw.conn, bo->token, mach_task_self(),
+++                                                  (mach_vm_address_t)(uintptr_t)bo->mapping);
+++         if (kr != KERN_SUCCESS) {
+++            return retire->failure = vk_device_set_lost(&dev->vk, "deferred CPU unmap failed: 0x%x", kr);
+++         }
+++         bo->mapping = NULL;
+++      }
+++
+++      NativeAdrenoAbiBoCpuUnmap undo = {.handle = bo->handle, .token = bo->token};
+++      kern_return_t kr = dw_call(NativeAdrenoMethodBoCpuUnmap, &undo, sizeof(undo), NULL, 0);
+++      if (kr != KERN_SUCCESS) {
+++         return retire->failure = vk_device_set_lost(&dev->vk, "deferred CPU lease release failed: 0x%x", kr);
+++      }
+++      bo->token = 0;
+++   }
+++
+++   NativeAdrenoAbiBoFree release = {.handle = bo->handle};
+++   kern_return_t kr = dw_call(NativeAdrenoMethodBoFree, &release, sizeof(release), NULL, 0);
+++   if (kr == kIOReturnBusy) {
+++      return VK_NOT_READY;
+++   }
+++   if (kr != KERN_SUCCESS) {
+++      return retire->failure = vk_device_set_lost(&dev->vk, "deferred BoFree failed: 0x%x", kr);
+++   }
+++
+++   darwin_free_iova(dev, bo->iova, bo->size);
+++   util_idalloc_free(&retire->ids, bo->gem_handle);
+++   *bo = {};
+++
+++   return VK_SUCCESS;
+++}
+++
+++static void
+++darwin_remove_cached_locked(struct darwin_retire_state *retire, unsigned index, uint64_t size)
+++{
+++   --retire->cache_count;
+++   memmove(&retire->cache[index], &retire->cache[index + 1],
+++           (retire->cache_count - index) * sizeof(retire->cache[0]));
+++   retire->cache[retire->cache_count] = {};
+++   retire->cache_bytes -= size;
+++}
+++
+++static VkResult
+++darwin_evict_oldest_locked(struct tu_device *dev, struct darwin_retire_state *retire)
+++{
+++   uint64_t size = retire->cache[0].size;
+++   VkResult result = darwin_release_bo_locked(dev, retire, &retire->cache[0]);
+++   if (result != VK_SUCCESS) {
+++      return result;
+++   }
+++
+++   darwin_remove_cached_locked(retire, 0, size);
+++   ++retire->cache_evictions;
+++
+++   return VK_SUCCESS;
+++}
+++
+++static VkResult
+++darwin_cache_completed_locked(struct tu_device *dev, struct darwin_retire_state *retire,
+++                              struct darwin_retired_bo *bo)
+++{
+++   if (!bo->cacheable) {
+++      return darwin_release_bo_locked(dev, retire, bo);
+++   }
+++
+++   while (retire->cache_count == DARWIN_CACHED_BOS ||
+++          bo->size > DARWIN_BO_CACHE_BYTES - retire->cache_bytes) {
+++      VkResult result = darwin_evict_oldest_locked(dev, retire);
+++      if (result != VK_SUCCESS) {
+++         return result;
+++      }
+++   }
+++
+++   retire->cache[retire->cache_count++] = *bo;
+++   retire->cache_bytes += bo->size;
+++   retire->cache_peak_bytes = MAX2(retire->cache_peak_bytes, retire->cache_bytes);
+++   *bo = {};
+++
+++   return VK_SUCCESS;
+++}
+++
+++/* The caller holds retire->lock. Every fence poll uses a zero timeout. */
+ +static VkResult
+ +darwin_reap_locked(struct tu_device *dev, struct darwin_retire_state *retire)
+ +{
+@@ -555,28 +686,14 @@ index 0000000..b03c6ee
+ +         have_completed_fence = true;
+ +         completed_fence = bo->fence;
+ +      }
+-+      if (bo->token) {
+-+         if (bo->mapping) {
+-+            kern_return_t kr = IOConnectUnmapMemory64(dw.conn, bo->token, mach_task_self(),
+-+                                                     (mach_vm_address_t)(uintptr_t)bo->mapping);
+-+            if (kr != KERN_SUCCESS)
+-+               return retire->failure = vk_device_set_lost(&dev->vk, "deferred CPU unmap failed: 0x%x", kr);
+-+            bo->mapping = NULL;
+-+         }
+-+         NativeAdrenoAbiBoCpuUnmap undo = {.handle = bo->handle, .token = bo->token};
+-+         kern_return_t kr = dw_call(NativeAdrenoMethodBoCpuUnmap, &undo, sizeof(undo), NULL, 0);
+-+         if (kr != KERN_SUCCESS)
+-+            return retire->failure = vk_device_set_lost(&dev->vk, "deferred CPU lease release failed: 0x%x", kr);
+-+         bo->token = 0;
+-+      }
+-+      NativeAdrenoAbiBoFree release = {.handle = bo->handle};
+-+      kern_return_t kr = dw_call(NativeAdrenoMethodBoFree, &release, sizeof(release), NULL, 0);
+-+      if (kr == kIOReturnBusy)
+++      VkResult result = darwin_cache_completed_locked(dev, retire, bo);
+++      if (result == VK_NOT_READY) {
+ +         return VK_SUCCESS;
+-+      if (kr != KERN_SUCCESS)
+-+         return retire->failure = vk_device_set_lost(&dev->vk, "deferred BoFree failed: 0x%x", kr);
+-+      darwin_free_iova(dev, bo->iova, bo->size);
+-+      *bo = {};
+++      }
+++      if (result != VK_SUCCESS) {
+++         return result;
+++      }
+++
+ +      retire->head = (retire->head + 1) % DARWIN_RETIRED_BOS;
+ +      --retire->count;
+ +      ++retire->reaped;
+@@ -594,6 +711,63 @@ index 0000000..b03c6ee
+ +   return result;
+ +}
+ +
+++static uint32_t
+++darwin_allocate_bo_id(struct tu_device *dev)
+++{
+++   struct darwin_retire_state *retire = (struct darwin_retire_state *)dev->darwin_retire;
+++   pthread_mutex_lock(&retire->lock);
+++   uint32_t id = util_idalloc_alloc(&retire->ids);
+++   pthread_mutex_unlock(&retire->lock);
+++
+++   return id;
+++}
+++
+++static VkResult
+++darwin_take_cached(struct tu_device *dev, uint64_t size, uint64_t alignment,
+++                    uint32_t alloc_flags, VkMemoryPropertyFlags mem_property,
+++                    struct darwin_retired_bo *out)
+++{
+++   struct darwin_retire_state *retire = (struct darwin_retire_state *)dev->darwin_retire;
+++   pthread_mutex_lock(&retire->lock);
+++   VkResult result = darwin_reap_locked(dev, retire);
+++   if (result == VK_SUCCESS) {
+++      for (unsigned i = 0; i < retire->cache_count; ++i) {
+++         const struct darwin_retired_bo *bo = &retire->cache[i];
+++         if (bo->size != size || bo->alignment != alignment ||
+++             bo->alloc_flags != alloc_flags || bo->mem_property != mem_property) {
+++            continue;
+++         }
+++
+++         *out = *bo;
+++         darwin_remove_cached_locked(retire, i, size);
+++         ++retire->cache_hits;
+++         break;
+++      }
+++      if (!out->handle) {
+++         ++retire->cache_misses;
+++      }
+++   }
+++   pthread_mutex_unlock(&retire->lock);
+++
+++   return result;
+++}
+++
+++/* Allocation pressure releases only completed cached objects. Pending fences
+++ * remain in the retirement queue and are polled by later collections. */
+++static VkResult
+++darwin_trim_cache(struct tu_device *dev)
+++{
+++   struct darwin_retire_state *retire = (struct darwin_retire_state *)dev->darwin_retire;
+++   pthread_mutex_lock(&retire->lock);
+++   VkResult result = retire->failure;
+++   while (result == VK_SUCCESS && retire->cache_count) {
+++      result = darwin_evict_oldest_locked(dev, retire);
+++   }
+++   pthread_mutex_unlock(&retire->lock);
+++
+++   return result == VK_NOT_READY ? VK_SUCCESS : result;
+++}
+++
+ +static VkResult
+ +darwin_map_failure(struct tu_device *dev, uint64_t handle, uint64_t iova,
+ +                   uint64_t size, kern_return_t map_error)
+@@ -624,59 +798,102 @@ index 0000000..b03c6ee
+ +               const char *name)
+ +{
+ +   MESA_TRACE_FUNC();
+-+   if (lazy_vma)
+++   if (lazy_vma) {
+ +      return vk_error(dev, VK_ERROR_FEATURE_NOT_PRESENT);
+++   }
+ +
+-+   VkResult collected = darwin_collect_retired(dev);
+-+   if (collected != VK_SUCCESS)
+-+      return collected;
+-+
+-+   uint64_t iova;
+-+   VkResult result = darwin_allocate_iova(dev, size, client_iova, flags, &iova);
+-+   if (result != VK_SUCCESS)
+++   const uint64_t alignment = os_page_size;
+++   const uint32_t excluded_flags = TU_BO_ALLOC_REPLAYABLE | TU_BO_ALLOC_DMABUF |
+++                                   TU_BO_ALLOC_SHAREABLE | TU_BO_ALLOC_IMPLICIT_SYNC;
+++   const bool cacheable = !client_iova && !(flags & excluded_flags) &&
+++                          size <= DARWIN_BO_CACHE_MAX_OBJECT_BYTES;
+++   struct darwin_retired_bo storage = {};
+++   VkResult result = cacheable ? darwin_take_cached(dev, size, alignment, flags, mem_property, &storage) :
+++                                darwin_collect_retired(dev);
+++   if (result != VK_SUCCESS) {
+ +      return result;
+-+
+-+   NativeAdrenoAbiBoAlloc alloc = {.bytes = size, .align_log2 = 12, .contiguous = 0};
+-+   NativeAdrenoAbiBoAllocReply reply = {};
+-+   kern_return_t kr = dw_call(NativeAdrenoMethodBoAlloc, &alloc, sizeof(alloc), &reply, sizeof(reply));
+-+   if (kr != KERN_SUCCESS) {
+-+      darwin_free_iova(dev, iova, size);
+-+      return vk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY, "BoAlloc failed: 0x%x", kr);
+ +   }
+ +
+-+   NativeAdrenoAbiBoMap map = {
+-+      .handle = reply.handle,
+-+      .iova = iova,
+-+      .permissions = (flags & TU_BO_ALLOC_GPU_READ_ONLY) ? 1u : 3u,
+-+      .writeback = 0,
+-+      .shareability = 2,
+-+   };
+-+   NativeAdrenoAbiBoMapReply mapped = {};
+-+   kr = dw_call(NativeAdrenoMethodBoMap, &map, sizeof(map), &mapped, sizeof(mapped));
+-+   if (kr != KERN_SUCCESS) {
+-+      return darwin_map_failure(dev, reply.handle, iova, size, kr);
+++   if (!storage.handle) {
+++      uint64_t iova;
+++      result = darwin_allocate_iova(dev, size, client_iova, flags, &iova);
+++      if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY ||
+++          result == VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS) {
+++         result = darwin_trim_cache(dev);
+++         if (result != VK_SUCCESS) {
+++            return result;
+++         }
+++         result = darwin_allocate_iova(dev, size, client_iova, flags, &iova);
+++      }
+++      if (result != VK_SUCCESS) {
+++         return result;
+++      }
+++
+++      NativeAdrenoAbiBoAlloc alloc = {.bytes = size, .align_log2 = 12, .contiguous = 0};
+++      NativeAdrenoAbiBoAllocReply reply = {};
+++      kern_return_t kr = dw_call(NativeAdrenoMethodBoAlloc, &alloc, sizeof(alloc), &reply, sizeof(reply));
+++      if (kr != KERN_SUCCESS) {
+++         result = darwin_trim_cache(dev);
+++         if (result != VK_SUCCESS) {
+++            darwin_free_iova(dev, iova, size);
+++            return result;
+++         }
+++         kr = dw_call(NativeAdrenoMethodBoAlloc, &alloc, sizeof(alloc), &reply, sizeof(reply));
+++      }
+++      if (kr != KERN_SUCCESS) {
+++         darwin_free_iova(dev, iova, size);
+++         return vk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY, "BoAlloc failed: 0x%x", kr);
+++      }
+++
+++      NativeAdrenoAbiBoMap map = {
+++         .handle = reply.handle,
+++         .iova = iova,
+++         .permissions = (flags & TU_BO_ALLOC_GPU_READ_ONLY) ? 1u : 3u,
+++         .writeback = 0,
+++         .shareability = 2,
+++      };
+++      NativeAdrenoAbiBoMapReply mapped = {};
+++      kr = dw_call(NativeAdrenoMethodBoMap, &map, sizeof(map), &mapped, sizeof(mapped));
+++      if (kr != KERN_SUCCESS) {
+++         return darwin_map_failure(dev, reply.handle, iova, size, kr);
+++      }
+++
+++      storage.handle = reply.handle;
+++      storage.iova = iova;
+++      storage.size = size;
+++      storage.gem_handle = darwin_allocate_bo_id(dev);
+ +   }
+ +
+-+   uint32_t gem_handle = (uint32_t)reply.handle;
+-+   struct tu_bo *bo = tu_device_lookup_bo(dev, gem_handle);
+++   struct tu_bo *bo = tu_device_lookup_bo(dev, storage.gem_handle);
+ +   assert(bo && bo->gem_handle == 0);
+ +
+ +   name = tu_debug_bos_add(dev, size, name);
+ +
+ +   *bo = (struct tu_bo) {
+-+      .gem_handle = gem_handle,
+++      .gem_handle = storage.gem_handle,
+ +      .size = size,
+-+      .iova = iova,
+++      .iova = storage.iova,
+++      .map = storage.mapping,
+ +      .name = name,
+ +      .refcnt = 1,
+ +      .implicit_sync = !!(flags & TU_BO_ALLOC_IMPLICIT_SYNC),
+++      .never_unmap = storage.mapping != NULL,
+ +      .base = base,
+-+      .unique_id = reply.handle,
+++      .unique_id = storage.handle,
+ +   };
+-+   bo->darwin_handle = reply.handle;
+++   bo->darwin_handle = storage.handle;
+++   bo->darwin_token = storage.token;
+++   bo->darwin_alloc_flags = flags;
+++   bo->darwin_mem_property = mem_property;
+++   bo->darwin_alignment = alignment;
+++   bo->darwin_cacheable = cacheable;
+++   bo->darwin_reused_map = storage.mapping != NULL;
+ +
+ +   tu_dump_bo_init(dev, bo);
+ +   TU_RMV(bo_allocate, dev, bo);
+++   if (bo->map) {
+++      TU_RMV(bo_map, dev, bo);
+++   }
+ +
+ +   *out_bo = bo;
+ +   if (flags & TU_BO_ALLOC_INTERNAL_RESOURCE) {
+@@ -698,12 +915,28 @@ index 0000000..b03c6ee
+ +      return collected;
+ +   uint64_t iova;
+ +   VkResult result = darwin_allocate_iova(dev, size, 0, TU_BO_ALLOC_NO_FLAGS, &iova);
+-+   if (result != VK_SUCCESS)
+++   if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+++      result = darwin_trim_cache(dev);
+++      if (result != VK_SUCCESS) {
+++         return result;
+++      }
+++      result = darwin_allocate_iova(dev, size, 0, TU_BO_ALLOC_NO_FLAGS, &iova);
+++   }
+++   if (result != VK_SUCCESS) {
+ +      return result;
+++   }
+ +
+ +   NativeAdrenoAbiBoImport import = {.address = (uint64_t)(uintptr_t)pointer, .bytes = size};
+ +   NativeAdrenoAbiBoAllocReply reply = {};
+ +   kern_return_t kr = dw_call(NativeAdrenoMethodBoImport, &import, sizeof(import), &reply, sizeof(reply));
+++   if (kr == kIOReturnNoMemory || kr == kIOReturnNoResources) {
+++      result = darwin_trim_cache(dev);
+++      if (result != VK_SUCCESS) {
+++         darwin_free_iova(dev, iova, size);
+++         return result;
+++      }
+++      kr = dw_call(NativeAdrenoMethodBoImport, &import, sizeof(import), &reply, sizeof(reply));
+++   }
+ +   if (kr != KERN_SUCCESS) {
+ +      darwin_free_iova(dev, iova, size);
+ +      return vk_errorf(dev, VK_ERROR_INVALID_EXTERNAL_HANDLE, "BoImport failed: 0x%x", kr);
+@@ -715,7 +948,7 @@ index 0000000..b03c6ee
+ +      return darwin_map_failure(dev, reply.handle, iova, size, kr);
+ +   }
+ +
+-+   uint32_t gem_handle = (uint32_t)reply.handle;
+++   uint32_t gem_handle = darwin_allocate_bo_id(dev);
+ +   struct tu_bo *bo = tu_device_lookup_bo(dev, gem_handle);
+ +   assert(bo && bo->gem_handle == 0);
+ +   *bo = (struct tu_bo) {
+@@ -753,6 +986,23 @@ index 0000000..b03c6ee
+ +static VkResult
+ +darwin_bo_map(struct tu_device *dev, struct tu_bo *bo, void *placed_addr)
+ +{
+++   if (bo->map && bo->darwin_token) {
+++      kern_return_t kr = IOConnectUnmapMemory64(dw.conn, bo->darwin_token, mach_task_self(),
+++                                               (mach_vm_address_t)(uintptr_t)bo->map);
+++      if (kr != KERN_SUCCESS) {
+++         return vk_device_set_lost(&dev->vk, "cached CPU unmap failed: 0x%x", kr);
+++      }
+++      bo->map = NULL;
+++
+++      NativeAdrenoAbiBoCpuUnmap undo = {.handle = bo->darwin_handle, .token = bo->darwin_token};
+++      kr = dw_call(NativeAdrenoMethodBoCpuUnmap, &undo, sizeof(undo), NULL, 0);
+++      if (kr != KERN_SUCCESS) {
+++         return vk_device_set_lost(&dev->vk, "cached CPU lease release failed: 0x%x", kr);
+++      }
+++      bo->darwin_token = 0;
+++      TU_RMV(bo_unmap, dev, bo);
+++   }
+++
+ +   NativeAdrenoAbiBoCpuMap req = {.handle = bo->darwin_handle};
+ +   NativeAdrenoAbiBoCpuMapReply reply = {};
+ +   kern_return_t kr = dw_call(NativeAdrenoMethodBoCpuMap, &req, sizeof(req), &reply, sizeof(reply));
+@@ -859,20 +1109,34 @@ index 0000000..b03c6ee
+ +      uint32_t fence = dw.last_fence;
+ +      pthread_mutex_unlock(&dw.lock);
+ +      unsigned slot = (retire->head + retire->count) % DARWIN_RETIRED_BOS;
+-+      retire->entries[slot] = {bo->darwin_handle, bo->iova, bo->size, bo->map, bo->darwin_token, fence};
+++      retire->entries[slot] = {
+++         .handle = bo->darwin_handle,
+++         .iova = bo->iova,
+++         .size = bo->size,
+++         .mapping = bo->map,
+++         .token = bo->darwin_token,
+++         .fence = fence,
+++         .gem_handle = bo->gem_handle,
+++         .alloc_flags = bo->darwin_alloc_flags,
+++         .mem_property = bo->darwin_mem_property,
+++         .alignment = bo->darwin_alignment,
+++         .cacheable = bo->darwin_cacheable,
+++      };
+ +      ++retire->count;
+ +      ++retire->enqueued;
+++
+++      /* The sparse-array entry becomes empty before another allocation can
+++       * obtain this handle from the completed cache. */
+++      memset(bo, 0, sizeof(*bo));
+ +      darwin_reap_locked(dev, retire);
+ +   } else {
+ +      /* No reusable range is reported on error. The kernel still owns the handle
+ +       * and view; connection teardown must drain them, even if this record cannot fit. */
+ +      retire->failure = vk_device_set_lost(&dev->vk, "deferred BO queue remains full; retaining native allocation");
+++      memset(bo, 0, sizeof(*bo));
+ +   }
+ +   pthread_mutex_unlock(&retire->lock);
+ +
+-+   /* The BO structs live in a sparse array: zero the entry to mark it free. */
+-+   memset(bo, 0, sizeof(*bo));
+-+
+ +   u_rwlock_rdunlock(&dev->dma_bo_lock);
+ +}
+ +
+@@ -1198,6 +1462,8 @@ index 0000000..b03c6ee
+ +      dw_close_connection();
+ +      return vk_error(dev, VK_ERROR_INITIALIZATION_FAILED);
+ +   }
+++   util_idalloc_init(&retire->ids, 256);
+++   util_idalloc_reserve(&retire->ids, 0);
+ +   dev->darwin_retire = retire;
+ +   return VK_SUCCESS;
+ +}
+@@ -1211,10 +1477,17 @@ index 0000000..b03c6ee
+ +   if (retire) {
+ +      /* Some CreateDevice failure paths already destroyed the VMA heap/mutex.
+ +       * Never return ranges here: they are either gone or about to be destroyed. */
+-+      if (debug_get_bool_option("TU_DARWIN_RETIRE_TRACE", false))
+++      if (debug_get_bool_option("TU_DARWIN_RETIRE_TRACE", false)) {
+ +         mesa_logi("darwin BO retirement: enqueued=%llu reaped=%llu pending-at-close=%u pressure=%llu",
+ +                   (unsigned long long)retire->enqueued, (unsigned long long)retire->reaped,
+ +                   retire->count, (unsigned long long)retire->pressure_waits);
+++         mesa_logi("darwin BO cache: hits=%llu misses=%llu objects=%u bytes=%llu peak=%llu evictions=%llu",
+++                   (unsigned long long)retire->cache_hits, (unsigned long long)retire->cache_misses,
+++                   retire->cache_count, (unsigned long long)retire->cache_bytes,
+++                   (unsigned long long)retire->cache_peak_bytes,
+++                   (unsigned long long)retire->cache_evictions);
+++      }
+++      util_idalloc_fini(&retire->ids);
+ +      pthread_mutex_destroy(&retire->lock);
+ +      vk_free(&dev->vk.alloc, retire);
+ +      dev->darwin_retire = NULL;
 diff --git a/patches/mesa/turnip-tile-store-allocation-error.patch b/patches/mesa/turnip-tile-store-allocation-error.patch
 new file mode 100644
 index 0000000..d97a374

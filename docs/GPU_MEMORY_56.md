@@ -42,3 +42,16 @@ HUD的计时来源、累计和峰值保持，以及显示frame-info缺口见
 
 本包不新增或运行测试。实际编译和部署结果记录在发布目录的 `stages.tsv`、
 `source-revisions.json` 与MSC输出；性能变化由后续相同操作的实机增量记录衡量。
+
+## 构建与部署
+
+2026-10-27，56b九阶段全部返回0。构建前各源码仓库干净，固定设备 `bc90d20`、
+core `e0a8997`、SoC `4de7850`、Adreno6xx `5b15108`、AdrenoMetal `093e075`。
+不可移动tag为 `system-gpu-memory-56b` 与
+`build/system-gpu-memory-56b-source-1`。完整提交号、命令、子模块和补丁列表
+在 `build/releases/system-gpu-memory-56b/` 内；后续文档提交不改变此镜像来源。
+
+MSC重新枚举后完整写入536870912字节并sync，返回 `write-fat completed`。
+日志为工作区 `logs/msc-system-gpu-memory-56b/write-fat.jsonl`。Data保留。
+USB被动collector已确认运行，已请用户完整重启固件并选择Boot UniXNU。
+此时尚无56b实机性能结论。

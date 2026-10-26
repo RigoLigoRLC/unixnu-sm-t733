@@ -159,6 +159,109 @@ bit 31 表示用两段 32 位数据打包一个字段。当前 arm64 客户端�
 原订阅记录的异步引用位于 `+0x18`；该记录和引用由原显示类及 user client
 拥有，平台回调不能释放它们。
 
+### 通知传输必须同时匹配客户端和内核
+
+selector 74 的最后一个输出是通知传输选择，不是支持字段的 mask。
+`InfoKeyInitialize` 在 `0x1b63d54cc` 将首次枚举返回的该值保存到客户端
+`+0xde8`。`kern_GetRunLoopSource` 的 `0x1b63d6c54` 到 `0x1b63d6c64`
+和 dispatch queue 注册路径 `0x1b63d5210` 到 `0x1b63d5220` 均检查：
+notification type 为 3 且这个值为 1 时，选择 IOShq；否则使用 Mach 异步通知。
+Apple 原派生驱动的枚举实现 `0xfffffff006bb66b4` 返回 14 个键，并返回 1。
+
+内核侧也有配套开关。原基类 slot 336，`0xfffffff0067a023c`，返回 true。
+注册函数在 `0xfffffff006795f58` 调用它，true 会跳过订阅记录 `+0x18` 的
+异步引用初始化；false 才执行 `0xfffffff006795f68` 到 `0xfffffff006795f94`，
+将用户端口、callback、context 和 task 交给原初始化帮助函数。
+
+选定的平台实现沿用已有 Mach 通知，因此须一次完成两项修改：
+
+1. `supportedFrameInfo` 的最后一个输出返回 0。
+2. slot 336 用正确的 `bool` 签名覆盖并返回 false。
+
+这两项分别决定客户端接收通道和内核异步引用初始化。单独修改任何一项都会
+产生两端不匹配。原注册、注销、订阅记录和 work-loop gate 继续由基类管理。
+
+原 Apple 订阅记录的字段和操作已恢复：
+
+| 字段 / 地址 | 含义 |
+| --- | --- |
+| record `+0x10` | 原 user client 指针 |
+| record `+0x18` | `OSAsyncReference64` |
+| record `+0x74` | 原注册路径设置的活动状态 |
+| record `+0x78` | 订阅字段 mask，32 位 |
+| record `+0x80` | 原发送器保存的上一次 Presentation，用于 Presentation_delta |
+| `0xfffffff006bb672c` 到 `0xfffffff006bb6770` | 原 mask 更新实现只处理 type 3，更新 `+0x78` |
+| `0xfffffff006bb6708` | 取消订阅时经同一路径清除 mask |
+
+本平台只枚举 `Presentation_time` 和 `Requested_presentation`，对应本平台
+键列表的 bit 0 和 bit 1。CA 按键名求交集，故无需保留 Apple 14 键列表中
+原来的 bit 6 和 bit 8。原 mask 字段足够，不另建订阅表或持有第二份引用。
+
+### 完成报告和 Requested_presentation 的原始布局
+
+Apple 的 slot 337 实现从 `0xfffffff006bfa478` 开始。输出缓冲非空时，
+count 指针必须非空且 capacity 非零，否则返回 BadArgument。它先清零 count，
+逐份报告增加 count；`0xfffffff006bfa5f4` 和 `0xfffffff006bfa880` 明确使用
+`0xd8` 字节记录步长。输出缓冲为空时，使用栈上报告并发送通知。
+
+原驱动在 `+0x18f0` 保存最多 16 份 `0x4c` 字节的待退役记录，slot 337
+按目标 frame ID 消费至该帧，并扩展为 `0xd8` 字节报告。这是其多请求硬件
+队列的所有权安排。本平台 DPU 仅允许一份进行中的请求，退休前暂存一份报告
+即可；报告先从平台暂存状态移除，再交给基类发送，避免重入重复通知。
+
+| 报告偏移 | 宽度 | 已恢复的来源和用途 |
+| --- | --- | --- |
+| `+0x00` | 64 位 | request `+0x2d8`，原发送器作为 Issued_time 读取 |
+| `+0x08` | 64 位 | request `+0x2d0`，Requested_presentation |
+| `+0x10` | 64 位 | 硬件完成的 Presentation_time |
+| `+0x30` | 32 位 | request `+0x314`，CA 的 swap/frame ID |
+| `+0x34` | 32 位 | 原控制器生成的状态字段，不作为本平台时间字段 |
+| `+0x40` | 32 位 | request `+0x32c` 的原完成状态 |
+| `+0x49` | 8 位 | 原初始化函数清零的标记 |
+| `+0xcc`、`+0xd0` | 各 32 位 | 原控制器反馈值 |
+| `+0xd4` | 8 位 | 上述控制器反馈值有效标记 |
+| 全记录 | `0xd8` 字节 | 未实现字段和保留区清零，不设置未知有效标记 |
+
+Requested 的直接证据是 `0xfffffff006bd5954` 的
+`ldr q0, [request, #0x2d0]`，随后 `ext ... #8` 交换两个 64 位元素，
+`0xfffffff006bd595c` 写入报告开头。因此 report `+0x08` 来自 request
+`+0x2d0`。原发送器 `0xfffffff006bb6a50` 正是为 Requested 键读取该位置。
+`0xfffffff006bb6a38` 为 Presentation 键读取 `+0x10`，
+`0xfffffff006bb6a58` 为 Issued 键读取 `+0x00`。
+
+输入链同样匹配：`iomfb_SwapSetTimestamps` 的类型 1 写客户端 `+0x18`，
+进入 wire `+0x00`，内核在 `0xfffffff00678f744` 起的复制路径写 request
+`+0x2d0`。CA `finish_update` 的 `0x189502560` 到 `0x189502588` 把其
+计划呈现时间转换为 host ticks，交给类型 1。类型 2 则来自另一个 CA 时间，
+最终位于 request `+0x2e0`，不能当作 Requested 使用。
+
+### 显示时间使用 continuous 时钟
+
+内核原基类 slot 241 位于 `0xfffffff00679fc28`，调用
+`0xfffffff0067920b8`、`0xfffffff0067920cc`，再经导入岛
+`0xfffffff0067a2ecc` 和 GOT `0xfffffff006f33ec0` 到导出符号
+`_mach_continuous_time`。这也是原请求 Issued 时间的时钟。
+
+用户端兼容层负责时钟转换：
+
+| 地址 | 实际操作 |
+| --- | --- |
+| CA `0x1896e7204` 到 `0x1896e7214` | 调 `IOMobileFramebufferSetParameter(8, 1, &one)`；成功后置 display `+0x6c08` |
+| IOMFB `0x1b63d2468` 到 `0x1b63d2488` | 参数 8 只设置客户端 `+0x78c`，值只能为 0 或 1，不向内核发送 selector |
+| IOMFB `0x1b63d3148` | `kern_ingest_timestamp`：客户端未选择 continuous 时，对非零输入加 continuous 减 absolute |
+| IOMFB `0x1b63d3368` | `adjust_ni_timestamp`：按键名识别需转换的时间；选择 continuous 时直接保留 |
+| IOMFB `0x1b63d8348` | `kern_egest_timestamp`：默认客户端对非零输出减 continuous 加 absolute |
+| CA `0x1894f35c0` 到 `0x1894f35e8` | continuous 模式下由 CA 自己将两项回调时间转回 absolute |
+
+导入岛 `0x1ba64c884` 和 `0x1ba64c890` 分别解析到
+`mach_absolute_time` 和 `mach_continuous_time`。转换键名列表包含
+Issued_time、Presentation_time 和 Requested_presentation。
+
+因此新 DPU 呈现估计和它的时间区间必须直接采集 `mach_continuous_time()`；
+request 的 Requested 和 Issued 原值保持不变。现有 DPU 性能统计使用
+`mach_absolute_time()` 计算阶段耗时，可以继续保留，不能直接作为原报告的
+Presentation 绝对端点。此区分也覆盖系统休眠后两种时钟的偏移变化。
+
 ## DPU 的呈现时间与精度
 
 `NativeDpuSurface.cpp` 的 `t733_dpu_surface_poll` 原起始行 720，只有在
@@ -174,17 +277,66 @@ CTL0 flush 已清零且 INTF1 frame counter 已变化时才完成 IOSurface 换�
 `drm_calc_vbltimestamp_from_scanoutpos` 则在已知实际 mode clock 和 scanout
 位置时回推 vblank，记录查询前后的时间差作为误差，并限制重试次数。
 
-本平台应保存从最后一次观察到尚未完成，到首次观察到完成的时间区间，
-将首次完成观察时间作为单调时钟的呈现估计，并单独记录区间宽度和采样来源。
-这与 DRM 的低精度回退一致。轮询被调度延迟时，误差会扩大，不能宣称固定
-1 ms 精度。当前没有已证实的 mode pixel clock，不能拿固定 60 Hz 减去
-line counter 伪造高精度 vblank 时间。后续接入真实 DPU IRQ 或恢复完整 mode
-clock 后，沿同一报告契约替换时间来源。
+本平台应以首次完成观察的 continuous 时间作为呈现估计，在旧 buffer 释放
+之前取样，并保留时间来源及区间宽度。这与 DRM 的低精度回退一致。最初的
+区间下界在写 CTL flush 前取样；只有读到 flush 仍未完成时，才可将下界推进
+到该次寄存器读取之前的时间。当前代码在写 flush 后读取 pendingFrame，
+单凭 frame counter 仍相等，不能推出新 buffer 尚未开始扫描，因此不能用
+该条件缩小呈现时间区间。完成条件仍采用 flush 清零且 frame counter 前进。
+
+区间上界在首次观察到完成后立即取样。保留宽区间能够覆盖计数器读取跨帧和
+work-loop 调度延迟；不能宣称固定 1 ms 精度。该值是软件观察产生的呈现估计，
+不是硬件锁存时间。当前没有已证实的 mode pixel clock，不能拿固定 60 Hz
+减去 line counter 伪造高精度 vblank 时间。后续接入真实 DPU IRQ 或恢复完整
+mode clock 后，沿同一报告契约替换时间来源。
 
 显示报告只为硬件已确认的成功 IOSurface 换帧生成。失败、恢复 firmware
 buffer、CPU copy 和提前退役的 GPU copy 都不能虚构一个新 IOSurface 的
 Presentation_time。报告必须携带原请求 frame ID，不能用 DPU frame counter
 冒充 CA 的 swap ID。
+
+## 下一次显示源码交付的完整范围
+
+实施顺序按所有权组织，以下各项组成同一次显示交付：
+
+1. `NativeDpuSurface.h/.cpp` 保存固定大小的呈现结果：continuous 观察时间、
+   区间下界、上界、实际 frame counter 和来源。开始新操作、恢复 firmware、
+   fault、timeout 或 unmap 失败时清除有效结果；成功 SurfaceOperation 后
+   提供一次消费接口。DPU 模块继续拥有 buffer 映射和 fence，不持有 CA 请求。
+2. `NativeLegacyDisplay.cpp` 在当前请求仍被保留且 DPU 呈现成功时，读取原
+   request 的 frame ID、Requested、Issued 和状态，构造清零的 `0xd8`
+   字节报告；随后按现有顺序退役并释放请求。仅与 pendingSwapRequest 相符
+   的成功 SurfaceCompletion 生成报告，避免把已替换或提前退役的请求送回 CA。
+3. slot 337 使用正确类型接收报告数组、count 和 capacity。非空数组要求
+   count 非空且 capacity 非零；无匹配完成报告时 count 为零并成功返回。
+   匹配报告最多一份，取走后清除平台状态；有数组则复制，无数组则调用原
+   `native_legacy_frame_info_notify`。原 sender 在 gate 内遍历已有订阅。
+4. slot 211 接收 type、订阅记录和 mask，只允许 type 3 及两个已公布位；
+   slot 306 在注册和注销时清除该记录的 mask；slot 307 从记录读 mask，
+   在栈上构造最多 4 个 64 位值的消息。所有这些操作沿用原 work-loop gate，
+   不保存越过回调生命周期的订阅记录指针。
+5. slot 307 使用 `IOUserClient::sendAsyncResult64WithOptions` 和
+   `kIOUserNotifyOptionCanDrop`。现有 XNU `iokit/IOKit/IOUserClient.h`
+   第 103、334 到 343 行明确规定有限排队；`iokit/Kernel/IOUserClient.cpp`
+   第 2338 到 2340 行采用零超时发送。队列满或端口关闭只丢弃本次可选报告，
+   在固定计数器保存错误及丢弃数，不积压请求，也不阻塞 DPU 退役。平台发送
+   回调向基类返回成功以避免原遍历器逐帧打印相同传输错误；真实发送状态另存。
+6. 枚举两项键，返回 transport 0，并覆盖 slot 336 返回 false。
+   `scripts/build-software-display.py` 同时更新 slot 211、306、307、336、337
+   的实际声明和绑定；新增原 sender 绑定的 reference 地址为
+   `0xfffffff005796934`，按生成器现有 slide 规则得到本次原始地址
+   `0xfffffff006796934`。其余原基类方法继续按原 vtable 绑定。
+
+本方案复用原 IOMobileFramebuffer 的注册、取消、订阅表、客户端字典解码、
+时钟转换以及 XNU 有限消息队列。DPU 首次完成观察、误差记录、单个请求到
+完成报告的转交是 SM7325 适配。不会在显示热路径逐帧分配报告或追加无界队列。
+
+后续实机验收保留固定计数器：成功 SurfaceCompletion、生成报告、发送成功、
+队列满丢弃、其他发送错误、无匹配 frame ID；保留最近 64 份呈现观察区间。
+正常接收时成功换帧与生成报告一一对应，失败和 firmware 恢复不增加报告数。
+CA 首次样本只建立前值，后续不同 frame ID 才增加 Frame Duration；其变化
+应与呈现间隔及记录的误差区间一致。丢报告会使下一份收到的样本跨越更长间隔，
+必须与丢弃计数一同解读。此处列的是下一次交付的实机验收要求，本次未执行。
 
 ## Metal 时间戳链
 
@@ -248,5 +400,7 @@ frame counter 和时间来源。资源释放必须在记录中与完成观察分
 
 ## 实施状态
 
-上述 HUD、回调 ABI 和时间戳来源已经完成静态定位。显示 frame-info 实现正在
-补齐，代码完成后在此记录实际文件范围。未将半套键枚举发布为已修复状态。
+上述 HUD、回调 ABI、Requested 字段、通知传输选择和 continuous 时钟链已经
+完成静态定位。本次交付仅补充研究文档，没有修改实际显示源码、ABI 模板或
+构建脚本。`system-gpu-memory-56b` 沿用原显示实现；FrameInfo 的完整实现按
+上节范围另一次交付，当前 Frame Duration 为 0 的实现缺口尚未修复。

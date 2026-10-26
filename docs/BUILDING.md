@@ -22,7 +22,7 @@ cp local.toml.example local.toml
 
 `feeds.toml` 固定公开的 [unixnu-sm7325-common](https://github.com/RigoLigoRLC/unixnu-sm7325-common) 提交，公共驱动及 Apple OSS 由对应 core feed 提供。设备有 13 个 driver 子模块和 1 个 kit 子模块；`components.toml` 保留社区 fork 身份及本机 recipe。克隆和更新设备仓库后都执行递归子模块初始化，gitlink 与组件 revision 一起更新。
 
-当前开发源码已于 2026-10-26 本地提交并固定引用：core `d9e633a`、Metal `4f9598c`、Adreno6xx `dda9eb8`、SM7325 `fc47dfd`。这些提交包含此前上游同步和本机修改，尚未推送。设备运行的是回退后的原始 51s 产物；这些开发提交不对应 51s，不能给旧产物补填源码版本。
+当前源码已撤回 51s 之后的 GPU、Metal、Turnip 和显示修改，身份、配对、软件加密、HUD 与触点设置保留。恢复范围见 [GPU 回滚记录](GPU_51S_RESTORE.md)。每包使用提交后的源码和固定引用，原始 51s FAT 仍作为独立的已测产物保留。
 
 公开 `board.toml` 与 `board.platform.toml` 的 `[payload.adt] chip_id = "733"` 是十六进制软件身份输入。每台设备的 `hardware.unique_chip_id` 填在忽略的 `local.toml`：
 
@@ -88,7 +88,7 @@ bash scripts/build.sh platform-local-1 --platform
 
 turnip 阶段通过 `tools/gpu/bootstrap-turnip.py` 在公共 core 的 `.cache` 内准备固定 Mesa、Python 依赖、glslang 和 bison，再调用官方 `build-turnip-darwin.py`。也可提前执行 `python3 tools/gpu/bootstrap-turnip.py --core "$UNIXNU_BASE"` 准备依赖，保留 `UNIXNU_RECORD_HASHES=0`。
 
-metal 阶段调用 `tools/gpu/bootstrap-metal.py --core <core> --abi-directory <resolved tree>/drivers/Adreno6xx`。主机须已有 `rustup` 和 LLVM 21 或更高版本的 `llvm-as`；脚本在 core 的 `.cache/gpu-reference/metal2vulkan` 获取固定提交 `720ef1ce9ae2a2068999a8675717418b9416283e`，由 bridge 构建器按清单应用官方 `0001` 至 `0016` 及本机 `0017` 至 `0021`。本机补丁分别限制空闲池、描述处理步骤、确认 host-import 释放、收紧 tile-store 边界和限制错误日志。Rust 1.98.0 及 `aarch64-apple-ios` target 安装在 `.cache/metal-rustup`，Cargo 依赖保存在 `.cache/metal-cargo`；首次准备需要网络。
+metal 阶段调用 `tools/gpu/bootstrap-metal.py --core <core> --abi-directory <resolved tree>/drivers/Adreno6xx`。主机须已有 `rustup` 和 LLVM 21 或更高版本的 `llvm-as`；脚本在 core 的 `.cache/gpu-reference/metal2vulkan` 获取固定提交 `720ef1ce9ae2a2068999a8675717418b9416283e`，由 bridge 构建器应用 `0001` 至 `0008` 及 `0009-bound-idle-command-pools-on-ios.patch`。Rust 1.98.0 及 `aarch64-apple-ios` target 安装在 `.cache/metal-rustup`，Cargo 依赖保存在 `.cache/metal-cargo`；首次准备需要网络。
 
 bootstrap先查询本地工具链及iOS标准库；固定版本已安装时直接使用，缺失时才执行rustup安装。
 

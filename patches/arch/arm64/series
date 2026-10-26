@@ -25,7 +25,6 @@ arch:../../../patches/xnu/native-text-fixup.patch
 arch:../../../patches/xnu/native-trust-cache-runtime.patch
 arch:../../../patches/xnu/native-union-getattrlistbulk.patch
 arch:../../../patches/xnu/native-union-lower-directory.patch
-arch:../../../patches/xnu/native-work-interval-instance.patch
 arch:../../../patches/xnu/native-work-interval-soft-fail.patch
 arch:../../../patches/xnu/native-work-interval-trace.patch
 arch:../../../patches/xnu/non-apple-cache-monitor.patch

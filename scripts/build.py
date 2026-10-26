@@ -164,22 +164,16 @@ def main():
     if not args.platform:
         debug_tools = release / "debug-tools"
         wallpaper = release / "wallpaper"
-        gpu_tree = work / "tree"
-        environment["T733_GPU_TREE"] = str(gpu_tree)
         run("turnip", [sys.executable, DEVICE / "tools/gpu/bootstrap-turnip.py",
-                       "--core", gpu_tree, "--reference-core", base, "--build",
-                       "--abi-directory", gpu_tree / "drivers/Adreno6xx"])
+                       "--core", base, "--build", "--abi-directory", work / "tree/drivers/Adreno6xx"])
         run("metal", [sys.executable, DEVICE / "tools/gpu/bootstrap-metal.py",
-                      "--core", gpu_tree, "--reference-core", base,
-                      "--abi-directory", gpu_tree / "drivers/Adreno6xx",
-                      "--system-root", args.system_root.expanduser().resolve()])
+                      "--core", base, "--abi-directory", work / "tree/drivers/Adreno6xx"])
         run("wallpaper", [sys.executable, base / "scripts/make-wallpaper-overlay.py",
                           args.system_root.expanduser().resolve(), wallpaper])
         run("debug-tools", [sys.executable, DEVICE / "scripts/build-debug-tools.py",
                             "--output", debug_tools, "--trust-cache", inputs / "trust.bundle",
                             "--debugserver", inputs / "debugserver", "--wallpaper", wallpaper,
-                            "--metal-plugin", gpu_tree / "build/adreno-metal-plugin/NativeAdrenoMetal.bundle",
-                            "--metal-inputs", gpu_tree / "build/metal-inputs"])
+                            "--metal-plugin", base / "build/adreno-metal-plugin/NativeAdrenoMetal.bundle"])
         payload.extend(["--trust-cache", debug_tools / "trust.bundle",
                         "--gpu-addon", debug_tools / "debug.addon",
                         "--data-ramdisk", inputs / "data.dbr"])

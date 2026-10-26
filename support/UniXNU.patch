@@ -116,7 +116,7 @@ index 0000000..a1b56e0
 +    with:
 +      revision: ${{ needs.sync.outputs.revision }}
 diff --git a/components.toml b/components.toml
-index 505cf96..4d36af1 100644
+index 505cf96..ab237a5 100644
 --- a/components.toml
 +++ b/components.toml
 @@ -105,7 +105,7 @@ kind = "driver"
@@ -124,7 +124,7 @@ index 505cf96..4d36af1 100644
  scope = "graphics"
  repository = "https://github.com/UniXNU/AdrenoMetal.git"
 -revision = "454ff2ce83766ce7b3e0f355e83f1d72907708b3"
-+revision = "4f9598cbb6d6bff4d469931d43ee89797fd1b753"
++revision = "5cf8e42eb7d23121f5aea33383b06801f3e7373a"
  path = "drivers/AdrenoMetal"
  hardware = ["Turnip Darwin backend", "kernel GPU user-client ABI"]
  os_abi = ["ipados-17.7.11-21H461"]
@@ -151,7 +151,7 @@ index 505cf96..4d36af1 100644
  scope = "controller"
  repository = "https://github.com/UniXNU/ArmSmmu4K.git"
 -revision = "8bb168ad058c28d5c04f179ba407875eacba7ef3"
-+revision = "9f1d22d8e0309cc011b90241d1f7d58efe4e5a30"
++revision = "944b7697746662894da93d8bc4d0f2788034beec"
  path = "kits/ArmSmmu4K"
  hardware = ["ARM SMMU", "MMU-500"]
  os_abi = []
@@ -24596,12 +24596,12 @@ index 4e0314d..5c8c145 160000
 -Subproject commit 4e0314df8ad29d52f6fa3f9383a540adcd618b87
 +Subproject commit 5c8c1453c67d6ef6b10ec43ab1f8fc570a2f33e1
 diff --git a/drivers/AdrenoMetal b/drivers/AdrenoMetal
-index 454ff2c..4f9598c 160000
+index 454ff2c..5cf8e42 160000
 --- a/drivers/AdrenoMetal
 +++ b/drivers/AdrenoMetal
 @@ -1 +1 @@
 -Subproject commit 454ff2ce83766ce7b3e0f355e83f1d72907708b3
-+Subproject commit 4f9598cbb6d6bff4d469931d43ee89797fd1b753
++Subproject commit 5cf8e42eb7d23121f5aea33383b06801f3e7373a
 diff --git a/drivers/AppleKeyStoreState b/drivers/AppleKeyStoreState
 index 42ff83e..635b8f9 160000
 --- a/drivers/AppleKeyStoreState
@@ -24643,12 +24643,12 @@ index eca07cd..474ada6 100644
  
  ```sh
 diff --git a/kits/ArmSmmu4K b/kits/ArmSmmu4K
-index 8bb168a..9f1d22d 160000
+index 8bb168a..944b769 160000
 --- a/kits/ArmSmmu4K
 +++ b/kits/ArmSmmu4K
 @@ -1 +1 @@
 -Subproject commit 8bb168ad058c28d5c04f179ba407875eacba7ef3
-+Subproject commit 9f1d22d8e0309cc011b90241d1f7d58efe4e5a30
++Subproject commit 944b7697746662894da93d8bc4d0f2788034beec
 diff --git a/package/UniXNUPkg/Library/UniXNULib/Internal.h b/package/UniXNUPkg/Library/UniXNULib/Internal.h
 index 2524c40..fd1945a 100644
 --- a/package/UniXNUPkg/Library/UniXNULib/Internal.h
@@ -24938,442 +24938,6 @@ index 4b06ab4..3b2da2e 100644
    Pad = (Ui->RowHeight - Ch) / 2;
    Bg  = Selected ? mAccent : mRow;
    Tag = TypeTag (Entry);
-diff --git a/patches/mesa/turnip-darwin-kmd.patch b/patches/mesa/turnip-darwin-kmd.patch
-index aeaab9d..64b36b9 100644
---- a/patches/mesa/turnip-darwin-kmd.patch
-+++ b/patches/mesa/turnip-darwin-kmd.patch
-@@ -171,9 +171,10 @@ index 82efb07..3b512f8 100644
-  tu_allocate_lazy_memory(struct tu_device *dev,
-                          struct tu_device_memory *mem)
- diff --git a/src/freedreno/vulkan/tu_device.h b/src/freedreno/vulkan/tu_device.h
-+index d32a7d8..ce1d494 100644
- --- a/src/freedreno/vulkan/tu_device.h
- +++ b/src/freedreno/vulkan/tu_device.h
--@@ -300,6 +300,7 @@
-+@@ -300,6 +300,7 @@ struct tu_device
-  {
-     struct vk_device vk;
-     struct tu_instance *instance;
-@@ -268,18 +269,19 @@ index 4c2bf6a..a8ccd76 100644
-  VkResult tu_knl_drm_msm_load(struct tu_instance *instance,
- diff --git a/src/freedreno/vulkan/tu_knl_darwin.cc b/src/freedreno/vulkan/tu_knl_darwin.cc
- new file mode 100644
--index 0000000..b03c6ee
-+index 0000000..c8af61d
- --- /dev/null
- +++ b/src/freedreno/vulkan/tu_knl_darwin.cc
--@@ -0,0 +1,1110 @@
-+@@ -0,0 +1,1195 @@
- +/*
--+ * Native Darwin kernel backend for Turnip: talks to the NativeAdreno IOKit user client (NativeAdrenoABI.h, version 1).
-++ * Native Darwin kernel backend for Turnip: talks to the NativeAdreno IOKit user client (NativeAdrenoABI.h, versions 1 and 2).
- + * Modelled on tu_knl_kgsl.cc (no libdrm) and tu_knl_drm_msm.cc (the client chooses GPU addresses).
- + * SPDX-License-Identifier: MIT
- + */
- +
- +#include <errno.h>
- +#include <pthread.h>
-++#include <stddef.h>
- +#include <string.h>
- +#include <sys/mman.h>
- +#include <unistd.h>
-@@ -306,6 +308,9 @@ index 0000000..b03c6ee
- +/* 'NTNL': first word of a tunnelled call, as served by the driver (NativeAdrenoPublish.cpp). */
- +#define DW_TUNNEL_MAGIC 0x4e544e4cu
- +
-++/* Query.flags bit 1 selects WaitFence calls that sleep outside the GPU lock. */
-++enum { DARWIN_PARAMS_SLEEPING_WAIT = 1u << 1 };
-++
- +/* One GPU per process: the kernel service has a single connection slot, so the connection and the fence bookkeeping are
- + * process state rather than per tu_device state. */
- +static struct {
-@@ -322,8 +327,11 @@ index 0000000..b03c6ee
- +   bool tunnel;
- +   uint32_t selector;
- +   uint32_t last_fence;
-++   uint64_t connection_generation;
- +   NativeAdrenoAbiDeviceInfo info;
- +   NativeAdrenoAbiParams params;
-++   unsigned submit_buffers;
-++   size_t submit_bytes;
- +} dw = { .lock = PTHREAD_MUTEX_INITIALIZER };
- +
- +/* Preserve the native handle, CPU view and IOVA until the captured ring fence
-@@ -408,7 +416,7 @@ index 0000000..b03c6ee
- +   }
- +
- +   kr = dw_call(NativeAdrenoMethodQuery, NULL, 0, &dw.params, sizeof(dw.params));
--+   if (kr == KERN_SUCCESS && dw.params.abi_version != NativeAdrenoAbiVersion)
-++   if (kr == KERN_SUCCESS && dw.params.abi_version != 1 && dw.params.abi_version != 2)
- +      kr = kIOReturnUnsupported;
- +   if (kr == KERN_SUCCESS)
- +      kr = dw_call(NativeAdrenoMethodGetDeviceInfo, NULL, 0, &dw.info, sizeof(dw.info));
-@@ -418,9 +426,20 @@ index 0000000..b03c6ee
- +      return vk_startup_errorf(instance, VK_ERROR_INITIALIZATION_FAILED,
- +                               "NativeAdreno query failed: 0x%x", kr);
- +   }
-++
-++   dw.submit_buffers = dw.params.abi_version == 1 ? 16 : NativeAdrenoAbiMaxBuffers;
-++   dw.submit_bytes = offsetof(NativeAdrenoAbiSubmit, buffers) +
-++                     dw.submit_buffers * sizeof(NativeAdrenoAbiSubmitBuffer);
-++
-++   pthread_mutex_lock(&dw.lock);
-++   ++dw.connection_generation;
-++   if (!dw.connection_generation) {
-++      ++dw.connection_generation;
-++   }
- +   dw.open = true;
- +   dw.inflight_count = 0;
- +   dw.last_fence = 0;
-++   pthread_mutex_unlock(&dw.lock);
- +   return VK_SUCCESS;
- +}
- +
-@@ -444,15 +463,16 @@ index 0000000..b03c6ee
- +   return vk_device_set_lost(&dev->vk, "%s failed: 0x%x", what, kr);
- +}
- +
--+/* Waits for a fence in short kernel waits so the connection lock is never held for long. */
-++/* The kernel advertises sleeping waits separately from the ABI version. */
- +static VkResult
- +dw_wait_fence_raw(struct tu_device *dev, uint32_t fence, uint64_t abs_timeout_ns)
- +{
- +   for (;;) {
- +      uint64_t now = os_time_get_nano();
--+      uint64_t slice = 1000000; /* 1 ms */
--+      if (abs_timeout_ns != UINT64_MAX && abs_timeout_ns <= now)
--+         slice = 0;
-++      uint64_t slice = (dw.params.flags & DARWIN_PARAMS_SLEEPING_WAIT) ? 100000000 : 1000000;
-++      if (abs_timeout_ns != UINT64_MAX) {
-++         slice = abs_timeout_ns <= now ? 0 : MIN2(slice, abs_timeout_ns - now);
-++      }
- +      NativeAdrenoAbiWaitFence req = {.fence = fence, .timeout_ns = slice};
- +      kern_return_t kr = dw_call(NativeAdrenoMethodWaitFence, &req, sizeof(req), NULL, 0);
- +      if (kr == KERN_SUCCESS)
-@@ -767,9 +787,26 @@ index 0000000..b03c6ee
- +   uint32_t options = (placed_addr ? 0 : kIOMapAnywhere) | kIOMapWriteCombineCache;
- +   kr = IOConnectMapMemory64(dw.conn, reply.token, mach_task_self(), &address, &length, options);
- +   if (kr != KERN_SUCCESS || !address || length < bo->size) {
-++      bo->darwin_token = reply.token;
-++      bo->never_unmap = true;
-++      if (kr == KERN_SUCCESS && address) {
-++         bo->map = (void *)(uintptr_t)address;
-++         kern_return_t cleanup = IOConnectUnmapMemory64(dw.conn, reply.token, mach_task_self(), address);
-++         if (cleanup != KERN_SUCCESS) {
-++            return vk_device_set_lost(&dev->vk, "invalid CPU mapping cleanup failed: 0x%x", cleanup);
-++         }
-++         bo->map = NULL;
-++      }
- +      NativeAdrenoAbiBoCpuUnmap undo = {.handle = bo->darwin_handle, .token = reply.token};
--+      dw_call(NativeAdrenoMethodBoCpuUnmap, &undo, sizeof(undo), NULL, 0);
--+      return vk_errorf(dev, VK_ERROR_MEMORY_MAP_FAILED, "IOConnectMapMemory64 failed: 0x%x", kr);
-++      kern_return_t cleanup = dw_call(NativeAdrenoMethodBoCpuUnmap, &undo, sizeof(undo), NULL, 0);
-++      if (cleanup != KERN_SUCCESS) {
-++         return vk_device_set_lost(&dev->vk, "CPU mapping lease cleanup failed: 0x%x", cleanup);
-++      }
-++      bo->darwin_token = 0;
-++      return vk_errorf(dev, VK_ERROR_MEMORY_MAP_FAILED,
-++                       "IOConnectMapMemory64 failed: 0x%x, address=0x%llx length=%llu expected=%llu",
-++                       kr, (unsigned long long)address, (unsigned long long)length,
-++                       (unsigned long long)bo->size);
- +   }
- +
- +   bo->map = (void *)(uintptr_t)address;
-@@ -933,6 +970,8 @@ index 0000000..b03c6ee
- +   struct vk_sync vk;
- +   enum darwin_sync_state state;
- +   uint32_t fence;
-++   struct tu_device *device;
-++   uint64_t connection_generation;
- +};
- +
- +static VkResult
-@@ -941,6 +980,8 @@ index 0000000..b03c6ee
- +   struct vk_darwin_sync *s = container_of(sync, struct vk_darwin_sync, vk);
- +   s->state = initial_value ? DARWIN_SYNC_SIGNALED : DARWIN_SYNC_UNSIGNALED;
- +   s->fence = 0;
-++   s->device = container_of(device, struct tu_device, vk);
-++   s->connection_generation = 0;
- +   return VK_SUCCESS;
- +}
- +
-@@ -955,6 +996,7 @@ index 0000000..b03c6ee
- +   struct vk_darwin_sync *s = container_of(sync, struct vk_darwin_sync, vk);
- +   s->state = DARWIN_SYNC_UNSIGNALED;
- +   s->fence = 0;
-++   s->connection_generation = 0;
- +   return VK_SUCCESS;
- +}
- +
-@@ -965,8 +1007,11 @@ index 0000000..b03c6ee
- +   struct vk_darwin_sync *s = container_of(src, struct vk_darwin_sync, vk);
- +   d->state = s->state;
- +   d->fence = s->fence;
-++   d->device = s->device;
-++   d->connection_generation = s->connection_generation;
- +   s->state = DARWIN_SYNC_UNSIGNALED;
- +   s->fence = 0;
-++   s->connection_generation = 0;
- +   return VK_SUCCESS;
- +}
- +
-@@ -1042,10 +1087,10 @@ index 0000000..b03c6ee
- +      for (;;) {
- +         for (uint32_t i = 0; i < wait_count; i++) {
- +            struct vk_darwin_sync *s = container_of(waits[i].sync, struct vk_darwin_sync, vk);
--+            if (darwin_sync_wait(device, s, 0) == VK_SUCCESS ||
--+                (s->state == DARWIN_SYNC_FENCE &&
--+                 dw_wait_fence_locked_free(device, s->fence, 0) == VK_SUCCESS))
--+               return VK_SUCCESS;
-++            VkResult result = darwin_sync_wait(device, s, 0);
-++            if (result != VK_TIMEOUT) {
-++               return result;
-++            }
- +         }
- +         if (abs_timeout_ns != UINT64_MAX && os_time_get_nano() >= abs_timeout_ns)
- +            return VK_TIMEOUT;
-@@ -1091,8 +1136,8 @@ index 0000000..b03c6ee
- +   dw.last_fence = fence;
- +}
- +
--+/* One kernel submission of up to NativeAdrenoAbiMaxBuffers indirect buffers; waits for the oldest job when all eight kernel job slots
--+ * are taken. */
-++/* Each kernel submission uses the buffer count and record size selected by Query.
-++ * A full job table waits for the oldest submitted fence before retrying. */
- +static VkResult
- +darwin_submit_chunk(struct tu_queue *queue, const NativeAdrenoAbiSubmitBuffer *entries,
- +                    unsigned count, uint32_t *fence)
-@@ -1106,7 +1151,7 @@ index 0000000..b03c6ee
- +
- +   for (unsigned attempt = 0; attempt < 64; attempt++) {
- +      NativeAdrenoAbiSubmitReply reply = {};
--+      kern_return_t kr = dw_call(NativeAdrenoMethodSubmit, &req, sizeof(req), &reply, sizeof(reply));
-++      kern_return_t kr = dw_call(NativeAdrenoMethodSubmit, &req, dw.submit_bytes, &reply, sizeof(reply));
- +      if (kr == KERN_SUCCESS) {
- +         *fence = (uint32_t)reply.fence;
- +         return VK_SUCCESS;
-@@ -1125,6 +1170,28 @@ index 0000000..b03c6ee
- +   return vk_device_set_lost(&dev->vk, "submit: no free job slot");
- +}
- +
-++/* A fence already submitted by this device on the current connection precedes
-++ * new work on its single ring. Each job's CACHE_FLUSH_TS completes before the
-++ * next job, so the dependency needs ring ordering rather than a CPU wait.
-++ */
-++static bool
-++darwin_sync_submitted_on_ring(struct tu_device *dev, const struct vk_darwin_sync *sync,
-++                             uint32_t *fence)
-++{
-++   pthread_mutex_lock(&dw.lock);
-++   const bool submitted = dw.open && sync->device == dev &&
-++                          sync->state == DARWIN_SYNC_FENCE && sync->fence &&
-++                          sync->connection_generation &&
-++                          sync->connection_generation == dw.connection_generation &&
-++                          sync->fence <= dw.last_fence;
-++   if (submitted) {
-++      *fence = sync->fence;
-++   }
-++   pthread_mutex_unlock(&dw.lock);
-++
-++   return submitted;
-++}
-++
- +static VkResult
- +darwin_queue_submit(struct tu_queue *queue, void *_submit,
- +                    struct vk_sync_wait *waits, uint32_t wait_count,
-@@ -1134,9 +1201,18 @@ index 0000000..b03c6ee
- +   struct tu_darwin_queue_submit *submit = (struct tu_darwin_queue_submit *)_submit;
- +   struct tu_device *dev = queue->device;
- +
--+   /* The kernel client has one ring and no GPU-side waits: wait on the CPU before submitting. */
-++   uint32_t dependency_fence = 0;
- +   for (uint32_t i = 0; i < wait_count; i++) {
- +      struct vk_darwin_sync *s = container_of(waits[i].sync, struct vk_darwin_sync, vk);
-++      uint32_t submitted_fence = 0;
-++      if (darwin_sync_submitted_on_ring(dev, s, &submitted_fence)) {
-++         dependency_fence = MAX2(dependency_fence, submitted_fence);
-++         continue;
-++      }
-++
-++      /* A host signal, an unresolved dependency or another connection still
-++       * requires the existing completion wait before work can be submitted.
-++       */
- +      VkResult result = darwin_sync_wait(dev, s, UINT64_MAX);
- +      if (result != VK_SUCCESS)
- +         return vk_device_set_lost(&dev->vk, "wait before submit failed");
-@@ -1147,8 +1223,8 @@ index 0000000..b03c6ee
- +   if (total) {
- +      const NativeAdrenoAbiSubmitBuffer *all =
- +         util_dynarray_element(&submit->commands, NativeAdrenoAbiSubmitBuffer, 0);
--+      for (unsigned at = 0; at < total; at += NativeAdrenoAbiMaxBuffers) {
--+         unsigned count = MIN2(total - at, (unsigned)NativeAdrenoAbiMaxBuffers);
-++      for (unsigned at = 0; at < total; at += dw.submit_buffers) {
-++         unsigned count = MIN2(total - at, dw.submit_buffers);
- +         uint32_t chunk_fence = 0;
- +         VkResult result = darwin_submit_chunk(queue, all + at, count, &chunk_fence);
- +         if (result != VK_SUCCESS)
-@@ -1160,13 +1236,23 @@ index 0000000..b03c6ee
- +      }
- +      p_atomic_set(&queue->fence, fence);
- +   } else {
--+      /* Nothing to run: the signals resolve with the last earlier submission. */
--+      fence = p_atomic_read(&queue->fence) > 0 ? (uint32_t)p_atomic_read(&queue->fence) : 0;
-++      /* An empty submit still waits for every dependency it signals after,
-++       * including work another Vulkan queue submitted to this connection.
-++       */
-++      const int queue_fence = p_atomic_read(&queue->fence);
-++      fence = MAX2(dependency_fence, queue_fence > 0 ? (uint32_t)queue_fence : 0);
-++      p_atomic_set(&queue->fence, fence);
- +   }
- +
-++   pthread_mutex_lock(&dw.lock);
-++   const uint64_t connection_generation = dw.connection_generation;
-++   pthread_mutex_unlock(&dw.lock);
-++
- +   for (uint32_t i = 0; i < signal_count; i++) {
- +      struct vk_darwin_sync *s = container_of(signals[i].sync, struct vk_darwin_sync, vk);
- +      s->fence = fence;
-++      s->device = dev;
-++      s->connection_generation = fence ? connection_generation : 0;
- +      s->state = fence ? DARWIN_SYNC_FENCE : DARWIN_SYNC_SIGNALED;
- +   }
- +
-diff --git a/patches/mesa/turnip-host-import-release.patch b/patches/mesa/turnip-host-import-release.patch
-new file mode 100644
-index 0000000..847257b
---- /dev/null
-+++ b/patches/mesa/turnip-host-import-release.patch
-@@ -0,0 +1,130 @@
-+diff --git a/src/freedreno/vulkan/tu_device.cc b/src/freedreno/vulkan/tu_device.cc
-+index 527a4d4..fec54fa 100644
-+--- a/src/freedreno/vulkan/tu_device.cc
-++++ b/src/freedreno/vulkan/tu_device.cc
-+@@ -3499,12 +3499,32 @@ vk_icdGetInstanceProcAddr(VkInstance instance, const char *pName)
-+ }
-+ 
-+ #ifdef __APPLE__
-++/* The native Metal owner needs an error-bearing acknowledgement before its
-++ * deallocator can release imported pages. vkFreeMemory itself returns void. */
-++static VKAPI_ATTR VkResult VKAPI_CALL
-++tu_ReleaseHostMemoryUNIXNU(VkDevice _device, VkDeviceMemory _memory)
-++{
-++#ifdef TU_HAS_DARWIN
-++   VK_FROM_HANDLE(tu_device, device, _device);
-++   VK_FROM_HANDLE(tu_device_memory, memory, _memory);
-++   if (!memory || !memory->bo || !memory->bo->darwin_host_import)
-++      return VK_ERROR_INVALID_EXTERNAL_HANDLE;
-++
-++   return tu_darwin_release_host_bo(device, memory->bo);
-++#else
-++   return VK_ERROR_FEATURE_NOT_PRESENT;
-++#endif
-++}
-++
-+ /* iPadOS has no Khronos loader: a consumer that opens a loader by path (the metal2vulkan runtime behind the native Metal device) opens this
-+  * library and looks up the loader's name. Turnip is the only driver there, so the loader's entry is the driver's own. */
-+ PUBLIC
-+ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-+ vkGetInstanceProcAddr(VkInstance instance, const char *pName)
-+ {
-++   if (pName && !strcmp(pName, "vkReleaseHostMemoryUNIXNU"))
-++      return (PFN_vkVoidFunction)tu_ReleaseHostMemoryUNIXNU;
-++
-+    return tu_GetInstanceProcAddr(instance, pName);
-+ }
-+ #endif
-+diff --git a/src/freedreno/vulkan/tu_knl.h b/src/freedreno/vulkan/tu_knl.h
-+index a8ccd76..2583594 100644
-+--- a/src/freedreno/vulkan/tu_knl.h
-++++ b/src/freedreno/vulkan/tu_knl.h
-+@@ -63,6 +63,8 @@ struct tu_bo {
-+     * CPU mapping (IOConnectMapMemory64 memory type). */
-+    uint64_t darwin_handle;
-+    uint32_t darwin_token;
-++   bool darwin_host_import;
-++   bool darwin_host_detached;
-+ #endif
-+ 
-+    bool implicit_sync : 1;
-+@@ -277,6 +279,10 @@ void tu_sparse_vma_finish(struct tu_device *device,
-+ VkResult tu_knl_kgsl_load(struct tu_instance *instance, int fd);
-+ VkResult tu_knl_darwin_load(struct tu_instance *instance);
-+ 
-++#ifdef TU_HAS_DARWIN
-++VkResult tu_darwin_release_host_bo(struct tu_device *dev, struct tu_bo *bo);
-++#endif
-++
-+ struct _drmVersion;
-+ VkResult tu_knl_drm_msm_load(struct tu_instance *instance,
-+                              int fd, struct _drmVersion *version,
-+diff --git a/src/freedreno/vulkan/tu_knl_darwin.cc b/src/freedreno/vulkan/tu_knl_darwin.cc
-+index 9a6252e..214e4c8 100644
-+--- a/src/freedreno/vulkan/tu_knl_darwin.cc
-++++ b/src/freedreno/vulkan/tu_knl_darwin.cc
-+@@ -464,6 +464,7 @@ darwin_bo_init_host(struct tu_device *dev, struct tu_bo **out_bo, void *pointer,
-+    bo->darwin_token = 0;
-+    bo->map = pointer;
-+    bo->never_unmap = true;
-++   bo->darwin_host_import = true;
-+    tu_dump_bo_init(dev, bo);
-+    TU_RMV(bo_allocate, dev, bo);
-+    *out_bo = bo;
-+@@ -573,6 +574,31 @@ darwin_wait_idle(struct tu_device *dev)
-+    return VK_SUCCESS;
-+ }
-+ 
-++VkResult
-++tu_darwin_release_host_bo(struct tu_device *dev, struct tu_bo *bo)
-++{
-++   if (!bo->darwin_host_import)
-++      return vk_error(dev, VK_ERROR_INVALID_EXTERNAL_HANDLE);
-++   if (bo->darwin_host_detached)
-++      return VK_SUCCESS;
-++
-++   /* The caller has ended every use of this VkDeviceMemory. The captured
-++    * fence covers those submissions; later unrelated work does not extend it. */
-++   VkResult waited = darwin_wait_idle(dev);
-++   if (waited != VK_SUCCESS)
-++      return vk_device_set_lost(&dev->vk, "host import release fence failed: %d", waited);
-++
-++   NativeAdrenoAbiBoFree request = {.handle = bo->darwin_handle};
-++   kern_return_t kr = dw_call(NativeAdrenoMethodBoFree, &request, sizeof(request), NULL, 0);
-++   if (kr != KERN_SUCCESS)
-++      return vk_device_set_lost(&dev->vk, "host import release BoFree failed: 0x%x", kr);
-++
-++   /* Successful BoFree removes the SMMU mapping and cache-maintenance entry
-++    * before completing and releasing the descriptor that pins the owner. */
-++   bo->darwin_host_detached = true;
-++   return VK_SUCCESS;
-++}
-++
-+ static void
-+ darwin_bo_finish(struct tu_device *dev, struct tu_bo *bo)
-+ {
-+@@ -585,6 +611,24 @@ darwin_bo_finish(struct tu_device *dev, struct tu_bo *bo)
-+       return;
-+    }
-+ 
-++   if (bo->darwin_host_import) {
-++      VkResult released = tu_darwin_release_host_bo(dev, bo);
-++      if (released != VK_SUCCESS) {
-++         /* The native owner handshake retains its deallocator on this error.
-++          * Preserve the BO record and IOVA with the kernel's pinned pages. */
-++         u_rwlock_rdunlock(&dev->dma_bo_lock);
-++         return;
-++      }
-++
-++      tu_debug_bos_del(dev, bo);
-++      tu_dump_bo_del(dev, bo);
-++      TU_RMV(bo_destroy, dev, bo);
-++      darwin_free_iova(dev, bo->iova, bo->size);
-++      memset(bo, 0, sizeof(*bo));
-++      u_rwlock_rdunlock(&dev->dma_bo_lock);
-++      return;
-++   }
-++
-+    tu_debug_bos_del(dev, bo);
-+    tu_dump_bo_del(dev, bo);
-+ 
 diff --git a/patches/mesa/turnip-tile-store-allocation-error.patch b/patches/mesa/turnip-tile-store-allocation-error.patch
 new file mode 100644
 index 0000000..d97a374
@@ -25896,100 +25460,32 @@ index b939db5..72a7854 100644
  
  ["adt"."defaults"]
 diff --git a/scripts/build-adreno-metal-bridge.py b/scripts/build-adreno-metal-bridge.py
-index 489c7a8..f12d2f5 100644
+index 489c7a8..cde6fac 100644
 --- a/scripts/build-adreno-metal-bridge.py
 +++ b/scripts/build-adreno-metal-bridge.py
-@@ -8,10 +8,10 @@ import argparse
- import hashlib
- import json
- import os
--import re
- from pathlib import Path
- import shutil
- import subprocess
-+import tempfile
- 
- ROOT = Path(__file__).resolve().parents[1]
- PIN = json.loads((ROOT / 'scripts/data/gpu-metal-vulkan-inputs.json').read_text())['translator']['commit']
-@@ -27,28 +27,51 @@ PATCHES = [ROOT / 'drivers/AdrenoMetal/bridge/patches' / name for name in [
+@@ -27,8 +27,9 @@ PATCHES = [ROOT / 'drivers/AdrenoMetal/bridge/patches' / name for name in [
      '0001-optional-constant-output-members.patch', '0002-resource-wait-storage-dependencies.patch',
      '0003-cache-device-entry-point-priming.patch', '0004-fold-constant-global-field-loads.patch',
      '0005-keep-module-decodes-and-profile-fingerprints.patch', '0006-skip-draws-without-a-pipeline.patch',
 -    '0007-accept-two-plane-rgb-surfaces.patch', '0008-alias-padded-rows-of-written-textures.patch']]
 -tree_diff = subprocess.check_output(['git', '-C', str(SOURCE), 'diff', 'HEAD', '--'], text=True)
--def canonical_diff(diff):
--    # Independent patches touch disjoint files; Git orders the combined diff by
--    # filename, rather than by the order the patches were applied.
--    blocks = [block for block in re.split(r'(?=^diff --git )', diff, flags=re.M) if block]
--    names = [block.splitlines()[0] for block in blocks]
--    if len(set(names)) != len(names):
--        raise SystemExit('Overlapping recorded patches require an explicit combined-source update')
--    return ''.join(sorted(blocks, key=lambda block: block.splitlines()[0]))
 +    '0007-accept-two-plane-rgb-surfaces.patch', '0008-alias-padded-rows-of-written-textures.patch',
-+    # The rest stack in order, each on the source the ones before it leave.
-+    '0009-keep-final-pass.patch', '0010-fewer-allocations-per-draw.patch', '0011-keep-draw-commands.patch',
-+    '0012-keep-draw-lists.patch', '0013-skip-unchanged-rebinds.patch', '0014-map-tracker-keys.patch',
-+    '0015-two-plane-shadow-as-memory-lies.patch', '0016-tile-stores-within-rows.patch',
-+    '0017-bound-idle-command-pools-on-ios.patch',
-+    '0018-describe-kept-passes-and-shadow-initialization.patch',
-+    '0019-confirm-host-import-release.patch',
-+    '0020-tile-stores-stay-in-texture-rows.patch',
-+    '0021-bound-host-import-release-errors.patch']]
- 
- 
--expected = ''
--states = [expected]
--for patch in PATCHES:
--    expected += patch.read_text()
--    states.append(canonical_diff(expected))
-+def source_diff():
-+    # A temporary index includes files introduced by patches without staging the checkout.
-+    with tempfile.TemporaryDirectory(prefix='m2v-source-diff-', dir=ROOT / '.cache') as temporary:
-+        source_env = dict(os.environ, GIT_INDEX_FILE=str(Path(temporary) / 'index'))
-+        git_source = ['git', '-C', str(SOURCE)]
-+        subprocess.run(git_source + ['read-tree', PIN], env=source_env, check=True)
-+        subprocess.run(git_source + ['add', '--intent-to-add', '--', '.'], env=source_env, check=True)
-+        return subprocess.check_output(
-+            git_source + ['diff', '--no-ext-diff', '--abbrev=7', PIN, '--'],
-+            env=source_env, text=True)
-+
-+
-+tree_diff = source_diff()
-+states = ['']
-+with tempfile.TemporaryDirectory(prefix='m2v-patches-', dir=ROOT / '.cache') as temporary:
-+    patch_env = dict(os.environ, GIT_INDEX_FILE=str(Path(temporary) / 'index'))
-+    git_source = ['git', '-C', str(SOURCE)]
-+    subprocess.run(git_source + ['read-tree', PIN], env=patch_env, check=True)
-+
-+    # Each index contains the complete source after one more recorded patch.
-+    # Later patches can modify a file already changed by an earlier patch.
-+    for patch in PATCHES:
-+        subprocess.run(git_source + ['apply', '--cached', str(patch)], env=patch_env, check=True)
-+        states.append(subprocess.check_output(
-+            git_source + ['diff', '--cached', '--no-ext-diff', '--abbrev=7', PIN, '--'],
-+            env=patch_env, text=True))
-+
-+expected = states[-1]
- if tree_diff not in states:
++    '0009-bound-idle-command-pools-on-ios.patch']]
++tree_diff = subprocess.check_output(['git', '-C', str(SOURCE), 'diff', '--no-ext-diff', '--abbrev=7', 'HEAD', '--'], text=True)
+ def canonical_diff(diff):
+     # Independent patches touch disjoint files; Git orders the combined diff by
+     # filename, rather than by the order the patches were applied.
+@@ -48,7 +49,7 @@ if tree_diff not in states:
      raise SystemExit('Translator source differs from the pinned revision plus its recorded patches')
  for patch in PATCHES[states.index(tree_diff):]:
      subprocess.run(['git', '-C', str(SOURCE), 'apply', str(patch)], check=True)
 -if subprocess.check_output(['git', '-C', str(SOURCE), 'diff', 'HEAD', '--'], text=True) != canonical_diff(expected):
-+if source_diff() != expected:
++if subprocess.check_output(['git', '-C', str(SOURCE), 'diff', '--no-ext-diff', '--abbrev=7', 'HEAD', '--'], text=True) != canonical_diff(expected):
      raise SystemExit('Translator patch result differs from its exact recorded source')
  out = ROOT / 'build/adreno-metal-bridge'
  out.mkdir(parents=True, exist_ok=True)
-@@ -78,7 +101,7 @@ if args.manifest_only:
- triple = 'aarch64-apple-ios' if args.target == 'ios' else 'aarch64-apple-darwin'
- # The translator source the runtime is built from (its pin and recorded patches), which keys the shader cache: shader priming keeps what it
- # finished while this stays the same (PrimeShaders.h).
--runtime_id = hashlib.sha256((PIN + '\n' + canonical_diff(expected)).encode()).hexdigest()[:32]
-+runtime_id = hashlib.sha256((PIN + '\n' + expected).encode()).hexdigest()[:32]
- env = dict(os.environ, NMB_RUNTIME_ID=runtime_id, NMB_FIXTURE_AIR=str(air), NMB_FC_AIR=str(fc_air), IPHONEOS_DEPLOYMENT_TARGET='17.0', MACOSX_DEPLOYMENT_TARGET='14.0')
- target_dir = ROOT / 'build/m2v-target'
- log = out / ('build-%s.log' % args.target)
 diff --git a/scripts/build-adreno-metal-plugin.py b/scripts/build-adreno-metal-plugin.py
-index 7adae86..5ff04f0 100644
+index 7adae86..c593c75 100644
 --- a/scripts/build-adreno-metal-plugin.py
 +++ b/scripts/build-adreno-metal-plugin.py
 @@ -5,6 +5,7 @@ and the launchd probe daemon with its job plist (NativeAdrenoProbeDaemon.cpp).
@@ -26013,7 +25509,7 @@ index 7adae86..5ff04f0 100644
 +                    help='read and modify display state at the addresses selected for the A740 OS image')
 +parser.add_argument('--turnip-replay', choices=['a740', 'off'], default='a740',
 +                    help='include the recorded A740 command stream in the unpublished diagnostic path')
-+parser.add_argument('--turnip-debug', default='nocb',
++parser.add_argument('--turnip-debug', default='sysmem,nocb',
 +                    help='default TU_DEBUG for published Metal devices; an empty value leaves it unset')
 +parser.add_argument('--turnip-smoke-debug', default='nocb',
 +                    help='default TU_DEBUG for the unpublished Vulkan diagnostic; an empty value leaves it unset')
@@ -26153,17 +25649,16 @@ index 7c49d9d..a036489 100755
      git -C .cache/xnu-work apply --reverse "$LATE_PATCH"
    fi
 diff --git a/scripts/data/adreno-compiler-inputs.json b/scripts/data/adreno-compiler-inputs.json
-index b170e8e..fce5507 100644
+index b170e8e..c6e1ee6 100644
 --- a/scripts/data/adreno-compiler-inputs.json
 +++ b/scripts/data/adreno-compiler-inputs.json
-@@ -53,7 +53,9 @@
+@@ -53,7 +53,8 @@
      "patches/mesa/turnip-graphics-cache-feedback.patch",
      "patches/mesa/turnip-empty-scissor.patch",
      "patches/mesa/turnip-builtin-shader-pack.patch",
 -    "patches/mesa/turnip-host-import-images.patch"
 +    "patches/mesa/turnip-host-import-images.patch",
-+    "patches/mesa/turnip-tile-store-allocation-error.patch",
-+    "patches/mesa/turnip-host-import-release.patch"
++    "patches/mesa/turnip-tile-store-allocation-error.patch"
    ],
    "integer_fma_reference": {
      "repository": "https://github.com/ucb-bar/berkeley-softfloat-3",

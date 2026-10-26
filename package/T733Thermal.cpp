@@ -51,8 +51,9 @@ static uint64_t monotonicMs()
 }
 
 static void updateGroup(ThermalGroup &group, const QcomTsensSample &sample,
-                        uint16_t wanted, int32_t trip, int32_t release, uint64_t now)
+                        unsigned index, uint64_t now)
 {
+    uint16_t wanted = kSensorMasks[index];
     group.complete = (sample.validMask & wanted) == wanted;
     int32_t maximum = -2147483647;
     bool any = false;
@@ -66,14 +67,14 @@ static void updateGroup(ThermalGroup &group, const QcomTsensSample &sample,
         }
     }
 
-    if (any && maximum >= trip) {
+    if (any && maximum >= kTripMilliC[index]) {
         group.hot = true;
     }
     if (group.complete) {
         group.maximumMilliC = maximum;
         group.lastCompleteMs = now;
         group.haveComplete = true;
-        if (maximum <= release) {
+        if (maximum <= kReleaseMilliC) {
             group.hot = false;
         }
     } else {
@@ -82,7 +83,7 @@ static void updateGroup(ThermalGroup &group, const QcomTsensSample &sample,
 
     group.stale = !group.haveComplete || now - group.lastCompleteMs >= kStaleMs;
     bool capped = group.hot || group.stale;
-    if (group.capped && (!group.complete || maximum > release)) {
+    if (group.capped && (!group.complete || maximum > kReleaseMilliC)) {
         capped = true;
     }
     if (capped != group.capped) {
@@ -132,8 +133,7 @@ static void thermalWorker(void *, wait_result_t)
         next.sampledMs = monotonicMs();
         ++next.samples;
         for (unsigned group = 0; group < 3; ++group) {
-            updateGroup(next.group[group], next.controller[0], kSensorMasks[group],
-                        kTripMilliC[group], kReleaseMilliC,
+            updateGroup(next.group[group], next.controller[0], group,
                         next.sampledMs);
         }
 

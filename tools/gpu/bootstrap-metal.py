@@ -14,8 +14,6 @@ import shutil
 import subprocess
 import sys
 
-from build_inputs import prepare_cache, prepare_metal_libraries
-
 
 def run(command, environment, directory):
     subprocess.run([str(value) for value in command], env=environment,
@@ -43,14 +41,9 @@ def ios_toolchain_installed(rustup, environment, directory):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core", type=Path, required=True)
-    parser.add_argument("--reference-core", type=Path)
     parser.add_argument("--abi-directory", type=Path, required=True)
-    parser.add_argument("--system-root", type=Path, required=True)
     args = parser.parse_args()
     core = args.core.resolve()
-    reference = args.reference_core.resolve() if args.reference_core else None
-    prepare_cache(core, reference)
-    prepare_metal_libraries(core, args.system_root.resolve())
     cache = core / ".cache"
     source = cache / "gpu-reference/metal2vulkan"
     pin = json.loads((core / "scripts/data/gpu-metal-vulkan-inputs.json").read_text())["translator"]

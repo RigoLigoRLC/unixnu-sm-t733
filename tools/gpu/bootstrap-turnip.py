@@ -25,8 +25,6 @@ import subprocess
 import sys
 import urllib.request
 
-from build_inputs import prepare_cache
-
 
 GLSLANG_REVISION = "1062752a891c95b2bfeed9e356562d88f9df84ac"
 GLSLANG_REPOSITORY = "https://chromium.googlesource.com/external/github.com/KhronosGroup/glslang"
@@ -114,25 +112,7 @@ class Bootstrap:
         if changes:
             sys.path.insert(0, str(self.core / "scripts"))
             from mesa_patch_identity import validate_recorded_patches
-            # An existing target can contain an earlier complete prefix of the
-            # selected patches. Confirm that source before applying the suffix;
-            # any edits outside those recorded states remain a build error.
-            patches = self.pins["patches"]
-            failure = None
-            for applied in range(len(patches), -1, -1):
-                recorded = dict(self.pins, patches=patches[:applied])
-                try:
-                    validate_recorded_patches(self.core, source, recorded)
-                    break
-                except SystemExit as error:
-                    if failure is None:
-                        failure = error
-            else:
-                raise failure
-
-            for index in range(applied, len(patches)):
-                self.run(f"mesa-patch-{index + 1:02}",
-                         ["git", "-C", source, "apply", self.core / patches[index]])
+            validate_recorded_patches(self.core, source, self.pins)
         else:
             for index, patch in enumerate(self.pins["patches"]):
                 self.run(f"mesa-patch-{index + 1:02}", ["git", "-C", source, "apply", self.core / patch])
@@ -196,12 +176,6 @@ class Bootstrap:
         self.run("bison-install", ["make", "install"], cwd=build)
 
     def glslang(self):
-        installed = self.tools / "bin/glslangValidator"
-        if installed.is_file():
-            version = self.read([installed, "--version"])
-            if re.search(r"Glslang Version: \S*:" + re.escape(GLSLANG_VERSION) + r"(?:\s|$)", version):
-                return
-
         source = self.cache / "glslang-source"
         self.checkout("glslang", source, GLSLANG_REPOSITORY, GLSLANG_REVISION)
         build = self.cache / "glslang-build"
@@ -217,7 +191,6 @@ class Bootstrap:
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--core", type=Path, required=True)
-    parser.add_argument("--reference-core", type=Path)
     parser.add_argument("--jobs", type=int, default=6)
     parser.add_argument("--build", action="store_true")
     parser.add_argument("--abi-directory", type=Path)
@@ -232,10 +205,7 @@ def main():
     if missing:
         raise SystemExit("Required host build tools: " + ", ".join(missing))
 
-    core = args.core.expanduser().resolve()
-    reference = args.reference_core.expanduser().resolve() if args.reference_core else None
-    prepare_cache(core, reference)
-    bootstrap = Bootstrap(core, args.jobs)
+    bootstrap = Bootstrap(args.core.expanduser().resolve(), args.jobs)
     bootstrap.mesa()
     bootstrap.python()
     bootstrap.bison()

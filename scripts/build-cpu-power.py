@@ -25,7 +25,7 @@ def main():
         ".c": json.loads((recipes / "bsd/DEVELOPMENT/bsd_init.o.json").read_text().strip().rstrip(",")),
     }
     tsens = tree / "drivers/NativeQcomTsens"
-    includes = [package, tsens, tree / "drivers/Adreno6xx", tree / ".cache/xnu-work/osfmk"]
+    includes = [package, tsens, tree / ".cache/xnu-work/osfmk"]
     sources = [
         package / "T733CpuPower.cpp",
         package / "T733CpuPowerStartup.c",

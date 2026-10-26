@@ -70,7 +70,6 @@ def main():
         "NativeAdrenoSmmuContext.cpp", "NativeAdrenoVm.cpp", "NativeAdrenoGmuMemory.cpp",
         "NativeAdrenoGmuContext.cpp", "NativeAdrenoGpuContext.cpp", "NativeAdrenoRing.cpp",
         "NativeAdrenoCpInit.cpp", "NativeAdrenoIrq.cpp", "NativeAdrenoSubmit.cpp",
-        "NativeAdrenoSubmissionProfile.cpp",
         "NativeAdrenoTimer.cpp", "NativeAdrenoKernelTime.cpp", "NativeAdrenoUserClient.cpp",
         "NativeAdrenoClient.cpp", "NativeAdrenoPublish.cpp", "NativeAdrenoAccelerator.cpp",
     ]

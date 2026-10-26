@@ -144,7 +144,6 @@ files = [
   { source = "package/Build/Out/AARCH64-DEBUG/UniXNU.efi", destination = "EFI/UniXNU/UpdatedMenu.efi" },
 ]
 extra_entries = [
-  { id = "xnu-profile-off", title = "Boot without profiling", type = "xnu", kernel_args = ["native-adreno-profile=0"] },
   { id = "updated-menu", title = "Updated menu", type = "efi", path = "UpdatedMenu.efi" },
   { id = "xnu-dpu-off", title = "Boot CPU copy", type = "xnu", kernel_args = ["t733-dpu-scanout=0"] },
   { id = "xnu-metal-off", title = "Boot Metal off", type = "xnu", kernel_args = ["native-adreno-metal=0"] },
@@ -184,7 +183,6 @@ kernel_args = [
   "t733-display-power=1",
   "t733-managed-rt-normal=1",
   "native-adreno-a6xx=1",
-  "native-adreno-profile=1",
 ]
 
 # The 21H461 AttentionAwareness initializer creates a circular wait during

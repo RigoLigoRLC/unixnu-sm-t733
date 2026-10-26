@@ -60,8 +60,6 @@ def main():
                         help="J120 overlay produced by make-wallpaper-overlay.py")
     parser.add_argument("--metal-plugin", type=Path, required=True,
                         help="Signed NativeAdrenoMetal bundle from the core builder")
-    parser.add_argument("--metal-inputs", type=Path, required=True,
-                        help="Selected OS library list and readable shader copies")
     args = parser.parse_args()
     if not args.debugserver.is_file():
         raise SystemExit(f"Missing original target debugserver input: {args.debugserver}")
@@ -107,7 +105,7 @@ def main():
 
     gpu_output = output / "gpu"
     work = Path(os.environ["T733_RESOLVED_TREE"])
-    core = Path(os.environ["T733_GPU_TREE"])
+    core = Path(os.environ["UNIXNU_BASE"])
     run([sys.executable, DEVICE / "tools/gpu/build-userspace.py",
          "--output", gpu_output, "--abi-directory", work / "drivers/Adreno6xx",
          "--pm4-directory", work / "kits/AdrenoPM4", "--core", core,
@@ -170,11 +168,6 @@ def main():
         ("addons/NativeAdrenoMetal.clients", 0o644,
          b"backboardd\niconservicesagent\nKaleidoscopePoster\nAegirPoster\n"),
     ]
-    for path in sorted(args.metal_inputs.rglob("*")):
-        if path.is_file():
-            relative = path.relative_to(args.metal_inputs).as_posix()
-            files.append(("addons/" + relative, 0o644, path.read_bytes()))
-
     for path in sorted(tools_app.rglob("*")):
         if path.is_file():
             relative = path.relative_to(tools_app).as_posix()

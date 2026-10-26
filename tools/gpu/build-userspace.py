@@ -44,7 +44,7 @@ def main():
     subprocess.run(["xcrun", "clang++", *common, "-std=c++17", "-fno-exceptions",
                     "-fno-rtti", "-I", str(abi), "-I", str(pm4),
                     str(DEVICE / "tools/gpu/t733-adreno.cpp"), str(pm4_object),
-                    "-o", str(binary)], check=True)
+                    "-framework", "CoreFoundation", "-o", str(binary)], check=True)
 
     entitlements = output / "entitlements.plist"
     entitlements.write_bytes(plistlib.dumps({

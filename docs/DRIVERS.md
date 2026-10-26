@@ -1,6 +1,6 @@
 # SM-T733 驱动状态与后续清单
 
-更新日期：2026-10-24。最新部署为 `system-memory-input-display-46c`，45f 和 38a 保留为回退，
+更新日期：2026-10-25。最新部署为 `system-adreno6xx-51o`，普通GPU缓冲分配修正待实机结果，
 配套 UEFI 为 `memory-input-display-46`。本页按实际可用功能记录完成状态；
 后续项目完成后使用 `- [x] ~~项目~~`，补充日期及对应源码。
 
@@ -13,15 +13,17 @@
 | 物理按键 | SPMI v5/PDC 中断与三键 HID，已记录完整 DOWN/UP | [SPMI](../drivers/NativeQcomSpmi/NativeQcomSpmi.cpp)、[按键](../drivers/NativePmicKeys/NativePmicKeys.cpp)、[板级配置](../package/T733PmicKeys.cpp) |
 | CPU 调频与异构调度 | 45e 已实测 E0/P1/prime P2 八核上线、perfcontrol 通知和 27 路有效温度，45f 保留并修复 UFS 入队超时 | [调频 worker](../package/T733CpuPower.cpp)、[调度回调](../package/T733CpuPowerStartup.c)、[温度限制](../package/T733Thermal.cpp) |
 | 系统存储 | 原生 UFS 读取系统卷，96 GiB Data 可写并跨重启恢复，已有 FUA 和 flush | [NativeUfs](../drivers/NativeUfs/NativeUfs.cpp)、[Data 持久化](../drivers/NativeRamBlock/PersistOverlay.h)、[固定布局](../package/data-layout.toml) |
-| 桌面与显示 | CPU 软件合成和帧复制，38a 图库返回桌面正常 | [NativeLegacyDisplay](../drivers/NativeMobileDisplay/NativeLegacyDisplay.cpp)、[显示注册](../package/T733Display/DisplayRegistration.cpp) |
+| 桌面与显示 | 系统Metal合成与DPU持续直接扫描；51l2用户确认无闪烁但仍卡顿，51n2优化提交等待、缓存退休和执行线程 | [NativeLegacyDisplay](../drivers/NativeMobileDisplay/NativeLegacyDisplay.cpp)、[DPU扫描](../drivers/NativeMobileDisplay/NativeDpuSurface.cpp)、[显示注册](../package/T733Display/DisplayRegistration.cpp) |
+| GPU 命令与离屏渲染 | 50c内核和用户态CP回读成功、faults=0；Turnip填充1024字、计算1024字、三角形512像素，VkResult=0、退出0 | [Adreno6xx](../drivers/Adreno6xx/README.md)、[硬件启动](../drivers/Adreno6xx/NativeAdrenoService.cpp)、[GPU实施证据](../../../notes/GPU_IMPLEMENTATION.md) |
 | 触屏 | FT8203 固件上传、真实触点和 HID 已接通，可操作设置及桌面 | [触屏 worker](../package/T733Touch.cpp)、[HID](../package/T733TouchHid.cpp)、[FT8203](../drivers/NativeFocaltechTouch/Fts8203.c)、[GENI SPI](../drivers/NativeGeniSpi/GeniSpi.c) |
 | 电池 | SM5714 电量、电压、电流及充满状态；充电插拔图标立即更新 | [电池服务](../package/T733Battery.cpp)、[电量计](../package/T733FuelGauge.cpp) |
 | USB 调试 | CDC 日志、命令、指定进程线程栈采样；内存日志与启动日志保存 | [CDC](../drivers/NativeUsbDebug/native_usb_debug.c)、[日志](../drivers/NativeUsbDebug/native_usb_log.c)、[线程采样](../drivers/NativeUsbDebug/native_usb_thread_snapshot.c)、[BootLog](../package/BootLog.c) |
 | 平台启动 | PMGR 服务满足当前启动依赖，系统已通过 Setup 进入桌面 | [平台电源服务](../package/ShengPlatformPower.cpp)、[watchdog 启动策略](../package/BootWatchdogPolicy.c) |
 
 38a 中设置首页和关于本机最终均能打开，仍有加载延迟。当前软件绘制省略
-部分 CoreImage 形状滤镜和 blendOver 效果。GPU 加速、完整电源管理和所有
-外设尚未接通；设置延迟按实际用户线程采样继续定位。
+部分 CoreImage 形状滤镜和 blendOver 效果。GPU命令执行、Turnip Vulkan离屏渲染、
+系统Metal合成和DPU扫描已接通；显示性能、正常关机和完整电源管理继续记录。
+设置延迟按实际用户线程采样继续定位。
 
 UEFI MSC 已能更新启动 FAT。MSC 实现和错误恢复属于独立 UEFI 仓库；
 日常驱动更新只替换 FAT，保留系统卷和现有 Data，写入及同步完成后完整
@@ -131,8 +133,16 @@ UFS 与 USB 可以分别开发，合并后统一构建。USB host 与 CDC 使用
 
 ## 8. GPU 和其余外设
 
-- [ ] Adreno 642L：GMU、固件、供电/时钟、SMMU、命令队列和 fence，再接 Turnip/NativeMetal 与系统合成。
+- [x] ~~Adreno 642L供电/时钟、GMU/HFI和A660固件启动，GPU及LPAC独立SMMU context与启动页映射。~~ 2026-10-25，50a实机通过；Adreno6xx/NativeAdrenoA6xxPower.cpp、NativeAdrenoA6xxGmu.cpp、NativeAdrenoGpuContext.cpp。
+- [x] ~~CP消费ME_INIT、PAS13认证、退出secure mode，以及内核scratch写入和fence回读。~~ 2026-10-25，50a记录RPTR12/12、14/14，scratch=0x6421cafe、fence1/1；NativeAdrenoService.cpp、NativeAdrenoA6xxZap.cpp。
+- [x] ~~用户态经NativeAdrenoGpuPublished分配/映射BO、提交CP_MEM_WRITE、等待fence和回读。~~ 2026-10-25，50a四个值全部匹配、faults=0、t733-adreno退出0；tools/gpu/t733-adreno.cpp、NativeAdrenoUserClient.cpp。
+- [x] ~~Turnip Vulkan离屏填充、计算着色器和三角形渲染。~~ 2026-10-25，50c记录fill_words=1024、compute_words=1024、triangle_pixels=512、other_pixels=0，stage=0、VkResult=0、compute_stage=0、render_stage=0、进程退出0；DeviceInfo flags=1、UBWC=3、swizzle=6、macrotile=0，见[GPU实施证据](../../../notes/GPU_IMPLEMENTATION.md)。
+- [x] ~~接NativeMetal与系统Metal合成。~~ 2026-10-25，51e实际提交，51j采样1509批全部完成；Adreno6xx/NativeAdrenoAccelerator.cpp、公共AdrenoMetal插件。
+- [x] ~~接DPU直接扫描IOSurface，完成fence、双缓冲和vblank切换。~~ 2026-10-25，51j持续flip1200，用户确认无闪烁；NativeMobileDisplay/NativeDpuSurface.cpp、NativeLegacyDisplay.cpp。
+- [ ] 改善Metal提交和显示等待开销，记录稳定帧率及正常关机结果。
 - [ ] 摄像头和其他外设按实际使用需求分别实施。
 
-当前优先完善 UFS 恢复与电源生命周期，同时记录共享中断下的触屏和充电行为；
-物理键与亮度按后续依赖推进。普通更新复用固定 Data 种子、容量和位置。
+50c实机证据为工作区 `logs/t733-usb-live/t733-20261025T081340.968881Z.raw`；
+逐轮结果见[GPU实施](../../../notes/GPU_IMPLEMENTATION.md)，LPAC与ZAP故障调查见
+[首次取指复核](../../../notes/GPU_FIRST_FETCH_AUDIT_2026-10-25.md)。
+普通更新复用固定Data种子、容量和位置。

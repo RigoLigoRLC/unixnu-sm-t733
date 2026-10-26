@@ -1,0 +1,72 @@
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -393,12 +394,17 @@
+ 
+ __dead2 __unused
+ static void
+-arm64_implementation_specific_error(arm_saved_state_t *state, uint32_t esr, vm_offset_t far)
++arm64_implementation_specific_error(arm_saved_state_t *state, uint32_t esr, vm_offset_t far,
++    platform_error_source_t source)
+ {
+-#pragma unused (state, esr, far)
+-	panic_plain("Unhandled implementation specific error\n");
++	char message[192];
++
++	snprintf(message, sizeof(message),
++	    "Unhandled %s platform error ESR=0x%08x FAR=0x%016lx",
++	    source == PLAT_ERR_SRC_ASYNC ? "asynchronous" : "synchronous", esr, far);
++	panic_with_thread_kernel_state(message, state);
+ }
+ 
+ #if CONFIG_KERNEL_INTEGRITY
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wunused-parameter"
+@@ -445,21 +451,46 @@
+ static void
+ arm64_platform_error(arm_saved_state_t *state, uint32_t esr, vm_offset_t far, platform_error_source_t source)
+ {
++	extern void native_usb_log_append(const char *, int)
++	    __attribute__((weak_import));
++	char summary[256];
++	const int summary_length = snprintf(summary, sizeof(summary),
++	    "ARM64 platform error source=%s ESR=%08x FAR=%016llx "
++	    "PC=%016llx LR=%016llx SPSR=%08x\n",
++	    source == PLAT_ERR_SRC_ASYNC ? "asynchronous" : "synchronous", esr,
++	    (unsigned long long)far, (unsigned long long)get_saved_state_pc(state),
++	    (unsigned long long)get_saved_state_lr(state), get_saved_state_cpsr(state));
++
++	/* The USB ring accepts the exception summary without a console lock before
++	 * platform callbacks inspect their own hardware. */
++	if (native_usb_log_append != NULL && summary_length > 0) {
++		const int count = summary_length < (int)sizeof(summary) ?
++		    summary_length : (int)sizeof(summary) - 1;
++		native_usb_log_append(summary, count);
++	}
++
++#if XNU_EARLY_ENTRY_MARKER
++	arm_early_stage(35, 0x00800000, "ARM64 platform error before platform callback");
++	arm_early_value("ESR", esr);
++	arm_early_value("FAR", far);
++	arm_early_value("PC", get_saved_state_pc(state));
++	arm_early_value("LR", get_saved_state_lr(state));
++	arm_early_value("SPSR", get_saved_state_cpsr(state));
++#endif
+ #if CONFIG_KERNEL_INTEGRITY
+ 	kernel_integrity_error_handler(esr, far);
+ #endif
+ 
+-	(void)source;
+ 	cpu_data_t *cdp = getCpuDatap();
+ 
+ 	if (PE_handle_platform_error(far)) {
+ 		return;
+ 	} else if (cdp->platform_error_handler != NULL) {
+ 		cdp->platform_error_handler(cdp->cpu_id, far);
+ 	} else {
+-		arm64_implementation_specific_error(state, esr, far);
++		arm64_implementation_specific_error(state, esr, far, source);
+ 	}
+ }
+ 
+ void
+ panic_with_thread_kernel_state(const char *msg, arm_saved_state_t *ss)

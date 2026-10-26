@@ -116,6 +116,7 @@ def main():
         298: "IOReturn applyDisplayState()",
         301: "bool getRefreshAttributes(uint64_t *, bool)",
         337: "IOReturn collectCompletionReports(uint32_t, void *, uint32_t *, uint32_t) = 0",
+        345: "bool isTimingEnabled() = 0",
     }
     virtuals = []
     for slot in range(168, 358):
@@ -142,6 +143,8 @@ def main():
     record = json.loads(recipe.read_text().strip().rstrip(","))
     components = [
         sources / "drivers/NativeMobileDisplay/NativeLegacyDisplay.cpp",
+        sources / "drivers/NativeMobileDisplay/NativeDpuScanout.cpp",
+        sources / "drivers/NativeMobileDisplay/NativeDpuSurface.cpp",
         sources / "drivers/NativeKeyStoreEvents/NativeKeyStoreEvents.cpp",
         package / "T733Display/DisplayRegistration.cpp",
         package / "T733Display/KeyStoreRegistration.cpp",
@@ -191,6 +194,9 @@ def main():
         "_native_legacy_vsync_notify": relocated(0xfffffff005796720),
         "_native_legacy_set_refresh_properties": relocated(0xfffffff00579ebb8),
         "_native_legacy_set_properties": methods[44] + slide,
+        "_native_legacy_surface_increment_use": relocated(0xfffffff004b9f750),
+        "_native_legacy_surface_decrement_use": relocated(0xfffffff004b9f80c),
+        "_native_legacy_surface_fence_complete": relocated(0xfffffff004bb33f0),
     }
     for slot in range(358):
         name = imported.get(vtable + 16 + slot * 8)

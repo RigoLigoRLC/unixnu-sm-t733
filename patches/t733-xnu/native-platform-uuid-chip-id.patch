@@ -1,0 +1,16 @@
+--- a/iokit/Kernel/IOPlatformExpert.cpp
++++ b/iokit/Kernel/IOPlatformExpert.cpp
+@@ -2217,7 +2217,12 @@ IOPlatformExpertDevice::generatePlatformUUID( void )
+ 		if (data1 && data1->getLength() == 8) {
+ 			OSData * data2;
+ 
+-			data2 = OSDynamicCast( OSData, entry->getProperty( "chip-id" ));
++			/* The platform UUID keeps its device-assigned chip input when
++			 * image personalization uses the selected OS build's chip ID. */
++			data2 = OSDynamicCast( OSData, entry->getProperty( "unixnu,platform-uuid-chip-id" ));
++			if (!data2) {
++				data2 = OSDynamicCast( OSData, entry->getProperty( "chip-id" ));
++			}
+ 			if (data2 && data2->getLength() == 4) {
+ 				SHA1_CTX     context;
+ 				uint8_t      digest[SHA_DIGEST_LENGTH];

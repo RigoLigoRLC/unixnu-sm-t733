@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>application-identifier</key>
+    <string>org.unixnu.t733.tools</string>
+    <key>platform-application</key>
+    <true/>
+    <key>com.apple.private.security.no-container</key>
+    <true/>
+    <key>com.apple.private.security.no-sandbox</key>
+    <true/>
+    <key>com.apple.private.security.container-required</key>
+    <false/>
+    <key>com.apple.QuartzCore.debug</key>
+    <true/>
+    <key>com.apple.dt.remotepairing.pairingmanagement</key>
+    <true/>
+    <key>com.apple.private.coreservices.canmaplsdatabase</key>
+    <true/>
+    <key>com.apple.private.coreservices.can-register-install-results</key>
+    <true/>
+    <key>com.apple.lsapplicationworkspace.rebuildappdatabases</key>
+    <true/>
+    <key>com.apple.security.exception.shared-preference.read-write</key>
+    <array>
+        <string>org.unixnu.t733.tools</string>
+        <string>com.apple.backboardd</string>
+    </array>
+</dict>
+</plist>

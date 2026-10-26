@@ -7,6 +7,7 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <notify.h>
 #include <signal.h>
 #include <spawn.h>
 #include <stdio.h>
@@ -15,6 +16,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <sys/sockio.h>
+#include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <sys/time.h>
 #include <sys/wait.h>
@@ -25,37 +27,91 @@
 extern char **environ;
 
 static pid_t gpu_diagnostic_pid;
-static unsigned gpu_diagnostic_phase;
+static pid_t tools_pid;
+static volatile sig_atomic_t stopping;
+static volatile sig_atomic_t debugger_pid;
 
-static void start_turnip_diagnostic(void);
-
-static void reap_gpu_diagnostic(void)
+static void publish_debug_status(const char *state)
 {
-    if (!gpu_diagnostic_pid) {
+    const char *path = "/private/var/run/t733-debug-network.json";
+    char temporary[128];
+    snprintf(temporary, sizeof(temporary), "%s.%d", path, getpid());
+    int descriptor = open(temporary, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0644);
+    if (descriptor < 0) {
+        syslog(LOG_ERR, "debug status file open failed: %s", strerror(errno));
+        return;
+    }
+
+    char content[256];
+    int length = snprintf(content, sizeof(content),
+        "{\"state\":\"%s\",\"supervisor_pid\":%d,\"debugger_pid\":%d,"
+        "\"address\":\"192.168.73.2\",\"port\":1234}\n",
+        state, getpid(), (int)debugger_pid);
+    size_t written = 0;
+    while (written < (size_t)length) {
+        ssize_t count = write(descriptor, content + written, (size_t)length - written);
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            break;
+        }
+        written += (size_t)count;
+    }
+
+    fchmod(descriptor, 0644);
+    close(descriptor);
+    if (written != (size_t)length || rename(temporary, path) < 0) {
+        unlink(temporary);
+    }
+}
+
+static void reap_background_process(pid_t *child, const char *name)
+{
+    if (!*child) {
         return;
     }
 
     int status = 0;
-    pid_t result = waitpid(gpu_diagnostic_pid, &status, WNOHANG);
-    if (result == gpu_diagnostic_pid) {
-        int start_turnip = gpu_diagnostic_phase == 1 && WIFEXITED(status) &&
-            WEXITSTATUS(status) == 0;
+    pid_t result = waitpid(*child, &status, WNOHANG);
+    if (result == *child) {
         if (WIFEXITED(status)) {
-            syslog(LOG_NOTICE, "GPU diagnostic pid=%d exited status=%d",
-                gpu_diagnostic_pid, WEXITSTATUS(status));
+            syslog(LOG_NOTICE, "%s pid=%d exited status=%d",
+                name, *child, WEXITSTATUS(status));
         } else if (WIFSIGNALED(status)) {
-            syslog(LOG_ERR, "GPU diagnostic pid=%d terminated signal=%d",
-                gpu_diagnostic_pid, WTERMSIG(status));
+            syslog(LOG_ERR, "%s pid=%d terminated signal=%d",
+                name, *child, WTERMSIG(status));
         }
 
-        gpu_diagnostic_pid = 0;
-        gpu_diagnostic_phase = 0;
-        if (start_turnip) {
-            start_turnip_diagnostic();
-        }
+        *child = 0;
     } else if (result < 0 && errno == ECHILD) {
-        gpu_diagnostic_pid = 0;
-        gpu_diagnostic_phase = 0;
+        *child = 0;
+    }
+}
+
+static void reap_background_processes(void)
+{
+    reap_background_process(&gpu_diagnostic_pid, "GPU diagnostic");
+    reap_background_process(&tools_pid, "T733 Tools startup");
+}
+
+static void stop_service(int signal_number)
+{
+    (void)signal_number;
+    stopping = 1;
+    if (debugger_pid > 0) {
+        kill((pid_t)debugger_pid, SIGTERM);
+    }
+}
+
+static void start_tools(void)
+{
+    const char *path = "/private/var/ngpu/apps/T733Tools.app/T733Tools";
+    char *arguments[] = {"T733Tools", "--boot-apply", NULL};
+    int error = posix_spawn(&tools_pid, path, NULL, NULL, arguments, environ);
+    if (error) {
+        tools_pid = 0;
+        syslog(LOG_ERR, "T733 Tools startup failed: %s", strerror(error));
     }
 }
 
@@ -66,7 +122,7 @@ static void start_gpu_diagnostic(void)
         return;
     }
 
-    char *arguments[] = {"t733-adreno", "--stage", "submit",
+    char *arguments[] = {"t733-adreno", "--stage", "query",
         "--wait-seconds", "120", NULL};
     int error = posix_spawn(&gpu_diagnostic_pid, path, NULL, NULL, arguments, environ);
     if (error) {
@@ -75,35 +131,17 @@ static void start_gpu_diagnostic(void)
         return;
     }
 
-    gpu_diagnostic_phase = 1;
     syslog(LOG_NOTICE, "GPU diagnostic pid=%d started independently", gpu_diagnostic_pid);
 }
 
-static void start_turnip_diagnostic(void)
-{
-    const char *path = "/private/var/ngpu/bin/t733-turnip";
-    if (access(path, X_OK) < 0) {
-        return;
-    }
-
-    char *arguments[] = {"t733-turnip", NULL};
-    int error = posix_spawn(&gpu_diagnostic_pid, path, NULL, NULL, arguments, environ);
-    if (error) {
-        gpu_diagnostic_pid = 0;
-        syslog(LOG_ERR, "Turnip diagnostic spawn failed: %s", strerror(error));
-        return;
-    }
-
-    gpu_diagnostic_phase = 2;
-    syslog(LOG_NOTICE, "Turnip diagnostic pid=%d started after CP readback succeeded", gpu_diagnostic_pid);
-}
-
 /* The launchd helper assigns the USB Ethernet address and enables the normal
- * lockdown network connection setting through its local socket API. It then
- * accepts one TCP connection and replaces itself with debugserver using the fd.
- * This keeps launchd as debugserver's parent,
- * as required by its launch constraint. NativeUsbNetwork owns unet0 and its
- * link state. The cached RunAtLoad job starts one debugging session per boot.
+ * lockdown network connection setting through its local socket API. After
+ * confirming that setting, it posts the native Bonjour pairing service event.
+ * It owns the listening socket and launches one native debugserver per accepted
+ * connection. A session's exit returns to accept without repeating hardware
+ * initialization. The helper retains its launchd parent; the development-signed
+ * debugger uses its own category-0 trust entry. NativeUsbNetwork owns unet0 and
+ * its link state. The cached RunAtLoad job starts this supervisor once per boot.
  */
 
 /* LockdownApi contains the exported functions from the system's liblockdown.
@@ -154,7 +192,10 @@ static void enable_lockdown_connections(void)
     int confirmed = 0;
     unsigned attempts = 0;
     for (unsigned attempt = 1; attempt <= 45; ++attempt) {
-        reap_gpu_diagnostic();
+        reap_background_processes();
+        if (stopping) {
+            break;
+        }
 
         struct timespec now;
         if (clock_gettime(CLOCK_MONOTONIC, &now) < 0 ||
@@ -225,6 +266,13 @@ static void enable_lockdown_connections(void)
             "continuing to debug TCP listener", attempts);
     }
     dlclose(library);
+
+    if (confirmed && !stopping) {
+        const char *notification = "com.apple.mobile.lockdown.BonjourPairingServiceChanged";
+        uint32_t result = notify_post(notification);
+        syslog(result == NOTIFY_STATUS_OK ? LOG_NOTICE : LOG_ERR,
+            "lockdown pairing discovery notification=%s result=%u", notification, result);
+    }
 }
 
 static int configure_address(void)
@@ -285,7 +333,7 @@ static void connect_console(void)
     setvbuf(stderr, NULL, _IONBF, 0);
 }
 
-static int accept_debugger(void)
+static int create_debug_listener(void)
 {
     int listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listener < 0) {
@@ -293,7 +341,12 @@ static int accept_debugger(void)
         return -1;
     }
 
-    const char *operation = "SO_REUSEADDR";
+    const char *operation = "FD_CLOEXEC";
+    if (fcntl(listener, F_SETFD, FD_CLOEXEC) < 0) {
+        goto failed;
+    }
+
+    operation = "SO_REUSEADDR";
     int enabled = 1;
     if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &enabled, sizeof(enabled)) < 0) {
         goto failed;
@@ -314,11 +367,26 @@ static int accept_debugger(void)
         goto failed;
     }
 
-    syslog(LOG_NOTICE, "debug TCP listening on 192.168.73.2:1234; accepting 192.168.73.1");
+    return listener;
+
+failed:
+    {
+        int error = errno;
+        syslog(LOG_ERR, "debug TCP %s failed: errno=%d %s", operation, error,
+            strerror(error));
+        close(listener);
+        return -1;
+    }
+}
+
+static int accept_debugger(int listener)
+{
+    publish_debug_status("listening");
+    syslog(LOG_NOTICE, "debug TCP ready on 192.168.73.2:1234; accepting 192.168.73.1");
     struct in_addr allowed_peer;
     inet_pton(AF_INET, "192.168.73.1", &allowed_peer);
-    for (;;) {
-        reap_gpu_diagnostic();
+    while (!stopping) {
+        reap_background_processes();
 
         fd_set readable;
         FD_ZERO(&readable);
@@ -330,8 +398,8 @@ static int accept_debugger(void)
         }
 
         if (ready < 0) {
-            operation = "select";
-            goto failed;
+            syslog(LOG_ERR, "debug TCP select failed: %s", strerror(errno));
+            return -1;
         }
 
         struct sockaddr_in peer = {0};
@@ -342,8 +410,8 @@ static int accept_debugger(void)
                 continue;
             }
 
-            operation = "accept";
-            goto failed;
+            syslog(LOG_ERR, "debug TCP accept failed: %s", strerror(errno));
+            return -1;
         }
 
         if (peer_length != sizeof(peer) || peer.sin_family != AF_INET ||
@@ -359,8 +427,26 @@ static int accept_debugger(void)
             error = errno;
         }
 
+        int enabled = 1;
         if (!error && setsockopt(connection, IPPROTO_TCP, TCP_NODELAY,
             &enabled, sizeof(enabled)) < 0) {
+            error = errno;
+        }
+
+        if (!error && setsockopt(connection, SOL_SOCKET, SO_KEEPALIVE,
+            &enabled, sizeof(enabled)) < 0) {
+            error = errno;
+        }
+
+        int idle_seconds = 10;
+        int probe_seconds = 3;
+        int probe_count = 3;
+        if (!error && (setsockopt(connection, IPPROTO_TCP, TCP_KEEPALIVE,
+            &idle_seconds, sizeof(idle_seconds)) < 0 ||
+            setsockopt(connection, IPPROTO_TCP, TCP_KEEPINTVL,
+            &probe_seconds, sizeof(probe_seconds)) < 0 ||
+            setsockopt(connection, IPPROTO_TCP, TCP_KEEPCNT,
+            &probe_count, sizeof(probe_count)) < 0)) {
             error = errno;
         }
 
@@ -368,21 +454,53 @@ static int accept_debugger(void)
             syslog(LOG_ERR, "debug TCP connected socket setup failed: errno=%d %s",
                 error, strerror(error));
             close(connection);
-            close(listener);
-            return -1;
+            continue;
         }
 
-        close(listener);
         return connection;
     }
 
-failed:
-    {
-        int error = errno;
-        syslog(LOG_ERR, "debug TCP %s failed: errno=%d %s", operation, error,
-            strerror(error));
-        close(listener);
-        return -1;
+    return -1;
+}
+
+static void run_debug_session(int connection)
+{
+    char descriptor_argument[32];
+    snprintf(descriptor_argument, sizeof(descriptor_argument), "--fd=%d", connection);
+    char *arguments[] = {"debugserver", "--log-file=stderr", "--log-flags=0x80000",
+        descriptor_argument, NULL};
+
+    pid_t child = 0;
+    int error = posix_spawn(&child, "/private/var/ngpu/bin/t733-debugserver",
+        NULL, NULL, arguments, environ);
+    close(connection);
+    if (error) {
+        syslog(LOG_ERR, "debugserver spawn failed: %s", strerror(error));
+        return;
+    }
+
+    debugger_pid = child;
+    publish_debug_status("session");
+    syslog(LOG_NOTICE, "debug session pid=%d started", child);
+    if (stopping) {
+        kill(child, SIGTERM);
+    }
+
+    int status = 0;
+    pid_t result;
+    do {
+        result = waitpid(child, &status, 0);
+    } while (result < 0 && errno == EINTR);
+
+    debugger_pid = 0;
+    if (result < 0) {
+        syslog(LOG_ERR, "debug session pid=%d wait failed: %s", child, strerror(errno));
+    } else if (WIFEXITED(status)) {
+        syslog(LOG_NOTICE, "debug session pid=%d exited status=%d; listener retained",
+            child, WEXITSTATUS(status));
+    } else if (WIFSIGNALED(status)) {
+        syslog(LOG_WARNING, "debug session pid=%d terminated signal=%d; listener retained",
+            child, WTERMSIG(status));
     }
 }
 
@@ -390,6 +508,12 @@ int main(void)
 {
     connect_console();
     openlog("T733DebugNetwork", LOG_PID | LOG_PERROR, LOG_DAEMON);
+    publish_debug_status("starting");
+    struct sigaction action = {0};
+    action.sa_handler = stop_service;
+    sigemptyset(&action.sa_mask);
+    sigaction(SIGTERM, &action, NULL);
+    sigaction(SIGINT, &action, NULL);
 
     int error = ENXIO;
     for (unsigned attempt = 0; attempt < 60; ++attempt) {
@@ -416,26 +540,25 @@ int main(void)
     syslog(LOG_NOTICE, "unet0 192.168.73.2/30 ready; developer mode=%d query error=%d console=%d",
         developer_mode, developer_error, isatty(STDIN_FILENO));
     start_gpu_diagnostic();
+    start_tools();
     enable_lockdown_connections();
-    int connection = accept_debugger();
-    if (connection < 0) {
-        return 1;
+    while (!stopping) {
+        int listener = create_debug_listener();
+        if (listener < 0) {
+            sleep(1);
+            continue;
+        }
+
+        while (!stopping) {
+            int connection = accept_debugger(listener);
+            if (connection < 0) {
+                break;
+            }
+            run_debug_session(connection);
+        }
+        close(listener);
     }
 
-    char descriptor_argument[32];
-    snprintf(descriptor_argument, sizeof(descriptor_argument), "--fd=%d", connection);
-    syslog(LOG_NOTICE, "starting development-signed debugserver with connected fd=%d", connection);
-    char *arguments[] = {"debugserver", "--log-file=stderr", "--log-flags=0x80000",
-        descriptor_argument, NULL};
-    reap_gpu_diagnostic();
-    if (gpu_diagnostic_pid) {
-        // The inherited ignored disposition lets the kernel reap a diagnostic
-        // that finishes after this process becomes debugserver.
-        signal(SIGCHLD, SIG_IGN);
-    }
-
-    execv("/private/var/ngpu/bin/t733-debugserver", arguments);
-    syslog(LOG_ERR, "debugserver exec failed: %s", strerror(errno));
-    close(connection);
-    return 1;
+    publish_debug_status("stopped");
+    return 0;
 }

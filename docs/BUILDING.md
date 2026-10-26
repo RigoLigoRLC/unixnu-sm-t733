@@ -22,6 +22,8 @@ cp local.toml.example local.toml
 
 `feeds.toml` 固定公开的 [unixnu-sm7325-common](https://github.com/RigoLigoRLC/unixnu-sm7325-common) 提交，公共驱动及 Apple OSS 由对应 core feed 提供。设备有 13 个 driver 子模块和 1 个 kit 子模块；`components.toml` 保留社区 fork 身份及本机 recipe。克隆和更新设备仓库后都执行递归子模块初始化，gitlink 与组件 revision 一起更新。
 
+当前开发源码已于 2026-10-26 本地提交并固定引用：core `d9e633a`、Metal `4f9598c`、Adreno6xx `dda9eb8`、SM7325 `fc47dfd`。这些提交包含此前上游同步和本机修改，尚未推送。设备运行的是回退后的原始 51s 产物；这些开发提交不对应 51s，不能给旧产物补填源码版本。
+
 公开 `board.toml` 与 `board.platform.toml` 的 `[payload.adt] chip_id = "733"` 是十六进制软件身份输入。每台设备的 `hardware.unique_chip_id` 填在忽略的 `local.toml`：
 
 ```toml
@@ -75,14 +77,22 @@ ln -s /path/os-mount .cache/inputs/os-root
 
 ## 3. 统一构建与输出
 
+每轮先提交全部参与构建的源码。先提交驱动和 kit，再同时更新父仓库 gitlink 与组件 revision，最后固定 core、SoC 和设备提交。工作树有未提交修改或未跟踪源码时不开始编译。交付记录保存所有选中提交号、完整命令和不可移动的构建 tag；私有输入与密钥继续保留在忽略目录。旧包没有源码记录时，不得事后用当前提交补填。
+
 ```sh
 bash scripts/build.sh system-local-1
 bash scripts/build.sh platform-local-1 --platform
 ```
 
-系统入口依次执行 configure、resolve、kernel、menu、turnip、wallpaper、debug-tools、payload。kernel 内部完成源码准备、头文件导出、编译记录、按序 archive、最终链接和预链接；turnip 编译 ARM64/iOS Vulkan 库，debug-tools 编译 CP 和 Vulkan 离屏程序并加入 addon 与 trust bundle；payload 调用共用 DTS 转换器生成 ADT，再组装菜单、固定种子及 FAT。构建命令只生成产物。
+系统入口依次执行 configure、resolve、kernel、menu、turnip、metal、wallpaper、debug-tools、payload，共九阶段。kernel 内部完成源码准备、头文件导出、编译记录、按序 archive、最终链接和预链接；turnip 编译 ARM64/iOS Vulkan 库，metal 编译并签名系统 Metal 插件及 Rust bridge；debug-tools 将插件、CP/Vulkan 离屏程序和调试工具加入 addon 与 trust bundle；payload 调用共用 DTS 转换器生成 ADT，再组装菜单、固定种子及 FAT。构建命令只生成产物。
 
 turnip 阶段通过 `tools/gpu/bootstrap-turnip.py` 在公共 core 的 `.cache` 内准备固定 Mesa、Python 依赖、glslang 和 bison，再调用官方 `build-turnip-darwin.py`。也可提前执行 `python3 tools/gpu/bootstrap-turnip.py --core "$UNIXNU_BASE"` 准备依赖，保留 `UNIXNU_RECORD_HASHES=0`。
+
+metal 阶段调用 `tools/gpu/bootstrap-metal.py --core <core> --abi-directory <resolved tree>/drivers/Adreno6xx`。主机须已有 `rustup` 和 LLVM 21 或更高版本的 `llvm-as`；脚本在 core 的 `.cache/gpu-reference/metal2vulkan` 获取固定提交 `720ef1ce9ae2a2068999a8675717418b9416283e`，由 bridge 构建器按清单应用官方 `0001` 至 `0016` 及本机 `0017` 至 `0021`。本机补丁分别限制空闲池、描述处理步骤、确认 host-import 释放、收紧 tile-store 边界和限制错误日志。Rust 1.98.0 及 `aarch64-apple-ios` target 安装在 `.cache/metal-rustup`，Cargo 依赖保存在 `.cache/metal-cargo`；首次准备需要网络。
+
+bootstrap先查询本地工具链及iOS标准库；固定版本已安装时直接使用，缺失时才执行rustup安装。
+
+本板调用公共 `build-adreno-metal-plugin.py` 时传入 `--gpu-abi-dir <resolved tree>/drivers/Adreno6xx`，并选择 `--scanout-copy off --quartzcore-display-state off --turnip-replay off --turnip-debug '' --turnip-smoke-debug ''`。shader 编译器使用 Turnip 已准备的 `.cache/mesa-tools/bin/glslangValidator`，通过 `--shader-compiler` 指定并传入 `--skip-shader-validation`。插件产物为 core 的 `build/adreno-metal-plugin/NativeAdrenoMetal.bundle`；设备 addon 打包器负责发布标记、插件文件和签名信任输入，固定 `data.dbr` 继续作为普通系统更新的 Data 输入。
 
 默认 `--out` 为 `build/work`。format 2 的中间目录为：
 

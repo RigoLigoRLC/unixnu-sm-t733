@@ -29,6 +29,7 @@ DEVICE = Path(__file__).resolve().parents[1]
 # AMFI 21H461 category 5 accepts platform code on Data and requires launchd
 # or the system mbfloagent as its parent (self DER 0xab91c1, parent 0xab9955).
 HELPER_CONSTRAINT_CATEGORY = 5
+DEBUGGER_CONSTRAINT_CATEGORY = 0
 
 
 def run(command):
@@ -57,6 +58,10 @@ def main():
                         help="Unmodified debugserver from the target OS image")
     parser.add_argument("--wallpaper", type=Path, required=True,
                         help="J120 overlay produced by make-wallpaper-overlay.py")
+    parser.add_argument("--metal-plugin", type=Path, required=True,
+                        help="Signed NativeAdrenoMetal bundle from the core builder")
+    parser.add_argument("--metal-inputs", type=Path, required=True,
+                        help="Selected OS library list and readable shader copies")
     args = parser.parse_args()
     if not args.debugserver.is_file():
         raise SystemExit(f"Missing original target debugserver input: {args.debugserver}")
@@ -96,9 +101,13 @@ def main():
          "--identifier", "org.unixnu.t733.debugserver",
          "--entitlements", debugger_entitlements, debugger])
 
+    tools_output = output / "tools-app"
+    run([sys.executable, DEVICE / "scripts/build-t733-tools.py", "--output", tools_output])
+    tools_app = tools_output / "T733Tools.app"
+
     gpu_output = output / "gpu"
     work = Path(os.environ["T733_RESOLVED_TREE"])
-    core = Path(os.environ["UNIXNU_BASE"])
+    core = Path(os.environ["T733_GPU_TREE"])
     run([sys.executable, DEVICE / "tools/gpu/build-userspace.py",
          "--output", gpu_output, "--abi-directory", work / "drivers/Adreno6xx",
          "--pm4-directory", work / "kits/AdrenoPM4", "--core", core,
@@ -114,10 +123,13 @@ def main():
                zip(offsets, (*offsets[1:], len(original)))]
     entries = sorted([
         trust_entry(binary, HELPER_CONSTRAINT_CATEGORY),
-        trust_entry(debugger, HELPER_CONSTRAINT_CATEGORY),
+        trust_entry(debugger, DEBUGGER_CONSTRAINT_CATEGORY),
+        trust_entry(tools_app / "T733Tools", 0),
         trust_entry(gpu_binary, 0),
         trust_entry(turnip_binary, 0),
         trust_entry(turnip_library, 0),
+        trust_entry(args.metal_plugin / "NativeAdrenoMetal", 0),
+        trust_entry(args.metal_plugin / "libvulkan_freedreno.dylib", 0),
     ], key=lambda entry: entry[:20])
     owner = struct.pack("<I16sI", 2, uuid.uuid4().bytes, len(entries))
     owner += b"".join(entries)
@@ -154,7 +166,27 @@ def main():
         ("daemons/com.apple.iomfb_fdr_loader.plist", 0o644, job),
         ("preferences/backboardd-brightness.plist", 0o644,
          (DEVICE / "package/backboardd-brightness.plist").read_bytes()),
+        ("addons/NativeAdrenoMetal.publish", 0o644, b"1\n"),
+        ("addons/NativeAdrenoMetal.clients", 0o644,
+         b"backboardd\niconservicesagent\nKaleidoscopePoster\nAegirPoster\n"),
     ]
+    for path in sorted(args.metal_inputs.rglob("*")):
+        if path.is_file():
+            relative = path.relative_to(args.metal_inputs).as_posix()
+            files.append(("addons/" + relative, 0o644, path.read_bytes()))
+
+    for path in sorted(tools_app.rglob("*")):
+        if path.is_file():
+            relative = path.relative_to(tools_app).as_posix()
+            mode = 0o755 if os.access(path, os.X_OK) else 0o644
+            files.append(("apps/T733Tools.app/" + relative, mode, path.read_bytes()))
+
+    for path in sorted(args.metal_plugin.rglob("*")):
+        if path.is_file():
+            relative = path.relative_to(args.metal_plugin).as_posix()
+            mode = 0o755 if os.access(path, os.X_OK) else 0o644
+            files.append(("addons/NativeAdrenoMetal.bundle/" + relative, mode, path.read_bytes()))
+
     for name in ("index.xml", "assetManifest.caml", "main.caml", "J120.png", "J120-Dark.png"):
         files.append(("wallpaper/" + name, 0o644, (args.wallpaper / name).read_bytes()))
 
@@ -170,7 +202,8 @@ def main():
     print(f"USB debug helper and addon: {output}; "
           f"helper trust-cache constraint category={HELPER_CONSTRAINT_CATEGORY}")
     print(f"Development debugserver from {args.debugserver}; original entitlements "
-          "plus task_for_pid-allow; separate category 5 trust entry")
+          f"plus task_for_pid-allow; category {DEBUGGER_CONSTRAINT_CATEGORY} for helper-owned sessions")
+    print("T733 Tools: system app registration and saved HUD/touch settings at startup")
     print(f"J120 wallpaper document and PNG images from {args.wallpaper}")
     print("backboardd managed preference: SynchronousBrightnessTransactions=true")
 

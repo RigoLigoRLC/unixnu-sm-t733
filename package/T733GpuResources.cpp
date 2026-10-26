@@ -5,6 +5,11 @@
 #include <string.h>
 #include "NativeAdrenoA6xxService.h"
 
+extern "C" IOReturn armcpu_spi_register(uint32_t interrupt, bool edge,
+    void (*callback)(void *), void *context);
+extern "C" IOReturn armcpu_spi_enable(uint32_t interrupt);
+extern "C" IOReturn armcpu_spi_disable(uint32_t interrupt);
+
 static const OSData *property(IORegistryEntry *entry, const char *name)
 {
     return OSDynamicCast(OSData, entry->getProperty(name));
@@ -19,6 +24,42 @@ static bool scalar(IORegistryEntry *entry, const char *name, uint32_t &value)
 
     memcpy(&value, data->getBytesNoCopy(), sizeof(value));
     return true;
+}
+
+static bool interrupt(IORegistryEntry *entry, const char *name, uint32_t &value)
+{
+    const OSData *specifiers = property(entry, "interrupts");
+    const OSData *names = property(entry, "interrupt-names");
+    if (!specifiers || specifiers->getLength() % 12 || !names) {
+        return false;
+    }
+
+    const char *text = static_cast<const char *>(names->getBytesNoCopy());
+    const size_t nameBytes = names->getLength();
+    const uint8_t *bytes = static_cast<const uint8_t *>(specifiers->getBytesNoCopy());
+    const size_t count = specifiers->getLength() / 12;
+    size_t cursor = 0;
+    for (size_t index = 0; index < count && cursor < nameBytes; ++index) {
+        size_t length = strnlen(text + cursor, nameBytes - cursor);
+        if (length == nameBytes - cursor) {
+            return false;
+        }
+
+        if (strcmp(text + cursor, name) == 0) {
+            uint32_t cells[3];
+            memcpy(cells, bytes + index * 12, sizeof(cells));
+            if (cells[0] != 0 || cells[1] > 987 || cells[2] != 4) {
+                return false;
+            }
+
+            value = cells[1] + 32;
+            return true;
+        }
+
+        cursor += length + 1;
+    }
+
+    return false;
 }
 
 extern "C" int native_adreno_a6xx_resources(NativeAdrenoA6xxResources *resources)
@@ -69,6 +110,11 @@ extern "C" int native_adreno_a6xx_resources(NativeAdrenoA6xxResources *resources
         {"command-db", &result.commandDb}, {"rpmh", &result.rpmh},
         {"aop", &result.aop}, {"ipcc", &result.ipcc}, {"cx-misc", &result.cxMisc},
         {"zap", &result.zap},
+        {"smmu-tcu", &result.smmuTcu},
+        {"smmu-tbu-0", &result.smmuTbu[0]},
+        {"smmu-tbu-1", &result.smmuTbu[1]},
+        {"smmu-tbu-status-0", &result.smmuTbuStatus[0]},
+        {"smmu-tbu-status-1", &result.smmuTbuStatus[1]},
     };
 
     if (valid) {
@@ -131,10 +177,31 @@ extern "C" int native_adreno_a6xx_resources(NativeAdrenoA6xxResources *resources
         {"native-adreno-gmu-slot", &result.gmuSlot},
         {"native-adreno-gmu-sid", &result.gmuSid},
         {"native-adreno-gmu-sid-mask", &result.gmuSidMask},
+        {"native-adreno-lpac-bank", &result.lpacBank},
+        {"native-adreno-lpac-asid", &result.lpacAsid},
+        {"native-adreno-lpac-slot", &result.lpacSlot},
+        {"native-adreno-lpac-sid", &result.lpacSid},
+        {"native-adreno-lpac-sid-mask", &result.lpacSidMask},
     };
     for (const NamedScalar &candidate : scalars) {
         valid = scalar(gpu, candidate.name, *candidate.value) && valid;
     }
+
+    valid = interrupt(gpu, "smmu-global", result.smmuGlobalInterrupt) && valid;
+    const char *contextInterruptNames[] = {
+        "smmu-context-0", "smmu-context-1", "smmu-context-2", "smmu-context-3",
+        "smmu-context-4", "smmu-context-5", "smmu-context-6", "smmu-context-7",
+        "smmu-context-8", "smmu-context-9",
+    };
+    for (size_t bank = 0; bank < 10; ++bank) {
+        valid = interrupt(gpu, contextInterruptNames[bank], result.smmuContextInterrupts[bank]) && valid;
+    }
+
+    // Yupik's two GPU TBUs own SID 0x000..0x3ff and 0x400..0x7ff.
+    result.smmuTbuSidStart[0] = 0;
+    result.smmuTbuSidStart[1] = 0x400;
+    result.smmuTbuSidCount[0] = 0x400;
+    result.smmuTbuSidCount[1] = 0x400;
 
     gpu->release();
     bus->release();
@@ -144,4 +211,20 @@ extern "C" int native_adreno_a6xx_resources(NativeAdrenoA6xxResources *resources
 
     *resources = result;
     return 0;
+}
+
+extern "C" IOReturn native_adreno_smmu_register_irq(uint32_t interrupt,
+    void (*callback)(void *), void *context)
+{
+    return armcpu_spi_register(interrupt, false, callback, context);
+}
+
+extern "C" IOReturn native_adreno_smmu_enable_irq(uint32_t interrupt)
+{
+    return armcpu_spi_enable(interrupt);
+}
+
+extern "C" IOReturn native_adreno_smmu_disable_irq(uint32_t interrupt)
+{
+    return armcpu_spi_disable(interrupt);
 }

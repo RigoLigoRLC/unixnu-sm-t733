@@ -14,4 +14,37 @@
 
 &gpu {
     status = "okay";
+    native-adreno-lpac-bank = <2>;
+    native-adreno-lpac-asid = <3>;
+    native-adreno-lpac-slot = <4>;
+    native-adreno-lpac-sid = <1>;
+    native-adreno-lpac-sid-mask = <0x400>;
+    native-adreno-platform-reg =
+        <0 0x03d6a000 0 0x34000>,
+        <0 0x03da0000 0 0x20000>,
+        <0 0x03d90000 0 0x10000>,
+        <0 0x00100000 0 0x1f0000>,
+        <0 0x0b290000 0 0x10000>,
+        <0 0x03de0000 0 0x10000>,
+        <0 0x80860000 0 0x20000>,
+        <0 0x18220000 0 0x10000>,
+        <0 0x0c300000 0 0x400>,
+        <0 0x00408000 0 0x1000>,
+        <0 0x03d9e000 0 0x1000>,
+        <0 0x8b71a000 0 0x2000>,
+        <0 0x03dd6000 0 0x20>,
+        <0 0x03dd9000 0 0x1000>,
+        <0 0x03ddd000 0 0x1000>,
+        <0 0x03dd6200 0 0x8>,
+        <0 0x03dd6208 0 0x8>;
+    native-adreno-reg-names = "gmu", "smmu", "gpucc", "gcc",
+        "pdc", "rscc", "command-db", "rpmh", "aop", "ipcc", "cx-misc", "zap",
+        "smmu-tcu", "smmu-tbu-0", "smmu-tbu-1", "smmu-tbu-status-0", "smmu-tbu-status-1";
+    interrupts = <0 300 4>, <0 304 4>, <0 305 4>, <0 673 4>,
+        <0 678 4>, <0 679 4>, <0 680 4>, <0 681 4>, <0 682 4>,
+        <0 683 4>, <0 684 4>, <0 685 4>, <0 686 4>, <0 687 4>;
+    interrupt-names = "gpu", "hfi", "gmu", "smmu-global",
+        "smmu-context-0", "smmu-context-1", "smmu-context-2", "smmu-context-3",
+        "smmu-context-4", "smmu-context-5", "smmu-context-6", "smmu-context-7",
+        "smmu-context-8", "smmu-context-9";
 };

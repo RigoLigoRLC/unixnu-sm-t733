@@ -2,6 +2,8 @@ device:patches/t733-xnu/kalloc-type-zone-budget-diagnostic.patch
 device:patches/t733-xnu/native-build-label.patch
 device:patches/t733-xnu/native-console-debug-output.patch
 device:patches/t733-xnu/native-debugger-entry-state.patch
+device:patches/t733-xnu/native-platform-error-state.patch
+device:patches/t733-xnu/native-platform-uuid-chip-id.patch
 device:patches/t733-xnu/native-t733-display-bind.patch
 device:patches/t733-xnu/native-t733-framebuffer.patch
 device:patches/t733-xnu/native-text-repage.patch

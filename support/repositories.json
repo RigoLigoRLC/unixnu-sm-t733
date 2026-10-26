@@ -1,7 +1,7 @@
 {
   "owner": "RigoLigoRLC",
   "created_on": "2026-10-24",
-  "updated_on": "2026-10-25",
+  "updated_on": "2026-10-26",
   "visibility": "public",
   "repositories": [
     {
@@ -24,8 +24,8 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "fb5e8ba88fcce2526e33fe8c4348d5e7aeb585d8",
       "description": "UniXNU core build and boot-menu adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "8e411474977f2c7fd459a99cb2e3d1f3466d85ac",
-      "device_changes_pushed": true
+      "adaptation_commit": "d9e633a07e1e597980b1f7f733221dcfd187bdc1",
+      "device_changes_pushed": false
     },
     {
       "name": "unixnu-mu-silicium",
@@ -36,8 +36,8 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "42fe563791e51bf5500c2e470ed294ca0c94b97c",
       "description": "Project Silicium UEFI firmware and Samsung boot packaging for Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "a3618199b60a019d0f1f7ccf39e6109690bae728",
-      "device_changes_pushed": true
+      "adaptation_commit": "ea3fcb8bc3841720a0597d861b09a3e98abeba6a",
+      "device_changes_pushed": false
     },
     {
       "name": "unixnu-armcpu",
@@ -48,8 +48,8 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "1951cc8444b340d7d8879e9418220cf29eb711d7",
       "description": "ArmCpu SMP, GIC and timer adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "36e1e6f62fbbfd634b596c9cb8843a8ebe355782",
-      "device_changes_pushed": true
+      "adaptation_commit": "55cc0617ea9203e85f1cbbf81ae2669f4fa41645",
+      "device_changes_pushed": false
     },
     {
       "name": "unixnu-darwinboot",
@@ -84,8 +84,8 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "8666a9950c9699b368931d18cac92c0fdb2ce9c0",
       "description": "CPU software display, framebuffer copying and presentation for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
-      "adaptation_commit": "ecf382bf084b5df2315dd7f96952a3068def00b3",
-      "device_changes_pushed": true
+      "adaptation_commit": "6509fae5ea0d5c81a038fe6e85cb9d11ecd48df7",
+      "device_changes_pushed": false
     },
     {
       "name": "unixnu-nativeramblock",
@@ -204,8 +204,8 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": null,
       "description": "Qualcomm SM7325 shared SoC configuration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
-      "adaptation_commit": "611c7dbc361beb76cec1e9699a5dabe113a41b34",
-      "device_changes_pushed": true
+      "adaptation_commit": "fc47dfd4dfaa76be458155496b5d92364718f9f1",
+      "device_changes_pushed": false
     },
     {
       "name": "unixnu-adreno6xx",
@@ -216,8 +216,8 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "4e0314df8ad29d52f6fa3f9383a540adcd618b87",
       "description": "A642L GPU backend for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "5dc5f2e0e035fac39f78f9d784ce32b348e73a90",
-      "device_changes_pushed": true
+      "adaptation_commit": "dda9eb85841cbb027b8828adc5bd25191ed2c10c",
+      "device_changes_pushed": false
     }
   ]
 }

@@ -184,6 +184,7 @@ def commands_for(args):
     commands.append("script lldb.debugger.SetAsync(True)")
     commands.append(f"process connect --plugin gdb-remote connect://{DEVICE_IP}:{SERVER_PORT}")
     commands.append("script lldb.debugger.SetAsync(False)")
+    commands.append("process plugin packet send QSetDetachOnError:1")
     if args.pid:
         commands.append(f"process attach --pid {args.pid}")
     elif args.attach:

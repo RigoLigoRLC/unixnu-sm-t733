@@ -2,6 +2,7 @@
 #include "NativeAdrenoABI.h"
 #include "AdrenoPM4.h"
 
+#include <CoreFoundation/CoreFoundation.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -139,6 +140,7 @@ struct Connection {
     using Open = kern_return_t (*)(mach_port_t, mach_port_t, uint32_t, mach_port_t *);
     using Close = kern_return_t (*)(mach_port_t);
     using Release = kern_return_t (*)(mach_port_t);
+    using SetProperty = kern_return_t (*)(mach_port_t, CFStringRef, CFTypeRef);
     using Call = kern_return_t (*)(mach_port_t, uint32_t, const void *, size_t, void *, size_t *);
     using Map = kern_return_t (*)(mach_port_t, uint32_t, mach_port_t, uint64_t *, uint64_t *, uint32_t);
     using Unmap = kern_return_t (*)(mach_port_t, uint32_t, mach_port_t, uint64_t);
@@ -148,6 +150,7 @@ struct Connection {
     Open open_port = nullptr;
     Close close_port = nullptr;
     Release release = nullptr;
+    SetProperty set_property = nullptr;
     Call call_struct = nullptr;
     Map map = nullptr;
     Unmap unmap = nullptr;
@@ -164,6 +167,25 @@ struct Connection {
         }
     }
 
+    mach_port_t wait_service(const char *name, uint32_t seconds)
+    {
+        report(LOG_NOTICE, "waiting service=%s timeout_seconds=%u", name, seconds);
+        for (uint32_t attempt = 0; attempt <= seconds * 2; ++attempt) {
+            mach_port_t service = get_service(MACH_PORT_NULL, matching(name));
+            if (service) {
+                report(LOG_NOTICE, "service=%s found", name);
+                return service;
+            }
+
+            if (attempt < seconds * 2) {
+                usleep(500000);
+            }
+        }
+
+        report(LOG_ERR, "service=%s unavailable after %u seconds", name, seconds);
+        return MACH_PORT_NULL;
+    }
+
     bool open(const Options &options)
     {
         library = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_NOW | RTLD_LOCAL);
@@ -177,26 +199,29 @@ struct Connection {
         open_port = reinterpret_cast<Open>(dlsym(library, "IOServiceOpen"));
         close_port = reinterpret_cast<Close>(dlsym(library, "IOServiceClose"));
         release = reinterpret_cast<Release>(dlsym(library, "IOObjectRelease"));
+        set_property = reinterpret_cast<SetProperty>(dlsym(library, "IORegistryEntrySetCFProperty"));
         call_struct = reinterpret_cast<Call>(dlsym(library, "IOConnectCallStructMethod"));
         map = reinterpret_cast<Map>(dlsym(library, "IOConnectMapMemory64"));
         unmap = reinterpret_cast<Unmap>(dlsym(library, "IOConnectUnmapMemory64"));
-        if (!matching || !get_service || !open_port || !close_port || !release || !call_struct || !map || !unmap) {
+        if (!matching || !get_service || !open_port || !close_port || !release ||
+            !set_property || !call_struct || !map || !unmap) {
             report(LOG_ERR, "IOKit required export unavailable");
             return false;
         }
 
-        mach_port_t service = MACH_PORT_NULL;
-        for (uint32_t attempt = 0; attempt <= options.wait_seconds * 2; ++attempt) {
-            service = get_service(MACH_PORT_NULL, matching(options.service));
-            if (service || attempt == options.wait_seconds * 2) {
-                break;
-            }
-
-            usleep(500000);
+        uint32_t control_wait = options.wait_seconds > 120 ? 120 : options.wait_seconds;
+        mach_port_t control = wait_service("NativeAdrenoControl", control_wait);
+        if (!control) {
+            return false;
         }
 
+        kern_return_t start_result = set_property(control, CFSTR("Start"), kCFBooleanTrue);
+        release(control);
+        report(start_result ? LOG_ERR : LOG_NOTICE,
+            "NativeAdrenoControl Start=true status=0x%08x", start_result);
+
+        mach_port_t service = wait_service(options.service, options.wait_seconds);
         if (!service) {
-            report(LOG_ERR, "service=%s unavailable after %u seconds", options.service, options.wait_seconds);
             return false;
         }
 

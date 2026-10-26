@@ -16,7 +16,7 @@ include = [
   "NativeMobileDisplay", "NativeGeniSpi", "NativeFocaltechTouch",
   "NativeQcomTsens", "NativeQcomSpmi", "NativePmicKeys",
   "NativeGeniI2c", "NativeQcomDsi", "NativeUsbDebug", "NativeUsbNetwork", "device",
-  "Adreno6xx", "EarlyEntry",
+  "Adreno6xx", "AdrenoMetal", "EarlyEntry",
 ]
 
 [device_tree]
@@ -31,6 +31,7 @@ build = "21H461"
 device_class = "j120ap"
 chip_id = 0x8011
 board_id = 12
+security_domain = 1
 fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache"]
 
 [userdata]
@@ -101,6 +102,7 @@ roots = [
   "com.apple.iokit.IOGPUFamily",
   "com.apple.iokit.IOHDCPFamily",
   "com.apple.iokit.IOMobileGraphicsFamily",
+  "com.apple.iokit.IONetworkingFamily",
   "com.apple.iokit.IOReportFamily",
   "com.apple.iokit.IOSlowAdaptiveClockingFamily",
   "com.apple.iokit.IOStorageFamily",
@@ -142,7 +144,10 @@ files = [
   { source = "package/Build/Out/AARCH64-DEBUG/UniXNU.efi", destination = "EFI/UniXNU/UpdatedMenu.efi" },
 ]
 extra_entries = [
+  { id = "xnu-profile-off", title = "Boot without profiling", type = "xnu", kernel_args = ["native-adreno-profile=0"] },
   { id = "updated-menu", title = "Updated menu", type = "efi", path = "UpdatedMenu.efi" },
+  { id = "xnu-dpu-off", title = "Boot CPU copy", type = "xnu", kernel_args = ["t733-dpu-scanout=0"] },
+  { id = "xnu-metal-off", title = "Boot Metal off", type = "xnu", kernel_args = ["native-adreno-metal=0"] },
   { id = "xnu-gpu-off", title = "Boot GPU off", type = "xnu", kernel_args = ["native-adreno-a6xx=0"] },
   { id = "xnu-ufs-poll", title = "Boot UFS polling", type = "xnu", kernel_args = ["native-ufs-queue-depth=1", "native-ufs-poll=1"] },
   { id = "xnu-1-cpus", title = "Boot 1 CPU", type = "xnu", kernel_args = ["cpus=1", "sheng-smp=0"] },
@@ -172,12 +177,14 @@ kernel_args = [
   "offline-key-events=1", "sheng-aks=1", "sheng-vsync=60",
   "t733-fb-writecombine=1",
   "t733-display-bind-big=1",
+  "t733-dpu-scanout=1",
   "t733-touch=1",
   "t733-battery=1",
   "t733-cpu-dvfs=1",
   "t733-display-power=1",
   "t733-managed-rt-normal=1",
   "native-adreno-a6xx=1",
+  "native-adreno-profile=1",
 ]
 
 # The 21H461 AttentionAwareness initializer creates a circular wait during
@@ -190,11 +197,8 @@ kernel_args = [
 # The libsystem_platform zero-fill entry uses its existing paired-store loop
 # for both bzero and memset with a zero value. This avoids DC ZVA faults while
 # clearing software-rendered surfaces and preserves the original tail stores.
-# IconServices ISCompositor reports rendering mode 0, selecting its existing
-# CoreGraphics layer drawing and scaling without CoreImage filter effects.
-# The unavailable OpenGL dispatch otherwise crashes iconservicesagent.
 # CoreImage reports its OpenGL backend unavailable, so context creation follows
-# its existing failure return when Metal is also unavailable on this board.
+# its existing failure return in processes without a Metal device.
 # CoreUI shape-effect flattening returns a retained input CGImage, preserving
 # image ownership when its CI context is unavailable. Text effects use the
 # existing CoreGraphics glyph drawing path instead of CoreImage rendering.
@@ -203,7 +207,6 @@ text_fixups = [
   "dyld_shared_cache_arm64.13,1b05bec,44008052,24008052",
   "dyld_shared_cache_arm64.13,1b05b08,44008052,24008052",
   "dyld_shared_cache_arm64.29,1f55b9c,010400a8,35000014",
-  "dyld_shared_cache_arm64.13,6ac2294,000840f9,000080d2",
   "dyld_shared_cache_arm64.07,2e2cf98,20008052,00008052",
   "dyld_shared_cache_arm64.11,34f8c7c,eb2bb96de923016d,e00302aaf6fcd614",
   "dyld_shared_cache_arm64.11,34f8da4,ff0302d1eb2b016d,e00302aaacfcd614",
@@ -219,7 +222,9 @@ text_fixups = [
 ]
 
 [payload.adt]
+# This chip_id remains the input used for the device's existing IOPlatformUUID.
 chip_id = "733"
+personalization_from_ipsw = true
 cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
 psci_method = "smc"
 owned_memory_size = "auto"
@@ -237,6 +242,9 @@ native-usb-debug-config = "010000000000600a00e0000000886f0a00308e0800208e0800f01
 [adt.defaults.u32]
 sleep-disabled = 1
 "kern.maxvnodes" = 10240
+
+[adt.root.string]
+model-number = "SM-T733"
 
 [adt.product.string]
 model = "SM-T733"

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <IOKit/IOService.h>
+#include <IOKit/IODeviceTreeSupport.h>
 #include <IOKit/IOLib.h>
+#include <libkern/c++/OSData.h>
 #include <libkern/c++/OSSymbol.h>
 #include <mach/kmod.h>
 #include <pexpert/pexpert.h>
@@ -11,6 +13,33 @@ extern "C" IOService *native_keyevents_allocate(void);
 static IOService *keyService;
 static bool attempted;
 static uint32_t calls;
+static uint8_t softwareWrappingKey[32];
+static bool softwareWrappingKeyReady;
+
+static void loadSoftwareWrappingKey(void) {
+    IORegistryEntry *chosen = IORegistryEntry::fromPath("/chosen", gIODTPlane);
+    if (!chosen) {
+        return;
+    }
+
+    OSData *data = OSDynamicCast(OSData, chosen->getProperty("software-keystore-key"));
+    if (data && data->getLength() == sizeof(softwareWrappingKey)) {
+        bcopy(data->getBytesNoCopy(), softwareWrappingKey, sizeof(softwareWrappingKey));
+        softwareWrappingKeyReady = true;
+    }
+
+    chosen->removeProperty("software-keystore-key");
+    chosen->release();
+}
+
+extern "C" bool native_aks_copy_software_key(uint8_t *out, size_t capacity) {
+    if (!softwareWrappingKeyReady || !out || capacity < sizeof(softwareWrappingKey)) {
+        return false;
+    }
+
+    bcopy(softwareWrappingKey, out, sizeof(softwareWrappingKey));
+    return true;
+}
 
 extern "C" bool native_aks_state_enabled(void) {
     unsigned enabled = 0;
@@ -42,6 +71,7 @@ extern "C" void t733_keystore_start(void) {
         return;
     }
     attempted = true;
+    loadSoftwareWrappingKey();
 
     const OSSymbol *name = OSSymbol::withCString("AppleKeyStore");
     bool exists = name && OSMetaClass::getMetaClassWithName(name);
@@ -74,5 +104,6 @@ extern "C" void t733_keystore_start(void) {
         return;
     }
     keyService = service;
-    IOLog("T733 key state: notification service ready, no keybag or passcode\n");
+    IOLog("T733 key state: service ready, software wrapping key=%u\n",
+          softwareWrappingKeyReady ? 1U : 0U);
 }

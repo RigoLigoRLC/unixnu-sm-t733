@@ -54,12 +54,24 @@ their original build identities.
   scripts/build.py supplies the platform board through
   an ignored device directory and the official -D option.
   The resolved output is out/DEVICE/OS_PROFILE/CONFIG, read from status --json.
-  Public boards supply hexadecimal chip_id 733; local.toml keeps unique_chip_id
-  private and build.py passes it through UNIXNU_UNIQUE_CHIP_ID.
+  Public boards retain hexadecimal payload chip_id 733 for platform UUID input.
+  With personalization_from_ipsw enabled, chosen chip-id, board-id and
+  security-domain come from the selected OS identity. The original chip value
+  is carried in unixnu,platform-uuid-chip-id and consumed only by UUID generation.
+  local.toml keeps unique_chip_id private; build.py passes it through
+  UNIXNU_UNIQUE_CHIP_ID. Preserve this identity and the software keystore key.
 - Build and packaging have one owner: scripts/build.sh TAG. Driver development
   may run in parallel; dependent compilation and packaging remain in that command.
   Use official build kernel, build package and build payload. Prelinking belongs
   to build kernel; do not duplicate FAT assembly in a device staging script.
+- Every build requires committed source. Commit each changed module, including
+  new files, then commit its parent gitlink and component revision together.
+  Pin the core and SoC commits before building from clean working trees. Record
+  all selected commits and the build command with an immutable build tag.
+  Private inputs and keys remain ignored. Never assign today's commits to an
+  older binary whose uncommitted source was not preserved.
+- Use the existing unixnu-sm-t733 adaptation branch. Do not create checkpoint
+  branches for individual builds; ordinary commits and build tags record them.
 - Never calculate file hashes for confirmation. Keep UNIXNU_RECORD_HASHES=0.
   Do not add or run tests unless the user requests them.
 - Preserve the fixed Data seed, UUID and package/data-layout.toml during ordinary

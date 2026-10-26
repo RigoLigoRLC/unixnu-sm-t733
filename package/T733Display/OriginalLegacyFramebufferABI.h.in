@@ -35,6 +35,35 @@ public:
         return request;
     }
 
+    OSObject *layerZeroFence(const OriginalLegacySwapRequest *request) const {
+        OSObject *fence = nullptr;
+        memcpy(&fence, reinterpret_cast<const unsigned char *>(request) + 0xa20, sizeof(fence));
+        return fence;
+    }
+
+    bool layerZeroFenceActive(const OriginalLegacySwapRequest *request) const {
+        OSObject *fence = layerZeroFence(request);
+        if (!fence) {
+            return true;
+        }
+
+        const auto bytes = reinterpret_cast<const unsigned char *>(fence);
+        uint8_t active = 0;
+        uint32_t completed = 0;
+        memcpy(&active, bytes + 0x53, sizeof(active));
+        memcpy(&completed, bytes + 0x4c, sizeof(completed));
+
+        return active != 0 && completed == 0;
+    }
+
+    // The DPU takes the request's existing IOSurfaceFence reference after the
+    // read fence becomes active. Its completion follows the scanout switch.
+    void transferLayerZeroFence(const OriginalLegacySwapRequest *request) {
+        OSObject *empty = nullptr;
+        auto bytes = const_cast<unsigned char *>(reinterpret_cast<const unsigned char *>(request));
+        memcpy(bytes + 0xa20, &empty, sizeof(empty));
+    }
+
     // The pending queue transfers its head reference to the current-swap slot.
     // completeCurrentSwap then releases that reference and wakes its waiters.
     bool activateOnlyPendingSwap(const OriginalLegacySwapRequest *request) {

@@ -25,6 +25,7 @@ build = "21H461"
 device_class = "j120ap"
 chip_id = 0x8011
 board_id = 12
+security_domain = 1
 fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache"]
 
 # The device's primary and backup GPT place USERDATA on UFS LUN 0 at these LBAs.
@@ -105,7 +106,9 @@ text_fixups = []
 kernel_args = ["-v", "serial=3", "debug=0x14e", "cpus=1", "armcpu-diagnostics=1", "kt_fixed_zones=120", "native-ufs-discover=1", "native-ufs-diagnostics=1"]
 
 [payload.adt]
+# This chip_id remains the input used for the device's existing IOPlatformUUID.
 chip_id = "733"
+personalization_from_ipsw = true
 cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
 psci_method = "smc"
 owned_memory_size = "auto"
@@ -122,6 +125,7 @@ sleep-disabled = 1
 
 [adt.root.string]
 model = "SM-T733"
+model-number = "SM-T733"
 
 [adt.product.string]
 product-name = "Samsung Galaxy Tab S7 FE Wi-Fi"

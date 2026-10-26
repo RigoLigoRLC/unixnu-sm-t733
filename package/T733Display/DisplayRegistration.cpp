@@ -13,6 +13,7 @@ extern "C" kmod_info_t g_kernel_kmod_info;
 extern "C" void displayStaticInit(void) __asm__("__GLOBAL__sub_I_NativeLegacyDisplay.cpp");
 extern "C" IOService *native_legacy_display_allocate(void);
 extern "C" void t733_keystore_start(void);
+extern "C" IOReturn t733_dpu_capture_start(void);
 extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
 
 static IOService *pendingDisplay;
@@ -128,6 +129,7 @@ extern "C" void native_legacy_display_late_probe(void) {
         activeProvider = provider;
         OSSafeReleaseNULL(treeParent);
         IOLog("T733 display: CPU framebuffer service ready 1600x2560 stride=%lu\n", video.v_rowBytes);
+        t733_dpu_capture_start();
         return;
     }
 

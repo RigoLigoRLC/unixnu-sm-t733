@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""The Metal build prepares the pinned translator and the local Rust toolchain.
+
+The core plugin builder owns the Metal frontend, translated shader runtime and
+signed bundle. This entry selects the A642L ABI and display integration options.
+The device addon packager installs the resulting bundle and trust entries.
+"""
+
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+from build_inputs import prepare_cache, prepare_metal_libraries
+
+
+def run(command, environment, directory):
+    subprocess.run([str(value) for value in command], env=environment,
+                   cwd=directory, check=True)
+
+
+def ios_toolchain_installed(rustup, environment, directory):
+    result = subprocess.run([rustup, "toolchain", "list"], env=environment,
+                            cwd=directory, check=True, capture_output=True, text=True)
+    for line in result.stdout.splitlines():
+        name = line.split()[0]
+        if not name.startswith("1.98.0-"):
+            continue
+
+        toolchain = Path(environment["RUSTUP_HOME"]) / "toolchains" / name
+        libraries = toolchain / "lib/rustlib/aarch64-apple-ios/lib"
+        if ((toolchain / "bin/rustc").is_file()
+                and (toolchain / "bin/cargo").is_file()
+                and any(libraries.glob("libstd-*.rlib"))):
+            return True
+
+    return False
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--core", type=Path, required=True)
+    parser.add_argument("--reference-core", type=Path)
+    parser.add_argument("--abi-directory", type=Path, required=True)
+    parser.add_argument("--system-root", type=Path, required=True)
+    args = parser.parse_args()
+    core = args.core.resolve()
+    reference = args.reference_core.resolve() if args.reference_core else None
+    prepare_cache(core, reference)
+    prepare_metal_libraries(core, args.system_root.resolve())
+    cache = core / ".cache"
+    source = cache / "gpu-reference/metal2vulkan"
+    pin = json.loads((core / "scripts/data/gpu-metal-vulkan-inputs.json").read_text())["translator"]
+    environment = dict(os.environ, UNIXNU_RECORD_HASHES="0",
+                       RUSTUP_HOME=str(cache / "metal-rustup"),
+                       CARGO_HOME=str(cache / "metal-cargo"))
+    rustup = shutil.which("rustup")
+    if not rustup:
+        raise SystemExit("rustup is required to install the pinned iOS Rust toolchain")
+
+    environment["PATH"] = os.pathsep.join([
+        str(Path(rustup).parent), str(cache / "mesa-tools/bin"),
+        environment.get("PATH", ""),
+    ])
+    if not (source / ".git").exists():
+        source.parent.mkdir(parents=True, exist_ok=True)
+        run(["git", "init", source], environment, core)
+        run(["git", "-C", source, "remote", "add", "origin", pin["repository"]], environment, core)
+        run(["git", "-C", source, "fetch", "--depth=1", "origin", pin["commit"]], environment, core)
+        run(["git", "-C", source, "checkout", "--detach", pin["commit"]], environment, core)
+
+    run([rustup, "set", "auto-self-update", "disable"], environment, core)
+    if not ios_toolchain_installed(rustup, environment, core):
+        run([rustup, "toolchain", "install", "1.98.0", "--profile", "minimal",
+             "--target", "aarch64-apple-ios", "--no-self-update"], environment, core)
+    run([sys.executable, core / "scripts/build-adreno-metal-plugin.py",
+         "--gpu-abi-dir", args.abi_directory.resolve(),
+         "--scanout-copy", "off", "--quartzcore-display-state", "off",
+         "--turnip-replay", "off", "--turnip-debug", "", "--turnip-smoke-debug", "",
+         "--shader-compiler", cache / "mesa-tools/bin/glslangValidator",
+         "--skip-shader-validation"], environment, core)
+
+
+if __name__ == "__main__":
+    main()

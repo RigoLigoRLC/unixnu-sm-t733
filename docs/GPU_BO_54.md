@@ -1,8 +1,8 @@
 # 54：BO 管理和 GPU map 开销
 
 2026-10-27，`system-gpu-bo-54` 已完成九阶段构建和完整 512 MiB FAT 刷入、
-sync；Data、身份、配对、密钥、HUD、触点和现有固件保留。启动及实际耗时
-等待设备重启后采集。
+sync；Data、身份、配对、密钥、HUD、触点和现有固件保留。用户已启动并
+确认明显流畅，首次打开界面和重复手势仍有小卡顿。
 
 ## 源码修改
 
@@ -30,11 +30,32 @@ i915/Xe/ANV、Nouveau/NVK、Panfrost/PanVK、V3D/VC4、Asahi/AGX 和 KGSL。
 CPU 用户映射和 WC 属性切换分别在其他入口。旧实现每次 map 多次遍历
 约11万条驻留 span，插入时搬移数组，每64次还额外读取整张页表。
 这解释了已有对象增多时管理工作随之增长。旧日志没有输出内部阶段计时，
-各部分的实测占比由54新增的 USB 累计数据确定。
+54新增的 USB 累计数据已确认 map 平均降至56.4 us。
 
 `gpu` 查询输出 `vm_map`、`vm_unmap`、`pte_map`、`pte_unmap`、
 `memory_stage`、`backing_cache` 和 `map_pages one`。计数保存在有界内存中，
 查询时复制后打印。本轮未新增或运行测试，已完成正式系统构建。
+
+## 实机性能结果
+
+2026-10-27，首次 `gpu` 查询记录13,294次 BO map，总耗时749,603 us；
+444次单页 map 平均58.4 us，最大934 us。3,283次提交全部完成，GPU
+faults=0、poisoned_jobs=0，BO allocate/map/free没有失败。
+
+最近256次提交的准备时间平均7.26 ms，其中 WC 属性检查平均3.06 ms、
+内存发布平均4.06 ms，两者占98.17%。当前提交遍历所有驻留 WC 页，
+并对所有导入 BO 做整范围缓存维护；提交 ABI 只携带命令缓冲，需补充
+实际使用的纹理、渲染目标等资源及访问范围才能缩减这些操作。
+
+分配阶段单次最大42.105 ms，descriptor释放单次最大25.586 ms。
+内核 backing 缓存命中率11.3%，淘汰9,873次，容量峰值只有3.14 MiB；
+64对象上限限制了小对象复用。首次 pipeline 创建最大3.155秒。
+这些结果解释了明显改善后仍有持续提交成本和偶发长尾。
+
+工作区证据为 `logs/gpu-bo-54-runtime/first-query.raw` 和
+`first-query-summary.json`，完整分析见
+[54实测](../../../notes/GPU_BO_MAP_COST_AUDIT_2026-10-27.md#54-runtime-and-remaining-stutters)。
+本次为软件路径计时，未采集 GPU 硬件计数。剩余卡顿的源码优化与部署尚未完成。
 
 ## 固定版本和产物
 

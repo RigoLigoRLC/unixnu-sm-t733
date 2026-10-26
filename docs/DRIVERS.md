@@ -1,6 +1,6 @@
 # SM-T733 驱动状态与后续清单
 
-更新日期：2026-10-25。最新部署为 `system-adreno6xx-51o`，普通GPU缓冲分配修正待实机结果，
+更新日期：2026-10-27。最新部署为 `system-gpu-bo-54`，已启动并实测 BO map 改善，
 配套 UEFI 为 `memory-input-display-46`。本页按实际可用功能记录完成状态；
 后续项目完成后使用 `- [x] ~~项目~~`，补充日期及对应源码。
 
@@ -13,7 +13,7 @@
 | 物理按键 | SPMI v5/PDC 中断与三键 HID，已记录完整 DOWN/UP | [SPMI](../drivers/NativeQcomSpmi/NativeQcomSpmi.cpp)、[按键](../drivers/NativePmicKeys/NativePmicKeys.cpp)、[板级配置](../package/T733PmicKeys.cpp) |
 | CPU 调频与异构调度 | 45e 已实测 E0/P1/prime P2 八核上线、perfcontrol 通知和 27 路有效温度，45f 保留并修复 UFS 入队超时 | [调频 worker](../package/T733CpuPower.cpp)、[调度回调](../package/T733CpuPowerStartup.c)、[温度限制](../package/T733Thermal.cpp) |
 | 系统存储 | 原生 UFS 读取系统卷，96 GiB Data 可写并跨重启恢复，已有 FUA 和 flush | [NativeUfs](../drivers/NativeUfs/NativeUfs.cpp)、[Data 持久化](../drivers/NativeRamBlock/PersistOverlay.h)、[固定布局](../package/data-layout.toml) |
-| 桌面与显示 | 系统Metal合成与DPU持续直接扫描；51l2用户确认无闪烁但仍卡顿，51n2优化提交等待、缓存退休和执行线程 | [NativeLegacyDisplay](../drivers/NativeMobileDisplay/NativeLegacyDisplay.cpp)、[DPU扫描](../drivers/NativeMobileDisplay/NativeDpuSurface.cpp)、[显示注册](../package/T733Display/DisplayRegistration.cpp) |
+| 桌面与显示 | 系统Metal合成与DPU持续直接扫描；54用户确认明显流畅，首次打开界面和重复手势仍有小卡顿，map平均56.4 us | [NativeLegacyDisplay](../drivers/NativeMobileDisplay/NativeLegacyDisplay.cpp)、[DPU扫描](../drivers/NativeMobileDisplay/NativeDpuSurface.cpp)、[54实测](GPU_BO_54.md) |
 | GPU 命令与离屏渲染 | 50c内核和用户态CP回读成功、faults=0；Turnip填充1024字、计算1024字、三角形512像素，VkResult=0、退出0 | [Adreno6xx](../drivers/Adreno6xx/README.md)、[硬件启动](../drivers/Adreno6xx/NativeAdrenoService.cpp)、[GPU实施证据](../../../notes/GPU_IMPLEMENTATION.md) |
 | 触屏 | FT8203 固件上传、真实触点和 HID 已接通，可操作设置及桌面 | [触屏 worker](../package/T733Touch.cpp)、[HID](../package/T733TouchHid.cpp)、[FT8203](../drivers/NativeFocaltechTouch/Fts8203.c)、[GENI SPI](../drivers/NativeGeniSpi/GeniSpi.c) |
 | 电池 | SM5714 电量、电压、电流及充满状态；充电插拔图标立即更新 | [电池服务](../package/T733Battery.cpp)、[电量计](../package/T733FuelGauge.cpp) |
@@ -139,6 +139,8 @@ UFS 与 USB 可以分别开发，合并后统一构建。USB host 与 CDC 使用
 - [x] ~~Turnip Vulkan离屏填充、计算着色器和三角形渲染。~~ 2026-10-25，50c记录fill_words=1024、compute_words=1024、triangle_pixels=512、other_pixels=0，stage=0、VkResult=0、compute_stage=0、render_stage=0、进程退出0；DeviceInfo flags=1、UBWC=3、swizzle=6、macrotile=0，见[GPU实施证据](../../../notes/GPU_IMPLEMENTATION.md)。
 - [x] ~~接NativeMetal与系统Metal合成。~~ 2026-10-25，51e实际提交，51j采样1509批全部完成；Adreno6xx/NativeAdrenoAccelerator.cpp、公共AdrenoMetal插件。
 - [x] ~~接DPU直接扫描IOSurface，完成fence、双缓冲和vblank切换。~~ 2026-10-25，51j持续flip1200，用户确认无闪烁；NativeMobileDisplay/NativeDpuSurface.cpp、NativeLegacyDisplay.cpp。
+- [x] ~~重构 BO 地址与物理范围管理、增量更新页表并复用完成的 BO。~~ 2026-10-27，54实测13,294次map平均56.4 us，单页58.4 us，用户确认明显流畅；[实现和数据](GPU_BO_54.md)。
+- [ ] 缩减每次提交的全体 WC 页检查和导入 BO 缓存维护，改善小 BO 复用、集中回收及首次 pipeline 创建。54最近256次提交准备平均7.26 ms，缓存相关两段占98.17%。
 - [ ] 改善Metal提交和显示等待开销，记录稳定帧率及正常关机结果。
 - [ ] 摄像头和其他外设按实际使用需求分别实施。
 

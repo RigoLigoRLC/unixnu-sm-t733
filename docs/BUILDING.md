@@ -22,7 +22,7 @@ cp local.toml.example local.toml
 
 `feeds.toml` 固定公开的 [unixnu-sm7325-common](https://github.com/RigoLigoRLC/unixnu-sm7325-common) 提交，公共驱动及 Apple OSS 由对应 core feed 提供。设备有 13 个 driver 子模块和 1 个 kit 子模块；`components.toml` 保留社区 fork 身份及本机 recipe。克隆和更新设备仓库后都执行递归子模块初始化，gitlink 与组件 revision 一起更新。
 
-当前源码已撤回 51s 之后的 GPU、Metal、Turnip 和显示修改，身份、配对、软件加密、HUD 与触点设置保留。恢复范围见 [GPU 回滚记录](GPU_51S_RESTORE.md)。每包使用提交后的源码和固定引用，原始 51s FAT 仍作为独立的已测产物保留。
+54 在 51s 恢复基线上加入 BO 管理重构，身份、配对、软件加密、HUD 与触点设置保留，具体版本及范围见 [54 实施](GPU_BO_54.md)。此前恢复范围见 [GPU 回滚记录](GPU_51S_RESTORE.md)。每包使用提交后的源码和固定引用，原始 51s FAT 仍作为独立的已测产物保留。
 
 公开 `board.toml` 与 `board.platform.toml` 的 `[payload.adt] chip_id = "733"` 是十六进制软件身份输入。每台设备的 `hardware.unique_chip_id` 填在忽略的 `local.toml`：
 

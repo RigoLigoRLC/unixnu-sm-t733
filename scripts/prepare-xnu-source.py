@@ -35,17 +35,24 @@ def restore(entry, destination=DESTINATION, tag=TAG):
     target = destination / name
     if target.exists():
         return None
-    try:
-        data = fetch(entry['download_url'])
-    except urllib.error.URLError:
-        content = json.loads(fetch(entry['url']))
-        data = base64.b64decode(content['content'])
+    cached = CACHE.parent / 'headers' / tag / destination.relative_to('.cache/xnu-work') / name
+    if cached.is_file():
+        data = cached.read_bytes()
+    else:
+        try:
+            data = fetch(entry['download_url'])
+        except urllib.error.URLError:
+            content = json.loads(fetch(entry['url']))
+            data = base64.b64decode(content['content'])
     if RECORD_HASHES:
         digest = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
         if digest != entry['sha']:
             raise ValueError(f'Git blob hash mismatch: {entry["name"]}')
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
+    if not cached.exists():
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        cached.write_bytes(data)
     record = {'name': name, 'source_tag': tag, 'bytes': len(data)}
     if RECORD_HASHES:
         record.update(git_blob=digest, sha256=hashlib.sha256(data).hexdigest())

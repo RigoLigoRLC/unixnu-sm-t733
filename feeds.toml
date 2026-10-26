@@ -4,4 +4,4 @@
 name = "sm7325"
 kind = "soc"
 git = "https://github.com/RigoLigoRLC/unixnu-sm7325-common.git"
-commit = "c85ddc83eb5be8ee3bdd8249aa72ed45b012e526"
+commit = "4de7850e0751e27717ff52e5dd737c18a8cc57d6"

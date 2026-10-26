@@ -216,7 +216,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "4e0314df8ad29d52f6fa3f9383a540adcd618b87",
       "description": "A642L GPU backend for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "d249fecaec7cb8b646d6951590ef806a5df7e19e",
+      "adaptation_commit": "284b4ad9ce779ce99d43070a92073a2f30cc1ef7",
       "device_changes_pushed": false
     }
   ]

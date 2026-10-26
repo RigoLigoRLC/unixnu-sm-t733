@@ -1,6 +1,6 @@
 # BO 复用、分配与回收设计
 
-日期：2026-10-27。目标设备：SM-T733，Adreno 642L。本文给出 54 之后的选定方案及实施条件。当前轮先增加缓存原因统计与慢操作上下文，继续采样；本文中的缓存、异步回收和 ABI 改动尚未实施。
+日期：2026-10-27。目标设备：SM-T733，Adreno 642L。第 1-12 节保存 54/55 的研究、证据和完整目标；第 13 节记录 55b 后实际完成的源码范围、对象存活条件和剩余边界。GPU56 的构建、部署和实机结果由交付记录维护。
 
 ## 1. 已知问题与选定方案
 
@@ -150,7 +150,7 @@ close 先禁止新申请/提交，等待已发布 job 的对象 fence，删除�
 
 本轮 kernel 诊断源码已加入 `NativeAdrenoMemory.h/.cpp`：18 个尺寸区间、4 类 lookup miss、13 类 insertion reject、5 类 eviction 的次数/失败/bytes，以及 64 条至少 8 ms 的慢事件。慢事件记录进程名、序号、采样时刻和 storage 属性；查询通过 `NativeAdrenoMemory::copyDiagnostics` 在 resource gate 内拷贝后输出。`trimBackingCache` 的 pressure/retry 调用已传入明确原因，close 保留默认原因。构建、部署及实机结果由协调记录，本文件不把源码完成视作设备结果。
 
-当前轮只补两层缓存原因与慢事件，明确 close/capacity/fence/尺寸分布后，再按上述判据选择第一组修改。V2 resource refs、CPU map 所有权、每 BO fence 与异步释放必须共同维护同一对象存活条件；不能只实现新的 cache admission。
+55 诊断轮补两层缓存原因与慢事件，明确 close/capacity/fence/尺寸分布。55b 后的第一组修改见第 13 节；完整 V2 resource refs 和每 BO 最后 fence 仍按第 4-10 节设计接续。
 
 后续保留以下固定计数即可观察效果：
 
@@ -234,3 +234,56 @@ Vulkan Memory Allocator v3.3.0 提供直接参照：`VmaBlockVector::Allocate` �
 在现有慢记录之外，runtime 只需固定计数加一个短环记录 block 变化：`pool_kind/type_index`、单调 block ID、`reason`（普通 placement、keep_room、dedicated）、requested size/alignment、block capacity、增长开始/完成时刻、当时 longest free/total free、live/empty/growing blocks、是否成功发布、从未被 placement 使用即释放、释放原因。计数单列 keep_room 已有增长者、建好后已有空间、place 建好时已有可用空间，以及空块释放后再次增长。
 
 这些记录不需要按每个 resource 输出，也不需要继续拆分 XNU allocation。它们把已确认的 40-46 ms 冷分配和 19-26 ms 物理释放，关联到具体的 runtime 操作；实现与记录在后续统一源码变更中完成。本补充只完成源码研究和设计，没有修改运行时代码、执行测试或提交。
+
+## 13. 55b 长尾调用链与 GPU56 已完成的源码
+
+### 13.1 后续交互提供的直接证据
+
+原始数据为 `logs/t733-usb-live/t733-20261026T184400.809479Z.raw`，整理结果为 `logs/gpu-bo-55b-runtime/after-user-interaction.json` 和 `late-user-interaction.json`。后一次查询 q187、t=412.656 秒累计 requests 31,525、hits 5,777、misses 25,748；相对 q67、t=168.829 秒的 requests 8,161、hits 2,129，新增申请命中率约 15.61%。object-limit eviction 从 4,937 增至 24,698，size miss 从 4,570 增至 19,731，flags miss 从 511 增至 1,720。小对象缓存持续受对象数及 exact-size 限制。
+
+后一次慢环中，q283 的 16 KiB `cmd cs` retire 为 224.489 ms，q284 的 256 KiB `cmd cs` retire 为 239.143 ms；q262 的 4 KiB `host import` 为 retire 202.400 ms。实际 release 的直接配对证据包括 q233 的 8 KiB release 100.791 ms 和 q234 的外层 retire 100.805 ms。更早的 8 KiB `draw sub cs` release 143.077 ms 对应外层 retire 143.088 ms；这对记录的 native handle 不同，说明归还一个对象触发了另一个缓存对象的同步淘汰。
+
+同一轮新分配最大 67.953 ms、import 最大 74.224 ms。记录到的全局 `g.lock` wait 为 alloc 43 us、map 55 us、free 5 us、submit 91 us，无法解释上述百毫秒调用整体。最近 kernel 环 seq 2789-3044 的提交 CPU 平均 6.294 ms，98.51% 属于 cache 检查与 publish；它与 BO 回收分别处理。
+
+### 13.2 旧释放路径为何阻塞完成回调
+
+55b 的 `tu_knl_darwin.cc` 中，`darwin_take_cached`、`darwin_bo_finish` 和 fence 完成后的 collection 都持有 `retire->lock` 调用 `darwin_reap_locked`。后者扫过所有已完成退休对象，64 项缓存满时同步调用 `darwin_evict_oldest_locked`，继续执行 CPU unmap、lease 释放和 BoFree。外层 retire 因而包含其触发的缓存淘汰，以及等待其他线程完成同一把锁下的淘汰。
+
+legacy CPU unmap 使用 `IOConnectUnmapMemory64`。所选 XNU 工作树 `iokit/Kernel/IOUserClient.cpp:4808` 的 `is_io_connect_unmap_memory_from_task` 在 `:4828` 取得 IPC 写锁，再查 descriptor、找实际 map、移除映射并释放映射对象，`:4866` 才退出。普通 external method 在 `:6467` 根据配置取得读锁或写锁。本机 `NativeAdrenoPublish.cpp:1368-1369` 将 DefaultLocking 和 SingleThreadExternalMethod 都设为 true，因此普通调用也取得 IPC 写锁。该锁位于驱动的 `g.lock` 计时之前。保存源码对应本机选定 XNU 输入，公开代码入口为 [Apple IOUserClient](https://github.com/apple-oss-distributions/xnu/blob/main/iokit/Kernel/IOUserClient.cpp)；这些本机行号不能当作上游 main 的固定行号。
+
+`NativeAdrenoUserClient.cpp:351` 的 `freeBo` 先拒绝仍有 CPU lease 的对象，再调用 submit retirement，解除 GPU mapping，最后在 `:373` 调用 `memory.release(true)`。`NativeAdrenoMemory.cpp:807` 的 release 可能进入 backing cache，也可能执行真正 complete、descriptor release 和 VM teardown。整个 release 计时还包括 IOUserClient 进入前的调度与锁等待，现有数据没有把其中每个等待分别归因。V2 CPU map 的显式所有权不会自动改变 IOUserClient 的默认串行设置。
+
+Metal runtime 的 `command_buffer/mod.rs:2622` `complete` 在调用 completed handlers 前清理 uploads/heaps/submitted holds，并在 `:2728` 把 command pool 归还 spares。`spares.rs:150` `give_command_pool` 对超过 64 个 command buffer 的 pool，或每 family 已保留 8 个 pool 的情况，在 `:177` 同步销毁取出的 pool。该销毁在 spares mutex 外，仍发生于当前完成处理线程。Mesa `tu_cmd_buffer.cc:4175` `tu_cmd_buffer_destroy` 连续释放七类 command stream，进入 `tu_cs_finish` 和 BO finish。这是 callback 前实际执行大量 BO free 的完整调用链。runtime 基准为 [720ef1ce 的 complete](https://github.com/steelbrain/metal2vulkan/blob/720ef1ce9ae2a2068999a8675717418b9416283e/crates/metal2vulkan-runtime/src/command_buffer/mod.rs)，本机 spares 另叠加设备补丁。
+
+`NativeBridgeMetalFrontend.mm:943` 在 commit 开始记录时间，`:989-994` 在 runtime completed callback 入口计算并保存 `callbackUs`，`:1735-1740` 输出 ctc。raw 中 K1139 为 779,563 us，K1138 为 862,683 us。因此 ctc 包含提交、GPU 执行、完成处理等待，以及该回调之前的资源回收；它是 commit 到 callback 的墙钟时间。上述调用顺序证明同步回收能够延迟 ctc，现有记录尚未把某个 779 ms 样本与特定 BO release 用共同 command-buffer ID 串联。
+
+### 13.3 已实施的完整 BO 缓存与回收所有权
+
+本轮改动位于实际 Mesa 输入 `sources/UniXNU/.cache/mesa-work`，由父任务保存为正式补丁。以下入口行号来自源码定稿时：`tu_knl_darwin.cc:627` `darwin_cache_capacity`，`:915` `darwin_take_cached`，`:746` `darwin_retire_worker`，`:1493` `darwin_bo_finish`。
+
+1. 私有 BO 按 Freedreno 的 1/2/3 页以及每二次幂四档容量分配，上限 64 MiB。原请求尺寸继续进入诊断，实际分配、GPU mapping、`tu_bo.size` 和归还容量均使用完整 capacity。每个尺寸类下有 16 个属性索引，候选仍完整比较 flags、memory properties 和 alignment。命中保留 native handle、IOVA、CPU VA、token 或 map_id。导入、共享、固定地址、地址重放和 implicit-sync 对象保持各自准入规则。
+2. 完整缓存的字节预算为每 device 128 MiB，采用按归还顺序维护的空闲链决定字节压力下淘汰。缓存没有独立的 64 对象阈值。`darwin_bo_node` 在首次创建 native handle 之前预留，所有 active、pending、cached、reclaiming、released 和 quarantined 对象共用最多 4096 个槽，依据 `NativeAdrenoUserClient.h:18` 的实际 per-client handle 上限。这里的 4096 限制全部 native allocation 的 metadata，不是一份扩大的退休数组；free 只转移已取得的节点，不能因另分配 metadata 失败而丢失对象。
+3. allocation 和 bo_finish 不执行退休全扫描或实际缓存销毁。bo_finish 将完整 storage 写入既有节点，清除调用者的 sparse-array BO，排入 pending 并唤醒 worker。缓存命中只从对应 bucket 摘取对象。worker 独占取出的节点，释放 metadata mutex 后查询 fence 或执行 CPU unmap/lease release/BoFree，回锁发布结果。
+4. worker 每处理 32 个节点、4 MiB 或 1 ms 就让出 CPU，然后继续处理已有工作；空队列使用条件变量等待。GPU 未完成时使用最长 1 ms 的 fence 等待并重查退出状态。单次 IOKit 操作不可从用户态拆开，可能超过调度预算，其对象在调用返回前一直计费。没有用 sleep 控制回收速度。
+5. BoFree 成功后，节点先进入 released 链，实际 native handle 已销毁。下一次冷分配在短锁内归还这些节点的 IOVA 和 Mesa ID，再允许 ID 重用。worker 不访问 device VMA heap，兼容 CreateDevice 失败路径先销毁 VMA 的现有次序。busy 对象保留节点及剩余 map/VA 信息，等新的工作 generation 再尝试；失败对象进入 quarantine 并将 device 标记 lost，资源继续由该 connection 持有直到关闭。
+6. 已完成、等待真正销毁的 bytes 达 64 MiB 后，新的冷分配等待其降到 32 MiB；缓存命中和 free 继续运行。等待上限为 5 秒，超时返回分配失败并保留所有 queued storage。VA、native allocation 或 metadata 不足时，将可回收缓存交给 worker，等待实际进展后重试一次。正在排队或销毁的对象没有获得新的、不计费的副本；4096 handle 槽、各连接实际 VA window、缓存 bytes 和冷分配准入共同限制资源增长。
+
+这组改动同时减少分配/映射/销毁总次数，并解除 completion caller 与实际销毁的串行依赖。新增 profile kind 4 保存 node_objects、node_limit、metadata_bytes、cache_budget_bytes、reclaim_bytes 及高低水位；保留 55 的原有计数和慢记录布局。原 object eviction 字段在新版本表示全部 native metadata 槽耗尽时的回收，不再表示 64 项 FIFO 满。
+
+### 13.4 每 device 的连接、VA 和退出顺序
+
+`darwin_connection` 由每个 `darwin_retire_state` 独占，保存 Mach connection、能力、selector、inflight/last fence 和 fence mutex。`dw_call` 接收显式 device 或 connection。枚举打开并关闭独立临时连接；每个 VkDevice 的 init 再打开自己的持久连接并取得实际 `GetDeviceInfo.va_start/va_size`。`tu_device.h` 保存 device VA，`tu_device.cc` 在 backend init 后用它初始化 VMA，RMV 同样记录这个实际窗口。
+
+这项所有权来自现有内核接口：`NativeAdrenoPublish.cpp:648-652` 允许第二个 render-server connection 使用下一个空 slot；`:662` 为其设置独立 queue base 与 `kClientWindows[slot]`。内核当前共有四个连接 slot，其资源耗尽仍按原接口返回错误。用户态没有增加单活 VkDevice 限制，也没有用枚举时的窗口为后来的另一条连接分配地址。
+
+正常或初始化失败清理先通知并 join worker，再通知并 join reporter，最后关闭该 device 的 connection，然后销毁 metadata 和锁。已取出执行一次不可中断 IOKit 调用的 worker 返回后才可完成 join。quarantine、busy 和尚未退休的 native handle 保留到 connection close，由 kernel close 的 GPU/CPU 引用处理负责结束所有权。其他 VkDevice 的连接和地址分配器不受影响。
+
+### 13.5 成熟机制、当前边界与下一项判据
+
+直接采用的成熟机制是第 3 节固定 Mesa 版本的 Freedreno 容量分档、属性兼容和完整 BO 复用，以及 TTM `ttm_bo_release`/`ttm_bo_delayed_delete` 的“最后应用引用转给延迟销毁对象，完成条件满足才实际释放”。固定 native handle 对应的节点、Darwin map_id、分配线程归还 VA、worker 条件变量与准入预算是本项目的适配。runtime 同池增长协调由父任务独立实施，依据第 12 节的重复增长因果；本文件不重复其补丁内容。
+
+本轮仍使用所属 connection 的保守 last fence，完整每 BO read/write resource fence 与 reset epoch 留在 submit/coherency 设计中。kernel backing 的 64 对象算法及全局 g.lock 下慢分配没有在本文件的改造中替换。128 MiB 是当前每 device 的完整 BO cache 上限，不能把它描述成 runtime、Turnip 和 kernel 已共同实现的全局 idle budget；统一 pressure 通知与跨层预算仍按第 6 节接入。
+
+command pool 的现有 8/64 保留规则暂时保留。其析构调用 BO finish 后将只转移 metadata，已实测的同步 native BO 销毁从这一调用链移出。如果正常采样仍显示 pool 自身 CPU 结构析构显著，应让 device 持有的回收任务接管已完成 VkCommandPool，并在 vkDestroyDevice 前 drain/join；资源 retained/deallocator 和 completed handler 的既有顺序需要保留，不能把应用回调任意移到 worker。
+
+本轮验收使用正常交互下的固定计数：按原申请档比较 hit/miss，观察 object-limit eviction、真实释放次数与慢环；同时保存新增预算，观察 pending/reclaim 是否在交互结束后下降，以及 pressure_waits 是否集中在真实容量不足。ctc 与单 BO release 的直接关联需要共同 command-buffer 或 pool ID 的有界事件，不能只按相近时间认定。此次源码与文档没有增加或执行测试、hash 确认、额外实验；构建、设备结果及后续收益由协调任务记录。

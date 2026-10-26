@@ -2,7 +2,9 @@
 
 本包处理55b操作后的BO反复分配和同步回收，以及每次提交重新扫描owned WC页的成本。
 实测依据见[55b增量与长尾](GPU_BO_55_RUNTIME.md#55b-操作后的增量与长尾)。
-构建标签为 `system-gpu-memory-56`，构建、刷入和启动结果由交付入口记录。
+首次构建标签为 `system-gpu-memory-56`，XNU环境探测因沙箱拒绝sysctl退出，
+未进入GPU编译。后续构建使用 `system-gpu-memory-56b`，构建、刷入和启动结果
+由交付入口记录。
 
 ## 实现
 

@@ -1,6 +1,7 @@
 # 54 提交资源、CPU 映射和缓存一致性设计
 
-2026-10-27。本文只给出源码依据和实施设计，没有修改实现、构建、部署或增加测试。
+2026-10-27。第 1-9 节记录 54 的架构设计；第 10 节记录 55b 后的源码复查及已实施的
+独立 CPU 映射边界。该次实施没有构建、部署或增加测试。
 
 54 最近 256 次提交的 CPU 准备平均 7.260 ms，其中全 WC 页属性检查
 3.064 ms、全 VM 内存发布 4.063 ms。目标是让这些工作分别随实际 CPU
@@ -223,8 +224,9 @@ cache flush、memory barrier 和 fence 顺序完整保留。
 
 保持 V1 `Query` 的版本值、selector 1-16 和全部结构大小。新增 V2 capability/query
 与新 selector，并用独立 V2 header 声明 version、record_size、flags、reset_epoch。
-新用户态先查能力；旧内核返回 unsupported 时按 V1 兼容路径工作。V2 BO 创建/CPU
-映射模式按连接选择，不能让同一 BO 混用新 mapping ID 和旧 token。
+新用户态先查能力；旧内核返回 unsupported 时按 V1 兼容路径工作。CPU 映射的
+controlled lease 与旧 token lease 分开计数；同一 BO 使用过旧 physical view 后，
+继续采用旧页属性检查，直到该 BO 的存储交还或在回收后重新取得。
 
 V2 需要以下操作及固定含义：
 
@@ -313,3 +315,132 @@ import 数、回收队列长度、持有引用数和 device-loss 保留字节。
 新增写入字节、依赖等待和命令数量对应的成本。
 
 上述计数属于拟议实现的验收设计。本次仅研究并写入本文，没有新增或执行测试。
+
+## 10. 55b 复查和本次可独立交付的 CPU 映射修改
+
+### 10.1 采样窗口和完成时间
+
+`logs/gpu-bo-55b-runtime/after-user-interaction.json` 的 256 项为 seq 1534..1789、
+内核时间 177.699..185.838 秒。CPU 准备均值 7179.887 us，其中 WC 检查
+2564.699 us、内存发布 4471.215 us，两项占 97.995%。这些数值属于该动作窗口。
+
+第三次 USB 查询原文在
+`logs/t733-usb-live/t733-20261026T184400.809479Z.raw:6376`，summary 为 submitted=3044。
+本次环形记录完整范围是 seq 2789..3044；raw:6606 的 seq3044 为
+`t=421042534 c=421074382`。其后打印的 seq2789..2816 属于较旧的数组槽位。
+`NativeAdrenoSubmit.cpp:169` 回绕写入位置，`:225` 复制物理槽位，`:258` 依槽位输出；
+读取整次查询后按 seq 排列即可恢复时间顺序。最后一条打印记录不是最新提交。
+
+当前 `completeUs` 是 CPU 首次观察硬件 fence 的时间，`latencyUs` 包含 CPU 提交准备、
+排队、GPU 执行和观察延迟。`profileNoteComplete` 在 `NativeAdrenoSubmit.cpp:173`，
+`retireCompleted` 的调用还先于 import acquire。`NativeAdrenoRing.cpp:204` 写入的
+fence 是递增序号。它没有记录 GPU 完成时刻。
+
+后续计时记录应同时保存 CPU 入口、WPTR 发布、GPU 开始/结束 ticks、CPU 首次观察、
+import acquire 完成、用户完成通知。真实 GPU 时间可直接采用本机 Mesa
+`tu_device.cc:2279` 的 A6xx `RB_DONE_TS` 时间戳写入及 `:2308` 的读取流程；需要
+完整 48-bit 计数时采用 `tu_query_pool.cc:2078` 的 `CP_REG_TO_MEM` 与同函数的
+stage barrier。A6xx event 时间戳精度/回绕按现有 Turnip实现处理，不能照搬 A7xx
+`EV_WRITE_ALWAYSON`。GPU ticks 与 CPU 时钟以 GetTimestamp 前后 CPU 时间夹取校准，
+分别报告 GPU interval 与校准误差；首次观察时间减经校准 GPU 结束时间才是观察延迟。
+成熟算法来源是 [Mesa Turnip tu_device.cc](https://gitlab.freedesktop.org/mesa/mesa/-/blob/85fda3b36405bcaea8bffc64aa4f2651dc90770d/src/freedreno/vulkan/tu_device.cc)
+和 [tu_query_pool.cc](https://gitlab.freedesktop.org/mesa/mesa/-/blob/85fda3b36405bcaea8bffc64aa4f2651dc90770d/src/freedreno/vulkan/tu_query_pool.cc)。
+
+### 10.2 已实施的 WC descriptor 和实际 CPU map 生命周期
+
+本次实施范围为 ABI、NativeAdrenoMemory、NativeAdrenoUserClient、NativeAdrenoPublish、
+Mesa `tu_knl.h` 和 `tu_knl_darwin.cc`。完整 submit 资源 ABI 仍按第 7-9 节实施。
+
+- ABI v1 原结构保留。能力 `NativeAdrenoParamsCpuMapV2=4` 发布 method18 MapV2、
+  method19 UnmapV2；MapV2 的独立 version 为 1。请求指定整个 BO 及可选准确地址，
+  成功返回实际地址、长度和每连接不复用的 64-bit map_id。
+- `NativeAdrenoMemory::allocate` 创建用户 owned descriptor 时直接传入
+  `kIOMapWriteCombineCache`，持久 memory entry 从创建起记录 WC。缓存仍保存这个
+  descriptor，重新取得缓存 backing 时保留原有一次属性恢复；最终释放仍在用户
+  映射和 GPU 引用均已解除后恢复默认属性，再 complete/release。
+- `AGXDeviceUserClient::mapCpu` 先取得独立 controlled BO lease，再以该 allocation
+  descriptor 创建实际 `IOMemoryMap`。映射使用默认 cache 选项继承 entry 的 WC，
+  `kIOMapUnique` 使每个 map_id 有独立解除映射寿命。映射完成后才发布回复。
+- `unmapCpu` 先调用实际 map 的 unmap；成功后释放 controlled lease 和 map。失败
+  保留 map、lease、BO 并隔离 backing。close 先完成所有实际映射的同一流程，再
+  进入原有等待 GPU 和释放 BO 的路径。map 表固定最多 4096 项，没有逐帧分配。
+- 旧 BoCpuMap 和新 MapV2 分开统计 lease，旧 BoCpuUnmap 无法归还新映射的引用。
+  使用过旧 token 的 BO 仍走原有页属性检查；新协议仅在 descriptor 固定 WC 且
+  所有 CPU view 受控时跳过逐页检查。连续提交仍遍历 VM 对象表，成本不再随这些
+  owned BO 的页数增长。pool 或关闭 WC 时返回 Unsupported，Mesa 使用旧兼容路径。
+- Mesa 的普通映射与 placed mapping 共用 `darwin_bo_map`；实际 CPU 映射的回收
+  共用 `darwin_unmap_cpu_storage`。map_id 随完整 BO cache/retired storage 转移。
+  通用 `tu_bo_unmap` 的 `never_unmap` 继续让该映射存活到实际回收或 placed remap。
+  已成功移除映射但旧 lease 释放失败时保留 token，以便错误状态仍拥有剩余资源。
+
+该修改依据 XNU 现有的内存 entry 机制：
+[IOBufferMemoryDescriptor.cpp](https://github.com/apple-oss-distributions/xnu/blob/xnu-10063.141.1/iokit/Kernel/IOBufferMemoryDescriptor.cpp)
+本机行 248 确保 cache 属性按页分配，285 保存 entry cache mode，383..418 创建
+持久 entry；
+[IOMemoryDescriptor.cpp](https://github.com/apple-oss-distributions/xnu/blob/xnu-10063.141.1/iokit/Kernel/IOMemoryDescriptor.cpp)
+368 将 WC 对应到 `VM_WIMG_WCOMB`，563..566 把该模式传给 memory entry，
+968..971 只在调用者显式指定新 cache mode 时准备更改模式。V2 使用默认 cache
+flags，因此实际 CPU map/unmap不再由另一个 physical descriptor 更改这些页的属性。
+这项优化保持 GPU noncoherent 映射、提交屏障和全部 import 维护。
+
+预算诊断新增 `NativeAdrenoBoProfileBudget=4` 和能力 `NativeAdrenoParamsBoProfileBudget=8`。
+七个 uint64 字段放入原有 union，record 大小与 55 counters 保持相同；新增 budget
+单独记录 sequence、sampled_us、device_id，USB 分四短行输出，支持旧字段继续对照。
+
+### 10.3 4.47 ms 发布成本的最小完整后续实施
+
+当前 Turnip没有可以直接交给 Darwin 的完整精确 BO 使用列表。MSM backend 的
+`tu_knl_drm_msm.cc:717` 为每个驻留 BO登记 READ|WRITE，`:1508` 提交 device 全局
+`submit_bo_list`。`tu_cs.h:103` 的 read_only/read_write 由 `tu_cs.cc:141` 分配
+command/state storage 时填充，不能解释为 shader、纹理和 render target 的完整列表。
+Metal runtime 的 `used_resources.rs:47` 覆盖应用可见资源，其文件说明排除了内部
+Vulkan 分配。两者可以各自提供输入，仍需要 Turnip 收集驱动内部资源并合并。
+
+第一版精确资源收集采用整 BO 范围即可完整实施：把同一 backing 的引用去重，合并
+读写权限；读写无法证明时取 READ|WRITE。buffer copy/fill/update 可保留明确范围，
+image 初版使用包含全部 plane、metadata/UBWC 和 mip/layer 的整 BO，避免按可见
+像素大小截断实际 GPU 访问。下列类型与调用方必须一起接入：
+
+| 对象或命令 | 实际源码入口 | 提交时必须保留的内容 |
+| --- | --- | --- |
+| `tu_buffer`、`tu_image`、view | `tu_buffer.h:21`，`tu_image.h:32,67` | BO、binding offset、完整存储长度；view 取得原 image backing |
+| descriptor set 和 update template | `tu_descriptor_set.h:118`；`tu_descriptor_set.cc:1352,1749` | 与 descriptor 数据并行保存资源引用；更新、复制、push 和模板更新均同步；更新后真正消费时快照 |
+| descriptor buffer、BDA 和 bindless | `tu_cmd_buffer.cc:4909,4952`，`tu_descriptor_set.cc:1284` | CPU 字节中的 GPU address 不足以证明引用集合；无法完整枚举时快照该连接全部可寻址 BO，并记录原因 |
+| vertex/index/indirect/transform feedback | `tu_cmd_buffer.cc:4550,4596,5153,8964,8995,9028,9067,9103,9688` | 绑定 BO 与参数/计数 BO；按操作产生 READ 或 WRITE，动态地址范围扩展至整 BO |
+| attachments、render pass、dynamic rendering | `tu_cmd_buffer.cc:6951,7056`；`tu_clear_blit.cc:3907,4299,4341,5111` | color/depth/stencil、resolve、临时 MSRTT 存储及 metadata |
+| copy、blit、fill、update | `tu_clear_blit.cc:2729,2902,3109,3472,3745,3793,3889` | 源 READ、目标 WRITE、上传中间 BO；按存储绑定偏移转换到 BO 范围 |
+| query、predication、marker | `tu_query_pool.cc:891,984,1422,2036,2078`；`tu_cmd_buffer.cc:10100,10212` | query backing、复制目标、条件读取 BO、marker 写入 BO |
+| secondary 与内部存储 | `tu_cmd_buffer.cc:6304`；`tu_cmd_buffer.h:674..743`；`tu_queue.cc:489..529` | secondary 集合、主/子/epilogue command streams、visibility、scratch、shader、global BO、trace/perf/autotune BO |
+| 最终提交 | `tu_queue.cc:414,584`；`tu_knl.h:172..180`；Darwin submit_add_entries/queue_submit | 一次逻辑提交同时封存 IB 与完整资源引用；16 IB分块只改变 ring 装入批次 |
+
+V2 submit 先以全连接可寻址 BO 集合完成事务和引用寿命，再切换上述完整收集器；
+未知地址分支保留全连接集合。全连接是同一 client 的 handle/VA 范围，不是当前
+共享 VM 内其他连接的所有 BO。每次资源快照与 map/free 在同一连接锁顺序下取得，
+内核在接受前持有 BO、mapping 与 job 引用。完整资源 ABI 不可只通过现有 IB 列表
+推导，也不可把当前每 16 IB 的 fence 当作其他资源的最后使用 fence。
+
+16 IB合并能减少同一逻辑提交的重复维护；55b 的不少样本仅 13 或 15 IB，合并本身
+不会消除这些样本的一次全驻留 import 发布。真正的发布缩减来自完整实际集合和
+所有权交接；两项缺一时继续保守维护。
+
+### 10.4 CPU dirty 和 IOSurface 生产方边界
+
+本机 NativeBridgeMetalFrontend.mm 的 `didModifyRange` 仍是空实现；Metal runtime
+`managed.rs:39` 只对 managed 存储安排 upload。shared/no-copy/IOSurface 的长期
+cached CPU 映射允许外部生产者修改，当前导入 API 没有 begin/end CPU访问通知。
+因此 owned WC 映射可以本次独立优化，import 仍按实际提交使用的整个 backing维护。
+
+完整优化需要在生产方完成写入后传递 backing 身份、写入范围和 release fence；
+CPU读前等待最后 GPU writer 并 invalidate，CPU写前等待全部冲突 GPU使用。
+IOSurfaceLock/Unlock 只有覆盖全部生产者并接入该共享 backing 的协议时才提供
+可靠边界。未接入生产方保留每次使用的完整范围维护，seed 和 map/unmap次数仅用
+于诊断。该合约遵循
+[dma-buf CPU access](https://docs.kernel.org/driver-api/dma-buf.html) 与
+[Linux DMA API synchronization](https://docs.kernel.org/core-api/dma-api-howto.html)
+的所有权转换；Darwin/IOMemoryDescriptor 通知通道需要本平台实现。
+
+后续运行记录沿用有界 counters：受控 map 活跃数、成功/失败、旧协议映射数、
+WC逐页检查页数、实际 resource/unknown-fallback 数、import clean/invalidate 字节、
+逻辑 job 数和 ring 分段数。无映射变化的连续受控 submit 应没有 WC页检查增量；
+未知 import 维护保持原语义。实际资源收集完成后，未使用 import 的维护字节才应
+归零。该记录要求用于后续设备采样，本次没有新增或运行测试。

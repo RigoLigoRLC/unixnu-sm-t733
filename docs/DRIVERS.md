@@ -140,7 +140,8 @@ UFS 与 USB 可以分别开发，合并后统一构建。USB host 与 CDC 使用
 - [x] ~~接NativeMetal与系统Metal合成。~~ 2026-10-25，51e实际提交，51j采样1509批全部完成；Adreno6xx/NativeAdrenoAccelerator.cpp、公共AdrenoMetal插件。
 - [x] ~~接DPU直接扫描IOSurface，完成fence、双缓冲和vblank切换。~~ 2026-10-25，51j持续flip1200，用户确认无闪烁；NativeMobileDisplay/NativeDpuSurface.cpp、NativeLegacyDisplay.cpp。
 - [x] ~~重构 BO 地址与物理范围管理、增量更新页表并复用完成的 BO。~~ 2026-10-27，54实测13,294次map平均56.4 us，单页58.4 us，用户确认明显流畅；[实现和数据](GPU_BO_54.md)。
-- [ ] 缩减每次提交的全体 WC 页检查和导入 BO 缓存维护，改善小 BO 复用、集中回收及首次 pipeline 创建。54最近256次提交准备平均7.26 ms，缓存相关两段占98.17%。
+- [x] ~~删除 GPU 提交、完成回收、DPU present 和一致性页表的驱动 CPU 缓存维护，普通 BO 统一 WB 硬件一致性。~~ 2026-10-28，源码实施见[删除记录](GPU_CPU_CACHE_REMOVAL_60.md)；构建状态单列，尚无本轮设备运行结果。
+- [ ] 改善小 BO 复用、集中回收及首次 pipeline 创建。
 - [ ] 改善Metal提交和显示等待开销，记录稳定帧率及正常关机结果。
 - [ ] 摄像头和其他外设按实际使用需求分别实施。
 

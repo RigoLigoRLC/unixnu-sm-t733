@@ -3,7 +3,9 @@
 `system-gpu-submit-58d` completed all nine build stages and was written to SM-T733
 through MSC on 2026-10-27. The service wrote 536870912 bytes and completed sync.
 Data was preserved. Passive USB capture was running before the boot request.
-Operation-period measurements are pending the user's boot and interaction.
+Operation-period measurements confirmed a severe CPU submission regression.
+The evidence and deployed 58e correction are recorded in the
+[regression report](GPU_SUBMISSION_REGRESSION_58E_2026-10-28.md).
 
 ## Implementation
 

@@ -6,7 +6,8 @@ on 2026-10-28 with Data preserved; reboot and runtime results are pending.
 The implementation, recovery commit and fixed build versions are recorded in
 `docs/GPU_CPU_CACHE_REMOVAL_60.md`.
 Per-frame timing source `system-gpu-frame-profile-61` completed all nine build
-stages and awaits MSC deployment. Fields, limits and capture commands are in
+stages and was deployed by MSC on 2026-10-28 with Data preserved; reboot and
+frame capture are pending. Fields, limits and capture commands are in
 `docs/GPU_FRAME_PROFILE_61.md`; fence reference findings are in
 `docs/GPU_FENCE_WAIT_AUDIT_2026-10-28.md`.
 

@@ -76,5 +76,9 @@ SoC 保持 `1829984`。不可移动源码 tag 为
 `source-revisions.json`，各阶段结果见 `stages.tsv`。本轮没有新增 XNU 补丁或
 更改 series，构建仍选中既有 `native-t733-managed-rt-memory.patch`。
 
-构建后 MSC 查询没有连接设备，因此尚未刷入；运行中的系统仍为 60a，新增逐帧
-记录尚无设备采样结果。没有运行额外测试。
+2026-10-28，用户进入 MSC 后已刷入。服务完整写入 536870912 字节并完成 sync，
+返回 `write-fat completed`，Data 保留。部署日志位于工作区
+`logs/msc-20261028-030814-system-gpu-frame-profile-61/`，旧 FAT 位于
+`backups/msc-20261028-030814-system-gpu-frame-profile-61/payload-before.img`。
+被动日志采集已开启，等待完整重启；新增逐帧记录尚无设备采样结果。
+没有运行额外测试。

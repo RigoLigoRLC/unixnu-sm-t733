@@ -24,7 +24,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "fb5e8ba88fcce2526e33fe8c4348d5e7aeb585d8",
       "description": "UniXNU core build and boot-menu adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "e2f7a54756a0e2fd979cdaa69736849039219cdf",
+      "adaptation_commit": "2670fef131f91e8e8292070004266f2e58ae9058",
       "device_changes_pushed": false
     },
     {

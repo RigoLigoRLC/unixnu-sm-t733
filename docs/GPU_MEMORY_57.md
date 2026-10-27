@@ -124,3 +124,20 @@ IPC 并发允许其他方法在 WaitFence idle 期间进入驱动。import 的 V
 实机比较使用相邻 query 的 requests/hits/misses、import/actual release 慢事件、
 wait_outer 与同期 submit CPU/cache/publish 数据，并结合新显示完成时间，区分仍在
 驱动内执行的工作和被本轮解除的外层串行等待。
+
+## 统一构建与刷入
+
+2026-10-27，`system-gpu-concurrency-57c` 九阶段全部返回0，MSC完整写入
+536870912字节并sync成功，Data保留。用户启动前已确认被动USB collector运行。
+刷入成功后记录本节；当前等待新启动及操作结果。
+
+构建前源码均已提交且工作树干净，固定设备 `642750e`、core `b5ebcf6`、
+SoC `6fa3518`、Adreno6xx `5ca9e5d`、NativeMobileDisplay `0090571`。
+完整revision及命令在 `build/releases/system-gpu-concurrency-57c/source-revisions.json`，
+同目录保存 `stages.tsv`、子模块清单及实际 `xnu-patches.list`。不可移动tag为
+`system-gpu-concurrency-57c` 和 `build/system-gpu-concurrency-57c-source-1`。
+
+57首次编译在显示通知处遇到protected接口访问错误，新增禁止实例化的
+IOUserClient派生静态发送封装；57b在GPU的两处volatile自增遇到编译错误，
+改为原有锁保护下的显式读写。每次修复均先提交并固定新tag，失败包的日志及
+源码tag保留。57c才是本轮已刷入镜像，后续文档提交不改变该镜像来源。

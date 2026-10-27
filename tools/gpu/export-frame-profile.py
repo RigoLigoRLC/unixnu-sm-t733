@@ -58,13 +58,17 @@ def duration(row, start, end, flags):
 
 def read_capture(path):
     frames = {}
+    frame_parts = {}
     writers = {}
     snapshots = []
     for line in path.read_text(errors="replace").splitlines():
         if FRAME_PREFIX in line:
             row = read_fields(line.split(FRAME_PREFIX, 1)[1])
             if isinstance(row.get("sequence"), int):
-                frames[row["sequence"]] = row
+                sequence = row["sequence"]
+                frames.setdefault(sequence, {}).update(row)
+                if isinstance(row.get("part"), int):
+                    frame_parts.setdefault(sequence, set()).add(row["part"])
         elif WRITE_PREFIX in line:
             row = read_fields(line.split(WRITE_PREFIX, 1)[1])
             if "sequence" in row and "index" in row:
@@ -76,6 +80,14 @@ def read_capture(path):
     previous = None
     for sequence in sorted(frames):
         row = {"capture": str(path), **frames[sequence]}
+        expected_parts = row.get("parts", 0)
+        row["frame_record_complete"] = (
+            expected_parts > 0
+            and set(range(expected_parts)).issubset(frame_parts.get(sequence, set()))
+        )
+        if not row["frame_record_complete"]:
+            row["valid"] = 0
+
         row["generation_observed_us"] = duration(
             row, "composition_start_us", "read_fence_active_us", 1 | 16
         )

@@ -3,7 +3,9 @@
 `system-gpu-coherent-59b` completed all nine stages and was deployed on 2026-10-28.
 MSC wrote 536870912 bytes and completed sync. Data was preserved. Passive USB
 capture was restarted before requesting boot and Settings interaction. Runtime
-measurements are pending.
+logs confirm Metal publication and completed submissions. The saved operation
+window contains 256 submissions with mean CPU time 0.996805 ms and median
+0.911 ms. Software cache maintenance still takes mean 0.969016 ms per submission.
 
 58f removed submission-time physical-page alias queries. Its saved 256 operation
 submissions took mean 1.838656 ms, of which 1.814883 ms was CPU cache maintenance.
@@ -94,10 +96,22 @@ The `gpu` query prints bounded summaries:
 - `coherence_fallback`: owned, platform, unknown, non-writeback and mixed reasons.
 - Existing S/R/A records retain submission timing, resource ranges and alias work.
 
-The runtime directory is `logs/gpu-coherent-59b-runtime/`. The first operation
-capture must show actual coherent mappings and skipped-maintenance bytes, together
-with reduced `cache` and total submission time. An advertised capability alone
-does not establish that the displayed surfaces took the new path.
+The runtime directory is `logs/gpu-coherent-59b-runtime/`. Its `interaction-1.raw`
+records 142 coherent mappings and 10,894,954,496 bytes of skipped clean operations.
+The five non-writeback imports are classified without recording their raw WIMG
+attributes. Each of the 256 saved submissions, sequence 143 through 398 at
+80.520378 through 99.521429 seconds after boot, still maintains 32,768,000 bytes
+of imported memory. These records show that part of the repeated maintenance was
+removed and that 31.25 MiB remains in the software-maintained path per submission.
+They do not identify the exact CPU attributes of those remaining pages.
+
+`submission-costs-summary.json` and `submission-costs.csv` preserve the timing
+summary and individual records. The previous 58f window has mean CPU submission
+1.838656 ms and median 1.755 ms. In 59b, time after CPU submission until fence
+completion is observed averages 29.010578 ms. This includes queueing, GPU work
+and host observation delay. The two versions were sampled during separate
+interactions. The comparison image is `submission-costs-58f-59b.png` in the 59b
+runtime directory.
 
 ## Build and deployment identity
 
@@ -109,7 +123,8 @@ poisoned VM state; Metal was not published. Evidence is
 59b removes the redundant capability-time audit and readback. The empty-table
 audit remains at initial attachment with an explicit `observeEmptyTables` name.
 An unavailable optional capability retains software maintenance and records its
-reason, while GPU publication proceeds. 59b has not yet supplied operation data.
+reason, while GPU publication proceeds. The 59b capture confirms restored GPU
+publication and the operation measurements above.
 
 | Source | Commit |
 | --- | --- |

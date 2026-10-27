@@ -49,5 +49,21 @@ GMU 和 ZAP 固件对象按其硬件访问约定保留所需映射。XNU 在建�
 
 ## 构建状态
 
-实现完成后按组件、core、设备的顺序提交并固定版本，再运行统一构建入口。
-构建结果另行记录；本轮不运行测试、设备测量或刷写。
+`system-gpu-coherent-60a` 已通过统一构建的九个阶段，产物位于
+`build/releases/system-gpu-coherent-60a/`。本轮没有运行测试、设备测量或刷写。
+
+构建源码为设备 `0a363f3`、core `7eefbce`、Adreno6xx `e043d72`、
+AdrenoMetal `0d69cf8`、ArmSmmu4K `599ba82`、NativeMobileDisplay `3b922d0`；
+SoC 保持 `1829984`。这些仓库均固定不可移动 tag
+`build/system-gpu-coherent-60a-source-1`。完整版本和命令保存于产物目录
+`source-revisions.json`，阶段退出状态位于 `stages.tsv`。
+
+统一命令在工作区根执行：
+
+```sh
+source tools/activate.sh
+bash tools/build-t733-recovery.sh system-gpu-coherent-60a --system --payload-only --local-module soc:sm7325=/Users/rigoligo/expm/unixnu-sm-t733/sources/unixnu-sm7325-common
+```
+
+前一构建 `system-gpu-coherent-60` 在 Turnip 阶段报告重命名函数缺少前置声明。
+修复已同时写入头文件和维护补丁，旧构建日志和源码 tag 保留原身份。

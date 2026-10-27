@@ -1,5 +1,10 @@
 # Device repository instructions
 
+Current GPU source: CPU cache-maintenance removal is implemented and
+`system-gpu-coherent-60a` completed all nine build stages without deployment.
+The implementation, recovery commit and fixed build versions are recorded in
+`docs/GPU_CPU_CACHE_REMOVAL_60.md`.
+
 This directory is the source for UniXNU-SM-T733. The repository layout follows
 UniXNU-sheng; read README.md, docs/BUILDING.md and docs/REPOSITORY_LAYOUT.md.
 

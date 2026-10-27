@@ -3,7 +3,8 @@
 `system-gpu-submit-58e` completed all nine build stages and was deployed through
 MSC on 2026-10-28. The service wrote 536870912 bytes and completed sync. Data was
 preserved. Passive USB capture was restarted before requesting boot and repeated
-Settings interaction. Measurements from that interaction are pending.
+Settings interaction. Measured interaction and the subsequent 58f deployment
+are recorded below.
 
 ## Measured regression in 58d
 
@@ -124,3 +125,57 @@ The release directory is `build/releases/system-gpu-submit-58e/`, containing
 `payload.img`, `stages.tsv`, `source-revisions.json` and stage logs. Workspace
 deployment evidence is `logs/msc-20261028-001209-system-gpu-submit-58e/`.
 USB status, raw logs and disconnect tails remain in `logs/t733-usb-live/`.
+
+## 58e interaction and the remaining per-page query
+
+The two saved 58e windows contain 512 submissions. CPU time is mean 4.002514 ms,
+median 1.8595 ms and p95 13.8758 ms. Physical alias queries still account for
+mean 2.0977 ms and p95 12.0044 ms. The interval tree made individual lookups faster,
+but the outer loop still queried every physical span, mostly finding the same BO.
+Slow submissions made about 31000 queries. Replacing only the lookup structure
+therefore left a repeated page walk in the submission path.
+
+The separate BO interval q26-q80 covers 83.966038-192.843844 seconds: 19430 requests,
+18948 hits, 97.5193% reuse. Four command-stream classes had 18305 requests and
+18170 hits, 99.2625% reuse. Descriptor pools account for 329 of the remaining 482
+misses; their ordinary-cache placement competes with 64 MiB allocations. The
+counts do not yet attribute evictions by usage. Mapping failures did not increase.
+Puts minus hits and evictions exactly match the change in cached objects, and
+evictions plus uncached completed objects exactly match successful destruction.
+
+The data, chart and BO interval are in `logs/gpu-submit-58e-runtime/`:
+`submission-costs-summary.json`, `submission-costs.png` and
+`bo-interaction-delta.json`. CPU sample windows and the longer BO interval are
+reported separately.
+
+## 58f deployment and operation measurements
+
+58f establishes physical alias relationships while mapping. Each relationship
+stores offsets in the two BOs and a byte length; adjacent relationships with the
+same offset translation are merged. Submission checks its own mapping and these
+stored relationships. An unaliased BO requires no physical-page traversal during
+submission. Same-BO repeated physical pages remain represented. Unmapping removes
+both ends after outstanding job references have retired.
+
+All nine stages completed and MSC wrote 536870912 bytes with sync. The immutable
+tag is `build/system-gpu-submit-58f-source-1`. Build source: device
+`3f33c303d9a4b4c49f7cc6a0712f7e4de2a61331`, core
+`59a43917d5d12dd13ca14c9859d4347e8c9529ff`, SoC
+`1474962f4f0b0000fe77ab5e428f29103db174ea`, Adreno6xx
+`6c92ba91d3a684814cd2e4a0127e647ba6e6635c`, AdrenoMetal
+`fd02456764c399ab5a56dfdd603fbc887a08da92`.
+
+The command is the 58e command above with tag `system-gpu-submit-58f`. The release
+directory contains the exact command, revisions and stage results. Deployment
+evidence is `logs/msc-20261028-002619-system-gpu-submit-58f/`. Passive collector
+was restarted before boot.
+
+Saved operation sequences 468-723 cover 111.233157-128.800362 seconds. CPU submission
+mean is 1.838656 ms, median 1.755 ms, p95 2.33175 ms and maximum 2.766 ms. Alias
+query maximum is 29 us; cache maintenance mean is 1.814883 ms. Other submission
+work totals mean 23.773 us. These results establish that the per-page query
+spike was removed; repeated cache maintenance remains the main CPU cost.
+
+Raw data and statistics are in `logs/gpu-submit-58f-runtime/`. `aliases version=2`
+counts mapping/alias intervals rather than physical-tree lookups. Current source
+work on directional CVAC/IVAC and per-BO hardware coherency is not part of 58f.

@@ -1,7 +1,8 @@
 # Device repository instructions
 
 Current GPU source: CPU cache-maintenance removal is implemented and
-`system-gpu-coherent-60a` completed all nine build stages without deployment.
+`system-gpu-coherent-60a` completed all nine build stages and was deployed by MSC
+on 2026-10-28 with Data preserved; reboot and runtime results are pending.
 The implementation, recovery commit and fixed build versions are recorded in
 `docs/GPU_CPU_CACHE_REMOVAL_60.md`.
 

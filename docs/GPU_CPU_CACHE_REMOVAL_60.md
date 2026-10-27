@@ -50,7 +50,7 @@ GMU 和 ZAP 固件对象按其硬件访问约定保留所需映射。XNU 在建�
 ## 构建状态
 
 `system-gpu-coherent-60a` 已通过统一构建的九个阶段，产物位于
-`build/releases/system-gpu-coherent-60a/`。本轮没有运行测试、设备测量或刷写。
+`build/releases/system-gpu-coherent-60a/`。构建阶段没有运行测试或设备测量。
 
 构建源码为设备 `0a363f3`、core `7eefbce`、Adreno6xx `e043d72`、
 AdrenoMetal `0d69cf8`、ArmSmmu4K `599ba82`、NativeMobileDisplay `3b922d0`；
@@ -67,3 +67,12 @@ bash tools/build-t733-recovery.sh system-gpu-coherent-60a --system --payload-onl
 
 前一构建 `system-gpu-coherent-60` 在 Turnip 阶段报告重命名函数缺少前置声明。
 修复已同时写入头文件和维护补丁，旧构建日志和源码 tag 保留原身份。
+
+## 部署
+
+2026-10-28，按用户指令经 MSC 写入 `system-gpu-coherent-60a`。
+系统 dd 完整写入 536870912 字节并完成 sync，服务返回 `write-fat completed`。
+Data 保留，原 FAT 已备份。工作区日志为
+`logs/msc-20261028-021238-system-gpu-coherent-60a/`，原 FAT 位于
+`backups/msc-20261028-021238-system-gpu-coherent-60a/payload-before.img`。
+被动 USB 采集已运行，等待用户完整重启后启动 UniXNU。

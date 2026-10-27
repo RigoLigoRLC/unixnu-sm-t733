@@ -12,6 +12,20 @@ struct OriginalLegacyFrameInfoSubscription;
 struct OriginalLegacyFrameReport {
     unsigned char bytes[0xd8];
 
+    // QuartzCore supplies its begin_update timestamp through timestamp type 2.
+    // The original family stores it in continuous host ticks on the request.
+    static uint64_t compositionStartTime(const OriginalLegacySwapRequest *request) {
+        if (!request) {
+            return 0;
+        }
+
+        uint64_t value = 0;
+        const auto source = reinterpret_cast<const unsigned char *>(request);
+        memcpy(&value, source + 0x2e0, sizeof(value));
+
+        return value;
+    }
+
     void setPresentation(const OriginalLegacySwapRequest *request, uint64_t time) {
         const auto source = reinterpret_cast<const unsigned char *>(request);
         bzero(bytes, sizeof(bytes));

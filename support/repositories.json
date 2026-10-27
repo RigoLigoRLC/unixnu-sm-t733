@@ -84,7 +84,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "8666a9950c9699b368931d18cac92c0fdb2ce9c0",
       "description": "DPU IOSurface scanout and native MobileFramebuffer presentation for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
-      "adaptation_commit": "3b922d04fbd53e95691b2d19d0922832cc0d01f7",
+      "adaptation_commit": "b21111ddf58cb13a53d6aa00dbc6c87b7779b44b",
       "device_changes_pushed": false
     },
     {
@@ -216,7 +216,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "4e0314df8ad29d52f6fa3f9383a540adcd618b87",
       "description": "A642L GPU backend for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "e043d72d5e5019b286b778b18ab813550acb8b26",
+      "adaptation_commit": "bdb86b85e5320c19db395669c5a3a91ea6a2d93d",
       "device_changes_pushed": false
     },
     {

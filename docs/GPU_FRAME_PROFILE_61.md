@@ -64,3 +64,17 @@ Surface fence 观察耗时；`generation_gpu_observed_us` 单独表示直接写�
 没有原生 Surface fence 的请求不伪造其激活时间。显示等待和显示间隔保留上下界。
 
 现有 fence 等待的参考对照另见[等待审查](GPU_FENCE_WAIT_AUDIT_2026-10-28.md)。
+
+## 构建与部署状态
+
+`system-gpu-frame-profile-61` 已完成统一构建的九个阶段。源码为设备 `1727fdc`、
+Adreno6xx `bdb86b8`、NativeMobileDisplay `b21111d`；core 保持 `7eefbce`、
+SoC 保持 `1829984`。不可移动源码 tag 为
+`build/system-gpu-frame-profile-61-source-1`。
+
+产物位于 `build/releases/system-gpu-frame-profile-61/`，完整版本与执行命令见
+`source-revisions.json`，各阶段结果见 `stages.tsv`。本轮没有新增 XNU 补丁或
+更改 series，构建仍选中既有 `native-t733-managed-rt-memory.patch`。
+
+构建后 MSC 查询没有连接设备，因此尚未刷入；运行中的系统仍为 60a，新增逐帧
+记录尚无设备采样结果。没有运行额外测试。

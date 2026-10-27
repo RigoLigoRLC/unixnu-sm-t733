@@ -5,6 +5,10 @@ Current GPU source: CPU cache-maintenance removal is implemented and
 on 2026-10-28 with Data preserved; reboot and runtime results are pending.
 The implementation, recovery commit and fixed build versions are recorded in
 `docs/GPU_CPU_CACHE_REMOVAL_60.md`.
+Per-frame timing source `system-gpu-frame-profile-61` completed all nine build
+stages and awaits MSC deployment. Fields, limits and capture commands are in
+`docs/GPU_FRAME_PROFILE_61.md`; fence reference findings are in
+`docs/GPU_FENCE_WAIT_AUDIT_2026-10-28.md`.
 
 This directory is the source for UniXNU-SM-T733. The repository layout follows
 UniXNU-sheng; read README.md, docs/BUILDING.md and docs/REPOSITORY_LAYOUT.md.

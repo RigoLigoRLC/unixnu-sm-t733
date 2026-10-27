@@ -1,6 +1,6 @@
 # A642L coherent imports, build 59
 
-`system-gpu-coherent-59` completed all nine stages and was deployed on 2026-10-28.
+`system-gpu-coherent-59b` completed all nine stages and was deployed on 2026-10-28.
 MSC wrote 536870912 bytes and completed sync. Data was preserved. Passive USB
 capture was restarted before requesting boot and Settings interaction. Runtime
 measurements are pending.
@@ -33,8 +33,9 @@ cache events.
 The corresponding local procedure is:
 
 - After successful GPU initialization, submission-queue and timer setup, Service
-  enables cached-import support. VM checks chip ID `0x06030500`, attached healthy
-  state and its initialized SMMU context.
+  enables cached-import support. VM checks chip ID `0x06030500` and attached
+  healthy state. Initial attachment and CP startup already validate the SMMU
+  setup and GPU memory access.
 - `importTask` pins and retains the original backing, gathers physical spans and
   classifies CPU attributes once. Every page must return ARM
   `VM_WIMG_COPYBACK` (`2`) after masking. Unknown, non-WB and mixed imports remain
@@ -93,31 +94,43 @@ The `gpu` query prints bounded summaries:
 - `coherence_fallback`: owned, platform, unknown, non-writeback and mixed reasons.
 - Existing S/R/A records retain submission timing, resource ranges and alias work.
 
-The runtime directory is `logs/gpu-coherent-59-runtime/`. The first operation
+The runtime directory is `logs/gpu-coherent-59b-runtime/`. The first operation
 capture must show actual coherent mappings and skipped-maintenance bytes, together
 with reduced `cache` and total submission time. An advertised capability alone
 does not establish that the displayed surfaces took the new path.
 
 ## Build and deployment identity
 
+The original 59 build stopped after successful CP scratch readback because the
+new capability path reused an empty-table attachment audit after five bootstrap
+BOs were already mapped. The audit returned Argument, and its error handler
+poisoned VM state; Metal was not published. Evidence is
+`logs/gpu-coherent-59-runtime/boot-failure.raw` and `boot-failure-status.json`.
+59b removes the redundant capability-time audit and readback. The empty-table
+audit remains at initial attachment with an explicit `observeEmptyTables` name.
+An unavailable optional capability retains software maintenance and records its
+reason, while GPU publication proceeds. 59b has not yet supplied operation data.
+
 | Source | Commit |
 | --- | --- |
-| Device | `600227b55fe68536036fce4328d10c1ffbc9dc38` |
+| Device | `6c8de5a007d908459b71f9e070d4f18e419a7304` |
 | Core | `59a43917d5d12dd13ca14c9859d4347e8c9529ff` |
-| SM7325 | `09a6f33684a4a4ec5130f311258d400f17a8a417` |
-| Adreno6xx | `57d90a1c226e2a1e7ef2371a4aae7ff58d4d2b8f` |
+| SM7325 | `1829984554102bbee5ac2fafba945d7740d0590f` |
+| Adreno6xx | `ded753fd4c0e4129fbd911958f78a0cb235c1d0d` |
 | AdrenoMetal | `fd02456764c399ab5a56dfdd603fbc887a08da92` |
 
 All source was committed and clean before building. The immutable tag is
-`build/system-gpu-coherent-59-source-1`. No tests were added or run.
+`build/system-gpu-coherent-59b-source-1`. No tests were added or run.
 
 ```sh
 source tools/activate.sh
-bash tools/build-t733-recovery.sh system-gpu-coherent-59 --system --payload-only \
+bash tools/build-t733-recovery.sh system-gpu-coherent-59b --system --payload-only \
   --local-module soc:sm7325="$PWD/sources/unixnu-sm7325-common"
-bash tools/deploy-t733-msc.sh system-gpu-coherent-59
+bash tools/deploy-t733-msc.sh system-gpu-coherent-59b
 ```
 
-The release is `build/releases/system-gpu-coherent-59/`, with `payload.img`,
+The release is `build/releases/system-gpu-coherent-59b/`, with `payload.img`,
 `stages.tsv`, `source-revisions.json` and logs. Deployment evidence is in workspace
+`logs/msc-20261028-005634-system-gpu-coherent-59b/`. The original 59 source identity
+and deployment remain in its release directory and
 `logs/msc-20261028-004805-system-gpu-coherent-59/`.

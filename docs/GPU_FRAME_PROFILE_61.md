@@ -88,3 +88,12 @@ SoC 保持 `1829984`。不可移动源码 tag 为
 61 首次实机查询已收到有效帧 ID、原生时间及成功的 GPU 匹配，但单行记录超过
 内核日志上限，在 `read_fence_active_us` 附近截断。61a 将输出拆成短记录并同步
 修改导出器；旧截断数据不用于生成耗时统计。
+
+61a 九阶段构建成功，设备源码 `356a7d6`、显示组件 `3ff9ff4`，其他组件沿用 61。
+源码固定为 `build/system-gpu-frame-profile-61a-source-1`。已通过 MSC 完整写入
+536870912 字节并 sync，Data 保留。工作区部署日志为
+`logs/msc-20261028-031455-system-gpu-frame-profile-61a/`，旧 FAT 备份为
+`backups/msc-20261028-031455-system-gpu-frame-profile-61a/payload-before.img`。
+
+单行上限在 `GPU_BO_55_RUNTIME.md:40` 和 `GPU_BO_PROFILE_55.md:5` 已有记录。
+本次遗漏该约束而重复出现截断，现已将短行与完整分段要求提升到项目 AGENTS.md。

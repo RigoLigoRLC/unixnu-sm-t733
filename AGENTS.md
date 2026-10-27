@@ -5,9 +5,10 @@ Current GPU source: CPU cache-maintenance removal is implemented and
 on 2026-10-28 with Data preserved; reboot and runtime results are pending.
 The implementation, recovery commit and fixed build versions are recorded in
 `docs/GPU_CPU_CACHE_REMOVAL_60.md`.
-Per-frame timing source `system-gpu-frame-profile-61` completed all nine build
-stages and was deployed by MSC on 2026-10-28 with Data preserved; reboot and
-frame capture are pending. Fields, limits and capture commands are in
+Per-frame timing source `system-gpu-frame-profile-61a` completed all nine build
+stages and was deployed by MSC on 2026-10-28 with Data preserved. It fixes the
+61 long-line truncation; complete frame capture after reboot is pending.
+Fields, limits and capture commands are in
 `docs/GPU_FRAME_PROFILE_61.md`; fence reference findings are in
 `docs/GPU_FENCE_WAIT_AUDIT_2026-10-28.md`.
 
@@ -85,6 +86,12 @@ their original build identities.
   branches for individual builds; ordinary commits and build tags record them.
 - Never calculate file hashes for confirmation. Keep UNIXNU_RECORD_HASHES=0.
   Do not add or run tests unless the user requests them.
+- Kernel diagnostic output truncates near 255 bytes per call. Keep each fully
+  formatted record below 240 bytes including its newline, allowing maximum
+  field widths. Split larger records with sequence and part numbers; collectors
+  must join all parts before computing timings. This existing limit and the
+  55b repair are recorded in docs/GPU_BO_55_RUNTIME.md and
+  docs/GPU_BO_PROFILE_55.md.
 - Preserve the fixed Data seed, UUID and package/data-layout.toml during ordinary
   FAT updates. Do not execute device writes as part of a build.
 - Keep firmware, IPSWs, extracted Apple code, images, signing keys, local identity,

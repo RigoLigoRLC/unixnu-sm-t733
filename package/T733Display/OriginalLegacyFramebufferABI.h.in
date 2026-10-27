@@ -4,11 +4,54 @@
 #include <libkern/libkern.h>
 
 struct OriginalLegacySwapRequest;
+struct OriginalLegacyFrameInfoSubscription;
+
+// OriginalLegacyFrameReport contains one 21H461 completion record. The original
+// sender consumes its frame ID and requested/actual presentation timestamps;
+// optional controller measurements remain zero when the platform lacks them.
+struct OriginalLegacyFrameReport {
+    unsigned char bytes[0xd8];
+
+    void setPresentation(const OriginalLegacySwapRequest *request, uint64_t time) {
+        const auto source = reinterpret_cast<const unsigned char *>(request);
+        bzero(bytes, sizeof(bytes));
+        memcpy(bytes, source + 0x2d8, sizeof(uint64_t));
+        memcpy(bytes + 0x08, source + 0x2d0, sizeof(uint64_t));
+        memcpy(bytes + 0x10, &time, sizeof(time));
+        memcpy(bytes + 0x30, source + 0x314, sizeof(uint32_t));
+        memcpy(bytes + 0x40, source + 0x32c, sizeof(uint32_t));
+    }
+
+    uint32_t frameID() const {
+        uint32_t value = 0;
+        memcpy(&value, bytes + 0x30, sizeof(value));
+        return value;
+    }
+
+    uint64_t issuedTime() const {
+        uint64_t value = 0;
+        memcpy(&value, bytes, sizeof(value));
+        return value;
+    }
+
+    uint64_t requestedPresentation() const {
+        uint64_t value = 0;
+        memcpy(&value, bytes + 0x08, sizeof(value));
+        return value;
+    }
+
+    uint64_t presentationTime() const {
+        uint64_t value = 0;
+        memcpy(&value, bytes + 0x10, sizeof(value));
+        return value;
+    }
+};
 
 // IOMobileFramebufferLegacy retains the original 21H461 object extent and slot
 // order. The builder fills its declarations from the original dispatch table.
-// NativeLegacyDisplay owns the CPU copy; the original family owns user clients,
-// surface references, request queues, and completion delivery.
+// NativeLegacyDisplay owns presentation and supplies completed frame reports;
+// the original family owns user clients, surface references, request queues,
+// subscriptions and completion delivery.
 class IOMobileFramebufferLegacy : public IOService {
     OSDeclareAbstractStructors(IOMobileFramebufferLegacy)
     unsigned char originalPrivate[0x18a0 - sizeof(IOService)];

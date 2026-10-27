@@ -60,10 +60,10 @@ outputs = ["build/native-ram-block/libNativeRamBlock.a"]
 [[component]]
 id = "NativeMobileDisplay"
 kind = "driver"
-function = "CPU software rendering and inherited GOP framebuffer presentation"
+function = "DPU IOSurface scanout and native MobileFramebuffer presentation reports"
 scope = "display"
 repository = "https://github.com/RigoLigoRLC/unixnu-nativemobiledisplay.git"
-revision = "dc87f4abd2ff1b7233f7646622ceeb517a26aa98"
+revision = "00ced72933f139591921316f5b17efbcc9c3d8c3"
 path = "drivers/NativeMobileDisplay"
 hardware = ["SM-T733 inherited DSI scanout"]
 os_abi = ["ipados-17.7.11-21H461", "IOMobileGraphicsFamily"]

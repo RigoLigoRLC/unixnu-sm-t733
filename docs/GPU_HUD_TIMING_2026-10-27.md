@@ -295,9 +295,9 @@ buffer、CPU copy 和提前退役的 GPU copy 都不能虚构一个新 IOSurface
 Presentation_time。报告必须携带原请求 frame ID，不能用 DPU frame counter
 冒充 CA 的 swap ID。
 
-## 下一次显示源码交付的完整范围
+## 显示源码实现的完整范围
 
-实施顺序按所有权组织，以下各项组成同一次显示交付：
+实现按所有权组织，以下各项共同组成 FrameInfo 显示改动：
 
 1. `NativeDpuSurface.h/.cpp` 保存固定大小的呈现结果：continuous 观察时间、
    区间下界、上界、实际 frame counter 和来源。开始新操作、恢复 firmware、
@@ -331,12 +331,12 @@ Presentation_time。报告必须携带原请求 frame ID，不能用 DPU frame c
 时钟转换以及 XNU 有限消息队列。DPU 首次完成观察、误差记录、单个请求到
 完成报告的转交是 SM7325 适配。不会在显示热路径逐帧分配报告或追加无界队列。
 
-后续实机验收保留固定计数器：成功 SurfaceCompletion、生成报告、发送成功、
+实现保留固定计数器供后续实机验收：成功 SurfaceCompletion、生成报告、发送成功、
 队列满丢弃、其他发送错误、无匹配 frame ID；保留最近 64 份呈现观察区间。
 正常接收时成功换帧与生成报告一一对应，失败和 firmware 恢复不增加报告数。
 CA 首次样本只建立前值，后续不同 frame ID 才增加 Frame Duration；其变化
 应与呈现间隔及记录的误差区间一致。丢报告会使下一份收到的样本跨越更长间隔，
-必须与丢弃计数一同解读。此处列的是下一次交付的实机验收要求，本次未执行。
+必须与丢弃计数一同解读。此处列的是实机验收要求，源码实现阶段未执行。
 
 ## Metal 时间戳链
 
@@ -400,7 +400,22 @@ frame counter 和时间来源。资源释放必须在记录中与完成观察分
 
 ## 实施状态
 
-上述 HUD、回调 ABI、Requested 字段、通知传输选择和 continuous 时钟链已经
-完成静态定位。本次交付仅补充研究文档，没有修改实际显示源码、ABI 模板或
-构建脚本。`system-gpu-memory-56b` 沿用原显示实现；FrameInfo 的完整实现按
-上节范围另一次交付，当前 Frame Duration 为 0 的实现缺口尚未修复。
+`system-gpu-memory-56b` 沿用原显示实现，用户启动后确认 Frame Duration 仍为
+0。随后按已恢复契约完成以下源码改动，交给统一负责人构建 57：
+
+| 文件 | 实际改动 |
+| --- | --- |
+| `drivers/NativeMobileDisplay/NativeDpuSurface.h` | 固定呈现区间结构及一次消费接口 |
+| `drivers/NativeMobileDisplay/NativeDpuSurface.cpp` | CTL flush 前取 continuous 下界，flush 未完成时推进下界；成功换帧观察后、释放旧 buffer 前取上界；失败和恢复清除结果 |
+| `drivers/NativeMobileDisplay/NativeLegacyDisplay.cpp` | 配对原请求、退役前暂存报告、slot 337 消费、订阅 mask、有限 Mach 消息、transport 0 和 slot 336=false；停机及释放清除暂存状态 |
+| `package/T733Display/OriginalLegacyFramebufferABI.h.in` | `0xd8` 报告及原字段访问、订阅类型声明 |
+| `scripts/build-software-display.py` | 211/306/307/336/337 的实际虚函数签名和原 sender 绑定 |
+
+实现不在每帧新增 heap 分配。单份待退役报告和 64 份观察历史均嵌入显示对象；
+history 覆盖、未消费报告丢弃、消息队列满、发送错误、DPU 失败和缺失呈现结果
+分别计数。`T733 FrameInfo:` 汇总最多每 5 秒一行，含发送状态及最大不确定区间。
+订阅对象及其 async reference 生命周期仍由原类管理，发送失败不延长请求寿命。
+
+源码已完成，尚未由本研究代理构建或运行。没有添加或执行测试，没有计算文件
+散列，没有修改 GPU 回收路径。57 的构建、刷入和 Frame Duration 实测结果由
+统一交付记录追加；源码就绪本身不等于实机回调已经确认。

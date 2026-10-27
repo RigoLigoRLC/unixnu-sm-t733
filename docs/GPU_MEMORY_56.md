@@ -54,4 +54,32 @@ core `e0a8997`、SoC `4de7850`、Adreno6xx `5b15108`、AdrenoMetal `093e075`。
 MSC重新枚举后完整写入536870912字节并sync，返回 `write-fat completed`。
 日志为工作区 `logs/msc-system-gpu-memory-56b/write-fat.jsonl`。Data保留。
 USB被动collector已确认运行，已请用户完整重启固件并选择Boot UniXNU。
-此时尚无56b实机性能结论。
+
+## 操作后的实测
+
+用户已启动并操作，反馈没有明显的整体流畅度提升，Frame Duration仍为0。
+本包没有修改FrameInfo，后者与实际交付范围一致。原始记录为工作区
+`logs/gpu-memory-56b-runtime/interaction-later.raw`，按查询及记录类型分组的数据
+为同名JSON；第三次查询前的系统壁纸崩溃另由57专题记录。
+
+同一backboardd连接代数3、device 1，在BO快照q34（101.526948秒）到q83
+（200.077998秒）之间，申请从4700增至5887，命中从2116增至3296：1187次
+申请中1180次命中，命中率99.41%。只有7次大小不匹配，pending miss、字节
+预算淘汰均未增加，对象数量淘汰为0。第三次q219（472.755133秒）的BO申请
+和命中计数未变，不能把这一段空闲时间继续计为新的交互样本。
+
+前两次查询各自最近256次提交的CPU准备平均3.468和3.283 ms，WC处理平均
+0.116和0.139 ms，import发布平均3.221和3.016 ms。提交到fence完成观察仍
+包含GPU排队和主机唤醒，不能据此报告GPU执行耗时。55b的CPU准备平均6.294 ms
+来自不同动作窗口，说明软件路径成本降低，但不证明总体帧率提升。
+
+热期新增慢事件66到70仅含4个4 KiB host import（22.256、23.000、32.206、
+19.135 ms）和1个8 KiB host import释放（27.953 ms）。没有新增owned BO
+分配或退休慢事件。kernel方法内部计时未覆盖IOKit外层IPC锁等待；57将该
+连接的externalMethod改用原生IPC读锁，并补齐各独立状态的同步。
+
+Metal pipeline计数从110/13536 ms增至111/13575 ms；Vulkan从115/7999 ms
+增至116/8002 ms。后续壁纸崩溃窗口两者均未增加。开机累计编译时间不能
+解释这一窗口的反复抖动。
+
+IPC锁等待、实际连接配额及57对应实现详见[57接续修复](GPU_MEMORY_57.md)。

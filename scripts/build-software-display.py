@@ -109,13 +109,17 @@ def main():
     declarations = {
         178: "IOReturn submitSwap(const void *, void *, void *)",
         184: "bool isMainDisplay()", 188: "IOReturn getDotPitch(uint32_t *)",
+        211: "IOReturn setFrameInfoNotificationMask(uint32_t, OriginalLegacyFrameInfoSubscription *, uint32_t) = 0",
         213: "IOReturn supportedFrameInfo(uint32_t, uint32_t *, char *, uint32_t *) = 0",
         249: "void getDisplayDimensions(uint32_t *, uint32_t *)",
         288: "bool startHardware()", 290: "void kickSwapQueue()",
         295: "void completeCurrentSwap()", 296: "bool validateSwap(const OriginalLegacySwapRequest *)",
         298: "IOReturn applyDisplayState()",
         301: "bool getRefreshAttributes(uint64_t *, bool)",
-        337: "IOReturn collectCompletionReports(uint32_t, void *, uint32_t *, uint32_t) = 0",
+        306: "void frameInfoSubscriptionChanged(OriginalLegacyFrameInfoSubscription *, bool) = 0",
+        307: "IOReturn sendFrameInfo(OriginalLegacyFrameInfoSubscription *, const OriginalLegacyFrameReport *) = 0",
+        336: "bool usesSharedFrameInfoQueue()",
+        337: "IOReturn collectCompletionReports(uint32_t, OriginalLegacyFrameReport *, uint32_t *, uint32_t) = 0",
         345: "bool isTimingEnabled() = 0",
     }
     virtuals = []
@@ -192,6 +196,7 @@ def main():
         "__ZN17AppleARMBacklight10gMetaClassE": backlight_metaclass + slide,
         "__ZTV17AppleARMBacklight": backlight_vptr - 16 + slide,
         "_native_legacy_vsync_notify": relocated(0xfffffff005796720),
+        "_native_legacy_frame_info_notify": relocated(0xfffffff005796934),
         "_native_legacy_set_refresh_properties": relocated(0xfffffff00579ebb8),
         "_native_legacy_set_properties": methods[44] + slide,
         "_native_legacy_surface_increment_use": relocated(0xfffffff004b9f750),

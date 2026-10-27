@@ -26529,10 +26529,10 @@ index 0000000..f4b25c9
 +       *device_local_memory_info = {
 diff --git a/patches/mesa/turnip-darwin-cached-coherent-memory.patch b/patches/mesa/turnip-darwin-cached-coherent-memory.patch
 new file mode 100644
-index 0000000..fdf5be2
+index 0000000..ae5b739
 --- /dev/null
 +++ b/patches/mesa/turnip-darwin-cached-coherent-memory.patch
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,141 @@
 +diff --git a/src/freedreno/vulkan/tu_device.cc b/src/freedreno/vulkan/tu_device.cc
 +--- a/src/freedreno/vulkan/tu_device.cc
 ++++ b/src/freedreno/vulkan/tu_device.cc
@@ -26662,6 +26662,18 @@ index 0000000..fdf5be2
 + 
 +    return vk_device_get_proc_addr(&device->vk, name);
 + }
++diff --git a/src/freedreno/vulkan/tu_knl.h b/src/freedreno/vulkan/tu_knl.h
++--- a/src/freedreno/vulkan/tu_knl.h
+++++ b/src/freedreno/vulkan/tu_knl.h
++@@ -286,7 +286,7 @@
++ VkResult tu_darwin_submit_add_cs_resources(struct tu_device *dev, void *submit,
++                                            const struct tu_cs *cs);
++ VKAPI_ATTR VkBool32 VKAPI_CALL
++-tu_NativeAdrenoDeviceCacheMaintenance(VkDevice device);
+++tu_NativeAdrenoDeviceHostCoherent(VkDevice device);
++ #endif
++ 
++ void tu_bo_set_metadata(struct tu_device *dev, struct tu_bo *bo,
 diff --git a/patches/mesa/turnip-darwin-kmd.patch b/patches/mesa/turnip-darwin-kmd.patch
 index aeaab9d..220fa8b 100644
 --- a/patches/mesa/turnip-darwin-kmd.patch

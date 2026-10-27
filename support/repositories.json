@@ -84,7 +84,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "8666a9950c9699b368931d18cac92c0fdb2ce9c0",
       "description": "DPU IOSurface scanout and native MobileFramebuffer presentation for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
-      "adaptation_commit": "00ced72933f139591921316f5b17efbcc9c3d8c3",
+      "adaptation_commit": "0090571635e84144b09a1877e088d19c055a7979",
       "device_changes_pushed": false
     },
     {

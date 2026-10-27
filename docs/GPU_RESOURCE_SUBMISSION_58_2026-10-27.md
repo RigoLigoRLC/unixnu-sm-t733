@@ -1,6 +1,6 @@
-# GPU resource submission, build 58c
+# GPU resource submission, build 58d
 
-`system-gpu-submit-58c` completed all nine build stages and was written to SM-T733
+`system-gpu-submit-58d` completed all nine build stages and was written to SM-T733
 through MSC on 2026-10-27. The service wrote 536870912 bytes and completed sync.
 Data was preserved. Passive USB capture was running before the boot request.
 Operation-period measurements are pending the user's boot and interaction.
@@ -45,33 +45,33 @@ were used to produce the image.
 
 | Repository | Build commit |
 | --- | --- |
-| Device | `542b4718375fcd95f993d7e92cf4d8b8134fd159` |
-| Core | `2670fef131f91e8e8292070004266f2e58ae9058` |
-| SoC | `ad5fca7a2efb47cb510082d2846662c9a4d746c7` |
-| Adreno6xx | `b84ec1cb77fc7ded28c949614b41bd9fc8028412` |
+| Device | `bfa50a176750ed8e4d5b89c69eaf4b8dd8497333` |
+| Core | `bb45ad50cb4ef2f04b293727bfca8fccfe0e4bbc` |
+| SoC | `0d836f87572f3c82147b882d3790ab74ae15fe1d` |
+| Adreno6xx | `3e8380d4156947ee3d5be2df9ff90d46aebaecc2` |
 | AdrenoMetal | `fd02456764c399ab5a56dfdd603fbc887a08da92` |
 | ArmSmmu4K | `d92ebe7ee91e2412a40490f9f78a4a927876229a` |
 | NativeMobileDisplay | `0090571635e84144b09a1877e088d19c055a7979` |
 
-Changed repositories have immutable tag `build/system-gpu-submit-58c-source-1`.
+Changed repositories have immutable tag `build/system-gpu-submit-58d-source-1`.
 Source trees were clean before building. No tests were added or run; remote
 publication was not requested.
 
 ```sh
 source tools/activate.sh
-bash tools/build-t733-recovery.sh system-gpu-submit-58c --system --payload-only \
+bash tools/build-t733-recovery.sh system-gpu-submit-58d --system --payload-only \
   --local-module soc:sm7325="$PWD/sources/unixnu-sm7325-common"
-bash tools/deploy-t733-msc.sh system-gpu-submit-58c
+bash tools/deploy-t733-msc.sh system-gpu-submit-58d
 ```
 
-Records are in `build/releases/system-gpu-submit-58c/`: `stages.tsv`,
+Records are in `build/releases/system-gpu-submit-58d/`: `stages.tsv`,
 `source-revisions.json` and stage commands/logs. Attempt 58 failed on kernel enum
 arithmetic; 58a passed the kernel and failed on a missing command-buffer declaration
 in Turnip. Both fixes were committed before building 58b; earlier tags/logs remain.
 
 Workspace deployment evidence is in
-`logs/msc-20261027-233704-system-gpu-submit-58c/write-fat.jsonl`; the previous FAT is
-`backups/msc-20261027-233704-system-gpu-submit-58c/payload-before.img`.
+`logs/msc-20261027-234840-system-gpu-submit-58d/write-fat.jsonl`; the previous FAT is
+`backups/msc-20261027-234840-system-gpu-submit-58d/payload-before.img`.
 USB raw captures and status are under `logs/t733-usb-live/`.
 
 ## 58b panic and 58c correction
@@ -93,10 +93,36 @@ and calls `complete(kIODirectionOut)` before entering GPU method dispatch. Failu
 or a short copy is returned without dispatching the packet. BO CPU unmap only
 releases the CPU mapping; its backing descriptor stays prepared while BoFree is Busy.
 
+## 58c validation failure and 58d correction
+
+58c had no repeated IOGMD panic. The user reported old frames flashing or no new
+display updates. Its snapshot showed 27 accepted/completed submissions, fence
+28/28, no outstanding jobs, no hardware fault or poisoned state, then Metal
+DeviceLost. The first resource rejection was stage 2, BadArgument, resource index
+278 of 338, handle `0x210b`, offset 0, length 16384000. The older first-failure line
+labels this resource offset as `iova`. Allocation records identify the same host
+import at GPU address `0x2f608000`, size 16384000. Evidence is in workspace
+`logs/gpu-submit-58c-runtime/display-failure/`.
+
+Mesa's new barrier tracking incorrectly declared READ|WRITE for buffer and image
+memory barriers even though these commands only issue cache/synchronization
+events. 58d declares READ there; copy, clear, render-target and storage writes
+retain WRITE. KMD can map a host import read-only after writable pinning returns
+KERN_PROTECTION_FAILURE. A false WRITE declaration would therefore trigger the
+new permission check. This matches the saved failure, but 58c's record lacks the
+actual permissions needed to confirm that individual rejection's branch.
+
+58d keeps the strict checks and saves the first resource rejection's specific
+reason, requested access/range, BO state, memory size/read-only state and VM
+permissions/size. Five separate short USB lines preserve all fields. The Mesa
+fix is exported in the recorded patch, core commit `bb45ad5`; diagnostic changes
+are KMD commit `3e8380d`. No performance comparison is drawn from the 27 startup
+submissions.
+
 ## Operation-period comparison
 
 The 57c baseline has 512 completed interaction submissions: CPU submission mean
 3.981 ms/p95 6.635 ms; cache publication mean 3.775 ms/p95 6.394 ms. Data is in
-`logs/gpu-concurrency-57c-runtime/`. Compare 58c after user interaction, keeping
+`logs/gpu-concurrency-57c-runtime/`. Compare 58d after user interaction, keeping
 initial allocations separate. CPU fence-observation intervals are not GPU
 utilization. GPU hardware profiling remains outside this CPU-submission iteration.

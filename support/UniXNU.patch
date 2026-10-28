@@ -25040,10 +25040,10 @@ index 4b06ab4..3b2da2e 100644
    Tag = TypeTag (Entry);
 diff --git a/patches/mesa/turnip-a6xx-large-texel-buffers.patch b/patches/mesa/turnip-a6xx-large-texel-buffers.patch
 new file mode 100644
-index 0000000..3b7e461
+index 0000000..8a62837
 --- /dev/null
 +++ b/patches/mesa/turnip-a6xx-large-texel-buffers.patch
-@@ -0,0 +1,241 @@
+@@ -0,0 +1,250 @@
 +diff --git a/src/freedreno/vulkan/tu_buffer_view.cc b/src/freedreno/vulkan/tu_buffer_view.cc
 +index 05cc2f8..e4db135 100644
 +--- a/src/freedreno/vulkan/tu_buffer_view.cc
@@ -25251,6 +25251,15 @@ index 0000000..3b7e461
 +       nir_def *offset = intr->src[1].ssa;
 + 
 +       nir_foreach_use_safe (use, &intr->def) {
++@@ -1703,7 +1766,7 @@ lower_ssbo_address_size(nir_builder *b, nir_intrinsic_instr *intr, void *data)
++ static bool
++ tu_nir_lower_ssbo_address_size(
++-   nir_shader *shader, const struct lower_ssbo_address_size_state *state)
+++   nir_shader *shader, const struct descriptor_load_state *state)
++ {
++    return nir_shader_intrinsics_pass(shader, lower_ssbo_address_size,
++                                      nir_metadata_control_flow, (void *) state);
++ }
 +@@ -3463,6 +3526,18 @@ tu_shader_create(struct tu_device *dev,
 +             key->read_only_input_attachments, key->dynamic_renderpass,
 +             &const_allocs);

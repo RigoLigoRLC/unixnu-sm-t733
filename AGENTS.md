@@ -6,7 +6,9 @@ optimizations with the system BGRA8 sRGB format policy. The
 and AdrenoMetal use the same two branch names and pin matching component
 revisions. GPU and display driver revisions are shared.
 
-The main branch is being built as `system-gpu-opt-63b`. The complete Apple3
+The main branch completed all nine build stages as `system-gpu-opt-63b`.
+Branch boundaries, fixed revisions and commands are in
+`docs/GPU_BRANCHES_63_2026-10-28.md`. The complete Apple3
 implementation previously built as `system-gpu-stack-62j`; its fixed source and
 results remain in `docs/GPU_STACK_62J_BUILD_2026-10-28.md`. The latest deployed
 package remains `system-gpu-frame-profile-61a`. DVFS and full Apple4

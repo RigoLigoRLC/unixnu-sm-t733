@@ -39,6 +39,9 @@ extern void t733_tlmm_dump_stats(void) __attribute__((weak_import));
 extern void t733_pmic_keys_dump(void) __attribute__((weak_import));
 extern void t733_display_dump(void) __attribute__((weak_import));
 extern void native_adreno_metal_dump_stats(void) __attribute__((weak_import));
+extern uint32_t native_adreno_gpu_profile_start(uint32_t) __attribute__((weak_import));
+extern void native_adreno_gpu_profile_stop(void) __attribute__((weak_import));
+extern void native_adreno_gpu_profile_dump(void) __attribute__((weak_import));
 extern void native_usb_net_receive(const void *, unsigned) __attribute__((weak_import));
 extern void native_usb_net_set_link(int) __attribute__((weak_import));
 extern void native_usb_net_start(void) __attribute__((weak_import));
@@ -125,6 +128,9 @@ static bool gpio_requested;
 static bool dvfs_requested;
 static bool display_requested;
 static bool gpu_requested;
+static bool gpu_profile_start_requested;
+static bool gpu_profile_stop_requested;
+static bool gpu_profile_dump_requested;
 static bool network_requested;
 static uint64_t panic_deadline;
 static struct {
@@ -564,6 +570,13 @@ static void command_line(void)
         display_requested = true;
     } else if (!strcmp(u.command, "gpu")) {
         gpu_requested = true;
+    } else if (!strcmp(u.command, "gpu-profile-start")) {
+        gpu_profile_start_requested = true;
+    } else if (!strcmp(u.command, "gpu-profile-stop")) {
+        gpu_profile_stop_requested = true;
+        gpu_profile_dump_requested = true;
+    } else if (!strcmp(u.command, "gpu-profile")) {
+        gpu_profile_dump_requested = true;
     } else if (!strcmp(u.command, "tasks")) {
         tasks_process_name[0] = '\0';
         tasks_requested = true;
@@ -578,8 +591,10 @@ static void command_line(void)
         }
         u.cursor = 0;
         printf("T733 DEBUG: replay retained RAM log\n");
-    } else if (u.command_n)
+    } else if (u.command_n) {
         printf("T733 DEBUG: commands help status ping replay tasks [process-name] cpus ufs gpio dvfs display gpu network\n");
+        printf("T733 DEBUG: GPU capture gpu-profile-start gpu-profile-stop gpu-profile\n");
+    }
     u.command_n = 0;
     u.command_overflow = false;
 }
@@ -1117,6 +1132,29 @@ static void usb_thread(void *arg __unused, wait_result_t result __unused)
                 native_adreno_metal_dump_stats();
             } else {
                 printf("T733 GPU: Metal diagnostics unavailable\n");
+            }
+        }
+        if (gpu_profile_start_requested && !panicking) {
+            gpu_profile_start_requested = false;
+            if (native_adreno_gpu_profile_start) {
+                uint32_t status = native_adreno_gpu_profile_start(20000);
+                printf("T733 GPU: capture start status=0x%x\n", status);
+            } else {
+                printf("T733 GPU: hardware capture unavailable\n");
+            }
+        }
+        if (gpu_profile_stop_requested && !panicking) {
+            gpu_profile_stop_requested = false;
+            if (native_adreno_gpu_profile_stop) {
+                native_adreno_gpu_profile_stop();
+            }
+        }
+        if (gpu_profile_dump_requested && !panicking) {
+            gpu_profile_dump_requested = false;
+            if (native_adreno_gpu_profile_dump) {
+                native_adreno_gpu_profile_dump();
+            } else {
+                printf("T733 GPU: hardware capture unavailable\n");
             }
         }
         uint64_t deadline;

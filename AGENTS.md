@@ -16,6 +16,13 @@ Evidence and revisions are in `docs/GPU_ASYNC_WAIT_63C_2026-10-28.md`.
 Branch boundaries are in `docs/GPU_BRANCHES_63_2026-10-28.md`.
 DVFS and full Apple4 tile/imageblock/ROG support remain deferred.
 
+The current GPU investigation measures hardware execution, shader activity,
+cache waits and GMEM traffic. CPU timing analysis is deferred. The bounded
+hardware capture package `system-gpu-hardware-64` passed all nine build stages
+and was written through MSC with sync complete. Runtime counter collection
+is pending; commands and fixed sources are in
+`docs/GPU_HARDWARE_CAPTURE_64_2026-10-29.md`.
+
 This directory is the source for UniXNU-SM-T733. The repository layout follows
 UniXNU-sheng; read README.md, docs/BUILDING.md and docs/REPOSITORY_LAYOUT.md.
 

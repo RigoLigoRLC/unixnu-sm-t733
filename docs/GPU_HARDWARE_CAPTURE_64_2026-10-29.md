@@ -20,11 +20,26 @@ Adreno6xx `83a0453` 将两处 CPU 时间读取统一改为 GMU AO `0x1f888/0x1f8
 
 USB start 只排入窗口请求。GPU worker 使用 A642L 实际 GMU 分支的 OOB 请求 bit28、ACK bit30、释放 bit29；100 ms 内取得 ACK 后才允许采集。窗口期间持续持有，停止、截止或容量达到上限后等 pending job 退休再释放。fault 先禁采，停止 CP 后清请求，GMU reset 成功后清剩余软件所有权。OOB 失败时禁止计数器访问并进入既有故障处理。运行期不再读取 selector。新增 PM4 仍为每任务 9 dword，无新增 WFI。
 
-同机寄存器与地址换算已独立对照。`system-gpu-hardware-64a` 九阶段构建均退出 0，完整 536870912 字节 MSC 写入和 sync 成功，Data 保留。当前等待修正版启动和操作期采样。故障前内存记录计数不作为硬件计数采集成功证据。
+同机寄存器与地址换算已独立对照。`system-gpu-hardware-64a` 九阶段构建均退出 0，完整 536870912 字节 MSC 写入和 sync 成功，Data 保留。修正版已启动并完成下述操作期采样。故障前内存记录计数不作为硬件计数采集成功证据。
 
 64a 固定输入：设备 `f751d0dff134a8bf848f41b03377d87e1b775b01`、core `1aa8c23b8100ee766e9de540ac9b3045130b1e1e`、SoC `892c272e37d709e30dfe26afadfae68beb43dc0a`、Adreno6xx `83a0453e981567a30cecd6486bdb8b3b33d64683`。构建 tag 为 `build/system-gpu-hardware-64a-source-1`；命令沿用上文并将构建名替换为 `system-gpu-hardware-64a`，完整命令及版本在该 release 的 `source-revisions.json`。
 
 64a 部署日志在工作区 `logs/msc-system-gpu-hardware-64a/`，旧 FAT 在 `backups/msc-system-gpu-hardware-64a/payload-before.img`。刷入前还读取了 32 MiB 持久 BootLog，解码位于 `logs/gpu-hardware-64-crash-1/boot-log-decoded/`：tag 为 64、uptime 260 秒、write_errors 0，尾部为采样状态和 DPU flip 1800，没有本次 panic。保留的 encryption panic 明确属于旧启动。
+
+## 64a 首个完整操作窗口
+
+2026-10-29，20 秒窗口完成且设备保持连接，未复位。保存 29 个计数器定义、886 个有效硬件样本和 276 笔有效 job，885 个相邻差分区间，缺失、倒退、丢弃均为 0。OOB acquire/release 返回 0、owned 从 1 回到 0。主机已修正把新增 access 元数据误记为 discarded 的解析问题，离线重算 `export_complete=true`。原始大计数基值不当作成功归零；分析使用连续差分。
+
+| GPU 时间 | 平均 | 中位 | p95 | 最大 |
+| --- | --- | --- | --- | --- |
+| CP 开始处理至 RB 完成 | 34.768 ms | 32.569 ms | 55.828 ms | 68.136 ms |
+| 下发至 CP 开始处理 | 1.270 ms | 0.002656 ms | 10.156 ms | 23.292 ms |
+
+276 笔 CP 到 RB 区间互不重叠，总计 9.595958 秒；CP busy 周期对应 9.596847 秒。核心周期差分对应 315.000005 MHz。WFI 等待对应 5.2834 秒、占 CP busy 55.05%，几乎全部落在 shader 仍有工作的采样区间；不能直接当作可删除的同步开销。
+
+按完整落在单个 job 内的采样区间比较，至少 50 ms 的任务相对 25 至 35 ms 的任务：纹理指令事件/core 周期增加 2.50 倍、SP 等待 TP/core 周期增加 6.77 倍、FS ALU 指令事件/core 周期增加 1.03 倍。这是当前最强线索，优先追片元 shader 的纹理采样及重复绘制/pass。SP/TP 聚合倍数尚不适合直接套成 GPU 利用率；不同单元计数不相加。GMEM 搬运时长、冗余缓存命令比例仍需 pass/命令级抓取。
+
+可复核归档为工作区 `logs/gpu-hardware-64a-runtime/`：原始 raw、JSONL、完整 summary、`gpu-overhead-analysis.json` 的计算公式及区间序号、`analysis.md`、`gpu-timeline.png` 和可放大的 `gpu-timeline.svg`。时间线四轨使用同一 GPU 时间轴；计数曲线按 250 ms 汇总，时间段没有额外命名为某种用户操作。
 
 | 构建输入 | 固定版本 |
 | --- | --- |

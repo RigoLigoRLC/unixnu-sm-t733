@@ -22,8 +22,10 @@ hardware capture package `system-gpu-hardware-64` passed all nine build stages
 and was written through MSC with sync complete. Its first capture was followed
 by a black-screen reset. CPU sampling now uses GMU AO timestamps and holds the
 performance OOB until captured jobs retire. The 64a package passed all nine
-build stages and was written through MSC with sync complete; runtime results
-are pending. Do not
+build stages and was written through MSC with sync complete. Its 20-second
+capture completed with 886 valid samples and 276 GPU jobs, no missing records
+or reset. Mean CP-to-RB duration is 34.77 ms; longer jobs show increased
+texture activity and shader waits for texture. Do not
 restart capture on 64. Commands, failure evidence and fixed sources are in
 `docs/GPU_HARDWARE_CAPTURE_64_2026-10-29.md`.
 

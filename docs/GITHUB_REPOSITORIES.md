@@ -1,5 +1,9 @@
 # GitHub 仓库与适配分支
 
+设备、core、SM7325 和 AdrenoMetal 已拆为 `unixnu-sm-t733` 与
+`unixnu-sm-t733-apple3`。前者保留驱动优化和 ARGB32/BGRA8 sRGB 选择，后者增加
+Apple3 功能。固定版本和 63b 构建结果见[分支记录](GPU_BRANCHES_63_2026-10-28.md)。
+
 2026-10-28 的 GPU 优化及固定依赖发布见[本轮仓库与提交清单](GPU_CPU_PUBLICATION_2026-10-28.md)。当前固定版本以 `support/repositories.json` 为准。
 
 截至 2026-10-25，`RigoLigoRLC` 账号已发布 18 个公开仓库：10 个 fork、8 个新仓。

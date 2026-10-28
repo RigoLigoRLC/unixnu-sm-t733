@@ -204,7 +204,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": null,
       "description": "Qualcomm SM7325 shared SoC configuration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
-      "adaptation_commit": "f5702af5637f9298ee1762aeace058cf029f92f4",
+      "adaptation_commit": "716aa00ad232f5ce6c41eee19e261c694e57d68f",
       "device_changes_pushed": true
     },
     {
@@ -216,7 +216,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "4e0314df8ad29d52f6fa3f9383a540adcd618b87",
       "description": "A642L GPU backend for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "b762d6999d1abbf335ebad8f0abac1f3dae1554f",
+      "adaptation_commit": "83a0453e981567a30cecd6486bdb8b3b33d64683",
       "device_changes_pushed": true
     },
     {

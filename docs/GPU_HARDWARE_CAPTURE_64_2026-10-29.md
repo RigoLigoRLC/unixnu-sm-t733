@@ -4,7 +4,27 @@
 
 ## 交付
 
-`system-gpu-hardware-64` 九阶段构建均退出 0。MSC 已完整备份旧 FAT，再写入 536870912 字节并完成 sync，返回 `write-fat completed`。Data 保留。当前等待新包启动和操作期采样，尚未取得本包的有效硬件计数。
+`system-gpu-hardware-64` 九阶段构建均退出 0。MSC 已完整备份旧 FAT，再写入 536870912 字节并完成 sync，返回 `write-fat completed`。Data 保留。启动后正常合成约 4 分钟，开启采样后发生黑屏复位，暂停该版采样。尚未取得导出的有效硬件计数。
+
+## 首次窗口故障
+
+上海时间 00:39:39.782 开始窗口；约 2 秒后的状态记录 97 个内存样本、33 个已收集 job、1 个 pending job，丢弃数 0。00:39:43.426 为最后收到的字节，00:39:49.723 USB 断开。用户报告滑动中黑屏死机复位，之后停在固件菜单或 MSC。尾部没有本次 panic 或 GPU fault。完整原始资料保存在工作区 `logs/gpu-hardware-64-crash-1/`。
+
+源码审计找到两处具体访问协议错误：新增 CPU 时间读取用了 CP AO `0x980/0x981`；同机原厂 `adreno_a6xx.c:a6xx_read_alwayson` 在 GMU 启用时明确选择 GMU AO。周期性能计数读取还缺少原厂 `adreno_perfcntr_active_oob_get/put` 的 `oob_perfcntr` 所有权。提交前 CPU 时间读取位于提交锁内；若 Device 总线读取不返回，完成回收和后续超时检查会被挡住。具体阻塞访问尚无现场 PC 证据，正在按原厂访问协议修正。
+
+独立 PM4 审计确认新增包字段、长度、时间戳槽范围及正常 fence 后回收与固定参考路径一致，暂未发现越界证据。修正版必须覆盖周期采样和提交前计时的全部 CPU 寄存器访问；GMU AO 与 CP 时间在没有同步依据时不得直接相减。
+
+## 64a 修正源码
+
+Adreno6xx `83a0453` 将两处 CPU 时间读取统一改为 GMU AO `0x1f888/0x1f889`。GPU PM4 继续读取 CP `0x980`。同机原厂 ringbuffer 的 CPU submit tick 经 `a6xx_read_alwayson` 取得 GMU AO；GPU end timestamp 由 CP 写入，dispatch 直接计算两者差值。本机沿用该已确认的计算关系，另用 `queue_valid` 和 `rb_valid` 分别标记两种区间。
+
+USB start 只排入窗口请求。GPU worker 使用 A642L 实际 GMU 分支的 OOB 请求 bit28、ACK bit30、释放 bit29；100 ms 内取得 ACK 后才允许采集。窗口期间持续持有，停止、截止或容量达到上限后等 pending job 退休再释放。fault 先禁采，停止 CP 后清请求，GMU reset 成功后清剩余软件所有权。OOB 失败时禁止计数器访问并进入既有故障处理。运行期不再读取 selector。新增 PM4 仍为每任务 9 dword，无新增 WFI。
+
+同机寄存器与地址换算已独立对照。`system-gpu-hardware-64a` 九阶段构建均退出 0，完整 536870912 字节 MSC 写入和 sync 成功，Data 保留。当前等待修正版启动和操作期采样。故障前内存记录计数不作为硬件计数采集成功证据。
+
+64a 固定输入：设备 `f751d0dff134a8bf848f41b03377d87e1b775b01`、core `1aa8c23b8100ee766e9de540ac9b3045130b1e1e`、SoC `892c272e37d709e30dfe26afadfae68beb43dc0a`、Adreno6xx `83a0453e981567a30cecd6486bdb8b3b33d64683`。构建 tag 为 `build/system-gpu-hardware-64a-source-1`；命令沿用上文并将构建名替换为 `system-gpu-hardware-64a`，完整命令及版本在该 release 的 `source-revisions.json`。
+
+64a 部署日志在工作区 `logs/msc-system-gpu-hardware-64a/`，旧 FAT 在 `backups/msc-system-gpu-hardware-64a/payload-before.img`。刷入前还读取了 32 MiB 持久 BootLog，解码位于 `logs/gpu-hardware-64-crash-1/boot-log-decoded/`：tag 为 64、uptime 260 秒、write_errors 0，尾部为采样状态和 DPU flip 1800，没有本次 panic。保留的 encryption panic 明确属于旧启动。
 
 | 构建输入 | 固定版本 |
 | --- | --- |

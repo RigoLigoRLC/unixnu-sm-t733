@@ -20,7 +20,11 @@ Adreno6xx `83a0453` 将两处 CPU 时间读取统一改为 GMU AO `0x1f888/0x1f8
 
 USB start 只排入窗口请求。GPU worker 使用 A642L 实际 GMU 分支的 OOB 请求 bit28、ACK bit30、释放 bit29；100 ms 内取得 ACK 后才允许采集。窗口期间持续持有，停止、截止或容量达到上限后等 pending job 退休再释放。fault 先禁采，停止 CP 后清请求，GMU reset 成功后清剩余软件所有权。OOB 失败时禁止计数器访问并进入既有故障处理。运行期不再读取 selector。新增 PM4 仍为每任务 9 dword，无新增 WFI。
 
-同机寄存器与地址换算已独立对照，构建和修正后的实机结果待记录。故障前内存记录计数不作为硬件计数采集成功证据。
+同机寄存器与地址换算已独立对照。`system-gpu-hardware-64a` 九阶段构建均退出 0，完整 536870912 字节 MSC 写入和 sync 成功，Data 保留。当前等待修正版启动和操作期采样。故障前内存记录计数不作为硬件计数采集成功证据。
+
+64a 固定输入：设备 `f751d0dff134a8bf848f41b03377d87e1b775b01`、core `1aa8c23b8100ee766e9de540ac9b3045130b1e1e`、SoC `892c272e37d709e30dfe26afadfae68beb43dc0a`、Adreno6xx `83a0453e981567a30cecd6486bdb8b3b33d64683`。构建 tag 为 `build/system-gpu-hardware-64a-source-1`；命令沿用上文并将构建名替换为 `system-gpu-hardware-64a`，完整命令及版本在该 release 的 `source-revisions.json`。
+
+64a 部署日志在工作区 `logs/msc-system-gpu-hardware-64a/`，旧 FAT 在 `backups/msc-system-gpu-hardware-64a/payload-before.img`。刷入前还读取了 32 MiB 持久 BootLog，解码位于 `logs/gpu-hardware-64-crash-1/boot-log-decoded/`：tag 为 64、uptime 260 秒、write_errors 0，尾部为采样状态和 DPU flip 1800，没有本次 panic。保留的 encryption panic 明确属于旧启动。
 
 | 构建输入 | 固定版本 |
 | --- | --- |

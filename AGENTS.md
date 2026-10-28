@@ -21,7 +21,9 @@ cache waits and GMEM traffic. CPU timing analysis is deferred. The bounded
 hardware capture package `system-gpu-hardware-64` passed all nine build stages
 and was written through MSC with sync complete. Its first capture was followed
 by a black-screen reset. CPU sampling now uses GMU AO timestamps and holds the
-performance OOB until captured jobs retire; the 64a build is pending. Do not
+performance OOB until captured jobs retire. The 64a package passed all nine
+build stages and was written through MSC with sync complete; runtime results
+are pending. Do not
 restart capture on 64. Commands, failure evidence and fixed sources are in
 `docs/GPU_HARDWARE_CAPTURE_64_2026-10-29.md`.
 

@@ -34,4 +34,26 @@ bash tools/build-t733-recovery.sh system-gpu-opt-63c2 --system --payload-only \
 
 63c 的内核构建因主机沙箱阻止 sysctl 查询 CPU/内存参数而退出，原日志保留在 `build/releases/system-gpu-opt-63c/`。63c2 使用相同源码在允许该查询的环境构建，九阶段均退出 0，产物为 `build/releases/system-gpu-opt-63c2/payload.img`。
 
-63c2 已通过 MSC 完整写入 536870912 字节并完成 sync，返回 `write-fat completed`，退出 0，Data 保留。旧 FAT 完整备份为工作区 `backups/msc-system-gpu-opt-63c2/payload-before.img`，读写记录在 `logs/msc-system-gpu-opt-63c2/`。被动 USB 采集器已就绪，当前等待首次启动确认 GPU 合成恢复。
+63c2 已通过 MSC 完整写入 536870912 字节并完成 sync，返回 `write-fat completed`，退出 0，Data 保留。旧 FAT 完整备份为工作区 `backups/msc-system-gpu-opt-63c2/payload-before.img`，读写记录在 `logs/msc-system-gpu-opt-63c2/`。随后启动及用户滑动记录确认 GPU 合成恢复。
+
+## 63c2 操作期结果
+
+本次 USB 日志为工作区 `logs/t733-usb-live/t733-20261028T152909.990732Z.raw`。GPU 查询完整输出位于第 3945 至 11094 行。累计提交 929、完成 929，faults、timeouts 和 poisoned_jobs 均为 0；显示完成 1099 帧，failed、missing、unmatched 均为 0。
+
+保留的 256 笔提交为 sequence 674 至 929，时间为开机后 153.026 至 206.125 秒；512 帧为 sequence 588 至 1099，时间为 135.358 至 206.134 秒。帧缓存已覆盖较早的 587 帧。导出数据在工作区 `logs/gpu-opt-63c2-runtime/`：`frames.jsonl`、`frames.csv`、`summary.json`、`operation-summary.json`、`bo-operation-intervals.json`。
+
+| 指标 | 操作期结果 |
+| --- | --- |
+| 硬件提交函数 CPU 耗时 | 平均 24.695 us，中位 16 us，p95 51 us；范围不含调度器接收前的资源遍历、分配和用户态编码 |
+| 接受任务到下发 | 平均 40.469 us，中位 30.5 us |
+| 下发到观察到完成 | 平均 34.078 ms，中位 31.293 ms，p95 65.919 ms；包含硬件队列及完成观察延迟 |
+| 开始合成到显示完成上界 | 中位 63.399 ms，p95 125.286 ms，最大 702.318 ms |
+| 最后连续 114 帧 | 帧间隔中位 33.663 ms；合成至显示中位 63.399 ms，p95 111.406 ms |
+| 每次提交的软件缓存维护 | 保留的 256 笔均为 0 us |
+| 两次提交间记录到的映射/释放/分配 | 173/241/12 次，累计 1014.733/377.337/456.436 ms；这些时间在提交函数计时范围之外 |
+
+最慢的第 914 帧耗时 702.318 ms，其中 657.684 ms 发生在该帧最终输出任务首次提交之前。该段第 741 笔提交前记录到 38 次映射共 141.954 ms；第 744 笔提交前另有一次分配耗时 239.367 ms。持续慢帧和提交前长停顿需要分别定位。
+
+从设备创建累计至查询，backboardd 的 BO 复用请求为 9605 次，命中 7665 次，命中率 79.80%；资源处理的 `clean_bytes=0 acquire_bytes=0 fallback=0`。这些累计值包含启动初始化。实际普通纹理格式列表包含 80，即 BGRA8Unorm；IOSurface 纹理创建成功 27 次、失败 0 次，平面请求计数 0。该计数直接读取传入源 IOSurface 的 `IOSurfaceGetPlaneCount()`，因此这 27 次创建调用的源表面均为非平面布局，未进入双平面导入路径。记录未提供成功 IOSurface/视图的 Metal 格式号，尚未取得 81 即 BGRA8Unorm_sRGB 的直接记录。
+
+本轮读取已保存的软件时序记录，没有新录制硬件计数或 shader 采样，不能据此把提交后延迟全部归为 shader 执行时间。

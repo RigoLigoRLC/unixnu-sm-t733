@@ -12,6 +12,14 @@
     };
 };
 
+&mdss {
+    status = "okay";
+    native-interrupt-base = <0x1000>;
+    native-interface-base = <0x36000>;
+    native-control-base = <0x16000>;
+    native-vsync-mask = <0x08000000>;
+};
+
 &gpu {
     status = "okay";
     native-adreno-lpac-bank = <2>;

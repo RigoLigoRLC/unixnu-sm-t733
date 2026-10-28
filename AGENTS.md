@@ -12,6 +12,13 @@ Fields, limits and capture commands are in
 `docs/GPU_FRAME_PROFILE_61.md`; fence reference findings are in
 `docs/GPU_FENCE_WAIT_AUDIT_2026-10-28.md`.
 
+GPU optimization currently defers DVFS. Format selection, Metal API ordering,
+incremental dependency handling and per-Surface completion design are in
+`docs/GPU_METAL_SUBMISSION_RESEARCH_2026-10-28.md`; continue from its concrete
+source findings before changing the submission or display paths. Apple family
+requirements and current A642L implementation gaps are recorded in
+`docs/A642L_METAL_FAMILY_RESEARCH_2026-10-28.md`.
+
 This directory is the source for UniXNU-SM-T733. The repository layout follows
 UniXNU-sheng; read README.md, docs/BUILDING.md and docs/REPOSITORY_LAYOUT.md.
 

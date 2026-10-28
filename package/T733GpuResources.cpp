@@ -188,6 +188,7 @@ extern "C" int native_adreno_a6xx_resources(NativeAdrenoA6xxResources *resources
     }
 
     valid = interrupt(gpu, "smmu-global", result.smmuGlobalInterrupt) && valid;
+    valid = interrupt(gpu, "gpu", result.gpuInterrupt) && valid;
     const char *contextInterruptNames[] = {
         "smmu-context-0", "smmu-context-1", "smmu-context-2", "smmu-context-3",
         "smmu-context-4", "smmu-context-5", "smmu-context-6", "smmu-context-7",

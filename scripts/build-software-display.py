@@ -64,6 +64,7 @@ def compile_source(record, tree, source, destination, output):
         "-Wno-reorder-init-list", "-Wno-deprecated-enum-enum-conversion",
         "-Wno-unnecessary-virtual-specifier", "-Wno-missing-include-dirs",
         "-I", output, "-I", tree / ".cache/xnu-work/osfmk",
+        "-I", tree / "drivers/NativeMobileDisplay",
     ])
     if source.stem == "NativeLegacyDisplay":
         command.append("-DNATIVE_T733_FIRMWARE_DISPLAY=1")
@@ -149,8 +150,10 @@ def main():
         sources / "drivers/NativeMobileDisplay/NativeLegacyDisplay.cpp",
         sources / "drivers/NativeMobileDisplay/NativeDpuScanout.cpp",
         sources / "drivers/NativeMobileDisplay/NativeDpuSurface.cpp",
+        sources / "drivers/NativeMobileDisplay/NativeDpuInterrupt.cpp",
         sources / "drivers/NativeKeyStoreEvents/NativeKeyStoreEvents.cpp",
         package / "T733Display/DisplayRegistration.cpp",
+        package / "T733Display/DisplayInterruptResources.cpp",
         package / "T733Display/KeyStoreRegistration.cpp",
     ]
     objects = []

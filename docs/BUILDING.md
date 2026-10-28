@@ -88,7 +88,7 @@ bash scripts/build.sh platform-local-1 --platform
 
 turnip 阶段通过 `tools/gpu/bootstrap-turnip.py` 在公共 core 的 `.cache` 内准备固定 Mesa、Python 依赖、glslang 和 bison，再调用官方 `build-turnip-darwin.py`。也可提前执行 `python3 tools/gpu/bootstrap-turnip.py --core "$UNIXNU_BASE"` 准备依赖，保留 `UNIXNU_RECORD_HASHES=0`。
 
-metal 阶段调用 `tools/gpu/bootstrap-metal.py --core <core> --abi-directory <resolved tree>/drivers/Adreno6xx`。主机须已有 `rustup` 和 LLVM 21 或更高版本的 `llvm-as`；脚本在 core 的 `.cache/gpu-reference/metal2vulkan` 获取固定提交 `720ef1ce9ae2a2068999a8675717418b9416283e`，由 bridge 构建器应用 `0001` 至 `0008` 及 `0009-bound-idle-command-pools-on-ios.patch`。Rust 1.98.0 及 `aarch64-apple-ios` target 安装在 `.cache/metal-rustup`，Cargo 依赖保存在 `.cache/metal-cargo`；首次准备需要网络。
+metal 阶段调用 `tools/gpu/bootstrap-metal.py --core <core> --abi-directory <resolved tree>/drivers/Adreno6xx`。主机须已有 `rustup` 和 LLVM 21 或更高版本的 `llvm-as`；脚本在 core 的 `.cache/gpu-reference/metal2vulkan` 获取固定提交 `720ef1ce9ae2a2068999a8675717418b9416283e`，由 bridge 构建器按显式列表应用 `0001` 至 `0018`。每个源码文件只属于一份补丁，共享修改合并回该文件所属补丁；构建器把完整源码差异与登记内容比较后继续编译。Rust 1.98.0 及 `aarch64-apple-ios` target 安装在 `.cache/metal-rustup`，Cargo 依赖保存在 `.cache/metal-cargo`；首次准备需要网络。
 
 bootstrap先查询本地工具链及iOS标准库；固定版本已安装时直接使用，缺失时才执行rustup安装。
 

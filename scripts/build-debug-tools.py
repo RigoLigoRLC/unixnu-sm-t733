@@ -165,6 +165,7 @@ def main():
         ("preferences/backboardd-brightness.plist", 0o644,
          (DEVICE / "package/backboardd-brightness.plist").read_bytes()),
         ("addons/NativeAdrenoMetal.publish", 0o644, b"1\n"),
+        ("addons/NativeAdrenoMetal.display-policy", 0o644, b"21H461-srgb-bgra8-1\n"),
         ("addons/NativeAdrenoMetal.clients", 0o644,
          b"backboardd\niconservicesagent\nKaleidoscopePoster\nAegirPoster\n"),
     ]

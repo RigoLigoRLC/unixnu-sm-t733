@@ -24,7 +24,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "fb5e8ba88fcce2526e33fe8c4348d5e7aeb585d8",
       "description": "UniXNU core build and boot-menu adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "2b582dcd1b6e27fda51062751346716f19e1d596",
+      "adaptation_commit": "bd3dc20f6c6bee4451cfb1f9a9a53ac4cf233a35",
       "device_changes_pushed": true
     },
     {
@@ -84,7 +84,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "8666a9950c9699b368931d18cac92c0fdb2ce9c0",
       "description": "DPU IOSurface scanout and native MobileFramebuffer presentation for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
-      "adaptation_commit": "3ff9ff47cbefd400b7afdbc687662d7d47330cca",
+      "adaptation_commit": "d15d6c91dd01698262404755d0568bd85277e46b",
       "device_changes_pushed": true
     },
     {
@@ -204,7 +204,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": null,
       "description": "Qualcomm SM7325 shared SoC configuration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
-      "adaptation_commit": "1829984554102bbee5ac2fafba945d7740d0590f",
+      "adaptation_commit": "99256e5b90d5ff840d47c05dbc3c3cf190d0671b",
       "device_changes_pushed": true
     },
     {
@@ -216,7 +216,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "4e0314df8ad29d52f6fa3f9383a540adcd618b87",
       "description": "A642L GPU backend for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "bdb86b85e5320c19db395669c5a3a91ea6a2d93d",
+      "adaptation_commit": "89cd057d60499e2ee4f844db507ebb00d679ec5e",
       "device_changes_pushed": true
     },
     {
@@ -240,7 +240,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": null,
       "description": "Metal frontend, memory allocation and Turnip integration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
-      "adaptation_commit": "0d69cf81e3d1e9e0cc897bf3049e480c94bc4556",
+      "adaptation_commit": "00a5b2f67b091b13f3351e30e9ed68e81bbb2770",
       "device_changes_pushed": true
     },
     {

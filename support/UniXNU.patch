@@ -138,10 +138,10 @@ index dff2ced..d0904e9 100644
  	path = kits/XnuPrelink
  	url = https://github.com/UniXNU/XnuPrelink.git
 diff --git a/components.toml b/components.toml
-index 505cf96..efa4052 100644
+index 505cf96..d695b93 100644
 --- a/components.toml
 +++ b/components.toml
-@@ -100,12 +100,12 @@ legacy_outputs = { "build/native-adreno/libNativeAdreno.a" = "build/adreno740/li
+@@ -100,19 +100,19 @@ legacy_outputs = { "build/native-adreno/libNativeAdreno.a" = "build/adreno740/li
  
  [[component]]
  id = "AdrenoMetal"
@@ -153,10 +153,18 @@ index 505cf96..efa4052 100644
 -repository = "https://github.com/UniXNU/AdrenoMetal.git"
 -revision = "454ff2ce83766ce7b3e0f355e83f1d72907708b3"
 +repository = "https://github.com/RigoLigoRLC/unixnu-adrenometal.git"
-+revision = "0d69cf81e3d1e9e0cc897bf3049e480c94bc4556"
++revision = "00a5b2f67b091b13f3351e30e9ed68e81bbb2770"
  path = "drivers/AdrenoMetal"
  hardware = ["Turnip Darwin backend", "kernel GPU user-client ABI"]
  os_abi = ["ipados-17.7.11-21H461"]
+ board_dependencies = ["display integration", "shader cache"]
+ verified_devices = ["sheng"]
+ dependencies = ["Adreno740", "AdrenoPM4"]
+-source_files = ["NativeAdrenoMetalPlugin.mm", "NativeBridgeMetalFrontend.mm", "bridge/NativeMetalBridge.rs"]
++source_files = ["NativeAdrenoMetalPlugin.mm", "NativeAdrenoSystemFormatPolicy.h", "NativeBridgeMetalFrontend.mm", "NativeBridgeMetalExtended.inc", "bridge/NativeMetalBridge.rs", "bridge/NativeMetalObjects.rs", "bridge/NativeMetalObjects.h", "bridge/NativeMetalExtended.rs", "bridge/NativeMetalExtended.h"]
+ runtime_identifiers = ["NativeMetal", "NativeAdrenoMetalPlugin.mm", "NativeBridgeMetalFrontend.mm", "bridge/NativeMetalBridge.rs", "NativeAdrenoMetal.bundle", "NativeAdrenoMetal", "org.blu-sharky.NativeAdrenoMetal", "libvulkan_freedreno.dylib"]
+ build_stage = "payload"
+ build = ["build-adreno-metal-plugin.py"]
 @@ -233,7 +233,7 @@ kind = "driver"
  function = "Software AES-CBC through IOAESAccelerator"
  scope = "os"
@@ -15106,10 +15114,10 @@ index 8816fe5..b8ab1d2 100644
 -- [README](https://github.com/kerrinz/UniXNU-zorn/blob/af23788d9ca7d48ff1576ff83664bbac975ba3ad/README.md)
 +- [README: kerrinz/UniXNU-zorn](https://github.com/kerrinz/UniXNU-zorn/blob/8e9d3a9cce8ea1f4e0641a124bc22baf7f4fd712/README.md)
 diff --git a/docs/drivers/adreno-metal.md b/docs/drivers/adreno-metal.md
-index f7f398e..6ca7c1d 100644
+index f7f398e..8a97d55 100644
 --- a/docs/drivers/adreno-metal.md
 +++ b/docs/drivers/adreno-metal.md
-@@ -15,8 +15,43 @@ the kernel GPU interface.
+@@ -15,8 +15,63 @@ the kernel GPU interface.
  | Verified device | sheng |
  | Runtime plugin | `NativeAdrenoMetal` |
  
@@ -15142,6 +15150,26 @@ index f7f398e..6ca7c1d 100644
 +memory on unified-memory GPUs. The frontend's device query recognizes hardware
 +coherence and kernel-managed visibility; either removes IOSurface flush-range
 +collection and userspace cache operations from submission and completion.
++
++The SM7325 adaptation passes resource declarations, render memory barriers and
++fence stages through the frontend into metal2vulkan. Encoding accumulates access
++summaries, and submission exports GPU writes to the CPU only for allocations
++with CPU consumers. Turnip's asynchronous Darwin extension submits timeline
++dependencies and output points to the kernel scheduler; CPU waits sleep on the
++requested point. Display holds a read of the IOSurface backing until DPU has
++switched to its replacement.
++
++Argument encoders, indirect command buffers and tessellation descriptors use
++the runtime's corresponding objects. Default sample-position queries read the
++Vulkan standard-location property and the runtime's supported sample counts.
++On iPadOS 17, Metal IO queues use the inherited system implementation with the
++bridge's blit encoders, shared events and stable resource trace identifiers.
++
++PVRTC sampling uses a GPU-decoded RGBA8 image whose mip levels are refreshed
++after uploads and blits. Depth Min/Max resolve can select samples into an integer
++color attachment and transfer those bits to the destination depth aspect.
++These implementations are part of the SM-T733 source adaptation; its device
++repository records build identities and hardware results.
 +
 +Device answers are cached by selector and argument. The frontend disables no-copy
 +rebind replay logs. A padded render target aliases its buffer only when the height
@@ -24201,10 +24229,10 @@ index 8d5e2d5..babb156 100644
 -- [README](https://github.com/kerrinz/UniXNU-zorn/blob/af23788d9ca7d48ff1576ff83664bbac975ba3ad/README.md)
 +- [README: kerrinz/UniXNU-zorn](https://github.com/kerrinz/UniXNU-zorn/blob/8e9d3a9cce8ea1f4e0641a124bc22baf7f4fd712/README.md)
 diff --git a/docs/zh/drivers/adreno-metal.md b/docs/zh/drivers/adreno-metal.md
-index e67ac6e..15f55c2 100644
+index e67ac6e..778b95b 100644
 --- a/docs/zh/drivers/adreno-metal.md
 +++ b/docs/zh/drivers/adreno-metal.md
-@@ -14,8 +14,38 @@ AdrenoMetal 通过 metal2vulkan 和 Turnip 提供 Metal 前端。它通过 `MTLA
+@@ -14,8 +14,54 @@ AdrenoMetal 通过 metal2vulkan 和 Turnip 提供 Metal 前端。它通过 `MTLA
  | 已验证设备 | sheng |
  | 运行时插件 | `NativeAdrenoMetal` |
  
@@ -24233,6 +24261,22 @@ index e67ac6e..15f55c2 100644
 +Private 资源以及实际分配存储的 Memoryless 附件均优先选择缓存一致性内存。
 +前端查询识别硬件一致性和内核负责的可见性处理；两者都会移除提交和完成路径
 +中的 IOSurface 刷新范围收集及用户态缓存操作。
++
++SM7325 适配将资源声明、render memory barrier 和 fence 的阶段参数传给
++metal2vulkan。编码时累加访问摘要，提交时只为存在 CPU 消费者的分配对象
++导出 GPU 写入。Turnip 的 Darwin 异步扩展把 timeline 依赖和输出时间点交给
++内核调度器，CPU 等待在所需时间点上睡眠。显示驱动持有 IOSurface backing
++的读占用，直到 DPU 切换到下一张表面。
++
++参数编码器、间接命令缓冲区和细分描述符接入 runtime 的对应对象。默认采样
++位置查询读取 Vulkan 的标准位置属性及 runtime 支持的采样数。iPadOS 17 的
++Metal IO 队列沿继承的系统实现运行，使用桥接的 blit encoder、shared event
++和稳定资源追踪标识。
++
++PVRTC 采样使用 GPU 解码的 RGBA8 图像，上传和 blit 后刷新相应 mip 层。
++深度 Min/Max resolve 可以在整数颜色附件中保存所选样本，再将位模式传送到
++目标深度 aspect。这些实现属于 SM-T733 源码适配，构建身份和设备结果由设备
++仓库记录。
 +
 +设备查询按 selector 和参数缓存，前端关闭 no-copy 重绑所需的编码器回放记录。
 +带行间距的 render target 只有在高度是 4 的倍数、宽度向上取整至 16 像素后的
@@ -24652,12 +24696,12 @@ index 4e0314d..5c8c145 160000
 -Subproject commit 4e0314df8ad29d52f6fa3f9383a540adcd618b87
 +Subproject commit 5c8c1453c67d6ef6b10ec43ab1f8fc570a2f33e1
 diff --git a/drivers/AdrenoMetal b/drivers/AdrenoMetal
-index 454ff2c..0d69cf8 160000
+index 454ff2c..00a5b2f 160000
 --- a/drivers/AdrenoMetal
 +++ b/drivers/AdrenoMetal
 @@ -1 +1 @@
 -Subproject commit 454ff2ce83766ce7b3e0f355e83f1d72907708b3
-+Subproject commit 0d69cf81e3d1e9e0cc897bf3049e480c94bc4556
++Subproject commit 00a5b2f67b091b13f3351e30e9ed68e81bbb2770
 diff --git a/drivers/AppleKeyStoreState b/drivers/AppleKeyStoreState
 index 42ff83e..635b8f9 160000
 --- a/drivers/AppleKeyStoreState
@@ -24994,6 +25038,860 @@ index 4b06ab4..3b2da2e 100644
    Pad = (Ui->RowHeight - Ch) / 2;
    Bg  = Selected ? mAccent : mRow;
    Tag = TypeTag (Entry);
+diff --git a/patches/mesa/turnip-a6xx-large-texel-buffers.patch b/patches/mesa/turnip-a6xx-large-texel-buffers.patch
+new file mode 100644
+index 0000000..3b7e461
+--- /dev/null
++++ b/patches/mesa/turnip-a6xx-large-texel-buffers.patch
+@@ -0,0 +1,241 @@
++diff --git a/src/freedreno/vulkan/tu_buffer_view.cc b/src/freedreno/vulkan/tu_buffer_view.cc
++index 05cc2f8..e4db135 100644
++--- a/src/freedreno/vulkan/tu_buffer_view.cc
+++++ b/src/freedreno/vulkan/tu_buffer_view.cc
++@@ -25,6 +25,8 @@ tu_CreateBufferView(VkDevice _device,
++    if (!view)
++       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
++ 
+++   view->buffer = buffer;
+++
++    uint8_t swiz[4] = { PIPE_SWIZZLE_X, PIPE_SWIZZLE_Y, PIPE_SWIZZLE_Z,
++                        PIPE_SWIZZLE_W };
++ 
++diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd_buffer.cc
++index 43fb96e..39e8d41 100644
++--- a/src/freedreno/vulkan/tu_cmd_buffer.cc
+++++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
++@@ -4907,6 +4907,13 @@ tu_dirty_desc_sets(struct tu_cmd_buffer *cmd,
++    } else {
++       assert(pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS);
++       cmd->state.dirty |= TU_CMD_DIRTY_DESC_SETS;
+++      for (uint32_t stage = MESA_SHADER_VERTEX; stage <= MESA_SHADER_FRAGMENT; stage++) {
+++         const struct tu_shader *shader = cmd->state.shaders[stage];
+++         if (shader && shader->const_state.num_bindless_base_addresses) {
+++            cmd->state.dirty |= TU_CMD_DIRTY_SHADER_CONSTS;
+++            break;
+++         }
+++      }
++    }
++ }
++ 
++diff --git a/src/freedreno/vulkan/tu_device.cc b/src/freedreno/vulkan/tu_device.cc
++index 72122f8..2a61651 100644
++--- a/src/freedreno/vulkan/tu_device.cc
+++++ b/src/freedreno/vulkan/tu_device.cc
++@@ -1737,12 +1737,15 @@ tu_physical_device_init(struct tu_physical_device *device,
++       goto fail_free_name;
++    }
++ 
++-   /* D3D12 texel buffer range emulation requires the resbase instruction, which appeared in 7xx. */
+++   /* A6xx reads the emulation metadata from descriptor memory; A7xx uses resbase. */
+++   if (fd_dev_gen(&device->dev_id) >= 6 &&
+++       device->info->props.max_texel_buffer_range_elements < TU_D3D12_MAX_TEXEL_BUFFER_ELEMENTS) {
+++      device->enable_texel_buffer_emulation =
+++         instance->drirc.misc.enable_texel_buffer_emulation ||
+++         strcmp(instance->knl->name, "darwin") == 0;
+++   }
+++
++    if (fd_dev_gen(&device->dev_id) >= 7) {
++-      if (device->info->props.max_texel_buffer_range_elements < TU_D3D12_MAX_TEXEL_BUFFER_ELEMENTS) {
++-         assert(fd_dev_gen(&device->dev_id) == 7);
++-         device->enable_texel_buffer_emulation = instance->drirc.misc.enable_texel_buffer_emulation;
++-      }
++       if (device->info->props.max_storage_buffer_range_bytes < TU_D3D12_MAX_STORAGE_BUFFER_RANGE_BYTES) {
++          assert(fd_dev_gen(&device->dev_id) == 7);
++          device->enable_ssbo_emulation = instance->drirc.misc.enable_ssbo_emulation;
++diff --git a/src/freedreno/vulkan/tu_shader.cc b/src/freedreno/vulkan/tu_shader.cc
++index 2413157..e5c7e5b 100644
++--- a/src/freedreno/vulkan/tu_shader.cc
+++++ b/src/freedreno/vulkan/tu_shader.cc
++@@ -627,7 +627,7 @@ build_texel_buffer_as_image_coords(nir_builder *b,
++ {
++    nir_def *base_offset = nullptr;
++    nir_def *real_size = build_texel_buffer_size(b, desc, &base_offset);
++-   nir_def *oob = nir_ige(b, offset, real_size);
+++   nir_def *oob = nir_uge(b, offset, real_size);
++ 
++    offset = nir_iadd(b, offset, base_offset);
++ 
++@@ -1043,6 +1043,43 @@ struct lower_instr_params {
++    struct ir3_const_allocations *const_allocs;
++ };
++ 
+++static bool
+++shader_uses_texel_buffers(nir_shader *shader)
+++{
+++   nir_foreach_function_impl (impl, shader) {
+++      nir_foreach_block (block, impl) {
+++         nir_foreach_instr (instr, block) {
+++            if (instr->type == nir_instr_type_tex &&
+++                nir_instr_as_tex(instr)->sampler_dim == GLSL_SAMPLER_DIM_BUF) {
+++               return true;
+++            }
+++
+++            if (instr->type != nir_instr_type_intrinsic) {
+++               continue;
+++            }
+++
+++            nir_intrinsic_instr *intrinsic = nir_instr_as_intrinsic(instr);
+++            switch (intrinsic->intrinsic) {
+++            case nir_intrinsic_image_deref_load:
+++            case nir_intrinsic_image_deref_sparse_load:
+++            case nir_intrinsic_image_deref_store:
+++            case nir_intrinsic_image_deref_atomic:
+++            case nir_intrinsic_image_deref_atomic_swap:
+++            case nir_intrinsic_image_deref_size:
+++            case nir_intrinsic_image_deref_samples:
+++               if (nir_intrinsic_image_dim(intrinsic) == GLSL_SAMPLER_DIM_BUF) {
+++                  return true;
+++               }
+++               break;
+++            default:
+++               break;
+++            }
+++         }
+++      }
+++   }
+++   return false;
+++}
+++
++ static bool
++ lower_instr(nir_builder *b, nir_instr *instr, void *cb_data)
++ {
++@@ -1368,7 +1405,10 @@ tu_lower_io(nir_shader *shader, struct tu_device *dev,
++ 
++    ir3_const_alloc(const_allocs, IR3_CONST_ALLOC_INLINE_UNIFORM_ADDRS, ldgk_consts, 1);
++ 
++-   if (dev->physical_device->enable_ssbo_emulation) {
+++   const bool texel_descriptor_loads =
+++      dev->physical_device->enable_texel_buffer_emulation &&
+++      dev->compiler->gen == 6 && shader_uses_texel_buffers(shader);
+++   if (dev->physical_device->enable_ssbo_emulation || texel_descriptor_loads) {
++       const_state->num_bindless_base_addresses = layout->num_sets;
++       const_state->bindless_base_const_offset_vec4 = const_allocs->max_const_offset_vec4;
++ 
++@@ -1600,11 +1640,12 @@ get_ssbo_bindless(nir_intrinsic_instr *intr)
++ }
++ 
++ static nir_def *
++-build_ssbo_global_addr(nir_builder *b,
+++build_descriptor_words(nir_builder *b,
++                        nir_intrinsic_instr *bindless,
++                        struct tu_shader *shader,
++                        bool load_shader_consts_via_preamble,
++-                       const struct ir3_const_allocations *const_allocs)
+++                       const struct ir3_const_allocations *const_allocs,
+++                       unsigned first_dword)
++ {
++    nir_def *set_base;
++ 
++@@ -1624,22 +1665,43 @@ build_ssbo_global_addr(nir_builder *b,
++ 
++    nir_def *descriptor_offset = nir_iadd_imm(
++       b, nir_imul_imm(b, bindless->src[0].ssa, FDL6_TEX_CONST_DWORDS * 4),
++-      11 * 4);
++-   nir_def *descriptor_words = nir_load_global_ir3(
+++      first_dword * 4);
+++   return nir_load_global_ir3(
++       b, 2, 32, nir_pack_64_2x32(b, set_base), descriptor_offset,
++       .access = (enum gl_access_qualifier)(
++          ACCESS_NON_WRITEABLE | ACCESS_CAN_REORDER | ACCESS_CAN_SPECULATE),
++       .align_mul = 4, .align_offset = 0);
++-
++-   return nir_pack_64_2x32(b, descriptor_words);
++ }
++ 
++-struct lower_ssbo_address_size_state {
+++struct descriptor_load_state {
++    struct tu_shader *shader;
++    const struct ir3_const_allocations *const_allocs;
++    bool load_shader_consts_via_preamble;
++ };
++ 
+++static bool
+++lower_texel_buffer_resbase(nir_builder *b, nir_intrinsic_instr *intr, void *data)
+++{
+++   if (intr->intrinsic != nir_intrinsic_resbase_ir3) {
+++      return false;
+++   }
+++
+++   auto state = static_cast<const descriptor_load_state *>(data);
+++   nir_intrinsic_instr *bindless = nir_def_as_intrinsic(intr->src[0].ssa);
+++   assert(bindless->intrinsic == nir_intrinsic_bindless_resource_ir3);
+++   b->cursor = nir_before_instr(&intr->instr);
+++
+++   /* Descriptor words 7 and 8 hold the size and texel offset encoded by
+++    * write_emulated_texel_buffer_descriptor_common. Null descriptors hold zero. */
+++   nir_def *words = build_descriptor_words(
+++      b, bindless, state->shader, state->load_shader_consts_via_preamble,
+++      state->const_allocs, 7);
+++   nir_def *low = nir_iand_imm(b, nir_channel(b, words, 0), 0xffffffe0);
+++   nir_def *high = nir_iand_imm(b, nir_channel(b, words, 1), 0x1ffff);
+++   nir_def_replace(&intr->def, nir_vec2(b, low, high));
+++   return true;
+++}
+++
++ static bool
++ lower_ssbo_address_size(nir_builder *b, nir_intrinsic_instr *intr, void *data)
++ {
++@@ -1651,13 +1713,14 @@ lower_ssbo_address_size(nir_builder *b, nir_intrinsic_instr *intr, void *data)
++       return false;
++    }
++ 
++-   auto state = static_cast<const lower_ssbo_address_size_state *>(data);
+++   auto state = static_cast<const descriptor_load_state *>(data);
++    b->cursor = nir_before_instr(&intr->instr);
++ 
++    if (intr->intrinsic == nir_intrinsic_load_ssbo_address) {
++-      nir_def *base = build_ssbo_global_addr(
+++      nir_def *words = build_descriptor_words(
++          b, get_ssbo_bindless(intr), state->shader,
++-         state->load_shader_consts_via_preamble, state->const_allocs);
+++         state->load_shader_consts_via_preamble, state->const_allocs, 11);
+++      nir_def *base = nir_pack_64_2x32(b, words);
++       nir_def *offset = intr->src[1].ssa;
++ 
++       nir_foreach_use_safe (use, &intr->def) {
++@@ -3463,6 +3526,18 @@ tu_shader_create(struct tu_device *dev,
++             key->read_only_input_attachments, key->dynamic_renderpass,
++             &const_allocs);
++ 
+++   struct descriptor_load_state descriptor_loads = {
+++      .shader = shader,
+++      .const_allocs = &const_allocs,
+++      .load_shader_consts_via_preamble =
+++         dev->compiler->info->props.load_shader_consts_via_preamble,
+++   };
+++   if (dev->physical_device->enable_texel_buffer_emulation &&
+++       dev->compiler->gen == 6) {
+++      NIR_PASS(_, nir, nir_shader_intrinsics_pass, lower_texel_buffer_resbase,
+++               nir_metadata_control_flow, &descriptor_loads);
+++   }
+++
++    nir_shader_gather_info(nir, nir_shader_get_entrypoint(nir));
++ 
++    struct ir3_shader_nir_options nir_options;
++@@ -3484,13 +3559,7 @@ tu_shader_create(struct tu_device *dev,
++ 
++       NIR_PASS(_, nir, nir_lower_ssbo, &options);
++ 
++-      struct lower_ssbo_address_size_state lower_ssbo_state = {
++-         .shader = shader,
++-         .const_allocs = &const_allocs,
++-         .load_shader_consts_via_preamble =
++-            dev->compiler->info->props.load_shader_consts_via_preamble,
++-      };
++-      NIR_PASS(_, nir, tu_nir_lower_ssbo_address_size, &lower_ssbo_state);
+++      NIR_PASS(_, nir, tu_nir_lower_ssbo_address_size, &descriptor_loads);
++    }
++ 
++    const struct ir3_shader_options options = {
+diff --git a/patches/mesa/turnip-darwin-async-submit.patch b/patches/mesa/turnip-darwin-async-submit.patch
+new file mode 100644
+index 0000000..b54d3f7
+--- /dev/null
++++ b/patches/mesa/turnip-darwin-async-submit.patch
+@@ -0,0 +1,601 @@
++--- a/src/freedreno/vulkan/tu_knl_darwin.cc
+++++ b/src/freedreno/vulkan/tu_knl_darwin.cc
++@@ -16,6 +16,7 @@
++ #include <mach/mach.h>
++ 
++ #include "NativeAdrenoABI.h"
+++#include "tu_darwin_async_abi.h"
++ 
++ #include "util/os_time.h"
++ #include "util/list.h"
++@@ -57,6 +58,7 @@
++    NativeAdrenoAbiDeviceInfo info;
++    NativeAdrenoAbiParams params;
++    NativeAdrenoAbiSubmitCaps submit_caps;
+++   NativeAdrenoAbiAsyncCaps async_caps;
++    bool submit_caps_checked;
++ };
++ 
++@@ -501,6 +503,12 @@
++                                "NativeAdreno query failed: 0x%x", kr);
++    }
++    dw.open = true;
+++   dw.async_caps = {};
+++   if (dw_call(connection, NativeAdrenoMethodQueryAsync, NULL, 0,
+++               &dw.async_caps, sizeof(dw.async_caps)) != KERN_SUCCESS ||
+++       dw.async_caps.version != NativeAdrenoAsyncVersion) {
+++      dw.async_caps = {};
+++   }
++    dw.inflight_count = 0;
++    dw.last_fence = 0;
++    return VK_SUCCESS;
++@@ -528,26 +536,31 @@
++    return vk_device_set_lost(&dev->vk, "%s failed: 0x%x", what, kr);
++ }
++ 
++-/* Waits for a fence in short kernel waits so the connection lock is never held for long. */
+++static uint64_t
+++darwin_relative_timeout(uint64_t absolute)
+++{
+++   if (absolute == UINT64_MAX) {
+++      return UINT64_MAX;
+++   }
+++   const uint64_t now = os_time_get_nano();
+++   return absolute > now ? absolute - now : 0;
+++}
+++
+++/* The kernel sleeps with its submission lock released until the exact
+++ * completion predicate changes or the caller's deadline expires. */
++ static VkResult
++ dw_wait_fence_raw(struct tu_device *dev, uint32_t fence, uint64_t abs_timeout_ns)
++ {
++-   for (;;) {
++-      uint64_t now = os_time_get_nano();
++-      uint64_t slice = 1000000; /* 1 ms */
++-      if (abs_timeout_ns != UINT64_MAX && abs_timeout_ns <= now)
++-         slice = 0;
++-      NativeAdrenoAbiWaitFence req = {.fence = fence, .timeout_ns = slice};
++-      kern_return_t kr = dw_call(dev, NativeAdrenoMethodWaitFence, &req, sizeof(req), NULL, 0);
++-      if (kr == KERN_SUCCESS)
++-         return VK_SUCCESS;
++-      if (kr != kIOReturnTimeout)
++-         return dw_status_to_vk(dev, kr, "wait fence");
++-      if (slice == 0)
++-         return VK_TIMEOUT;
++-      if (abs_timeout_ns != UINT64_MAX && os_time_get_nano() >= abs_timeout_ns)
++-         return VK_TIMEOUT;
+++   const struct darwin_connection *connection = darwin_connection_for(dev);
+++   const uint64_t timeout = darwin_relative_timeout(abs_timeout_ns);
+++   if (connection->async_caps.version) {
+++      NativeAdrenoAbiCompletionWait request = {fence, timeout, connection->async_caps.epoch};
+++      return dw_status_to_vk(dev, dw_call(dev, NativeAdrenoMethodWaitCompletion,
+++         &request, sizeof(request), NULL, 0), "wait completion");
++    }
+++   NativeAdrenoAbiWaitFence request = {.fence = fence, .timeout_ns = timeout};
+++   return dw_status_to_vk(dev, dw_call(dev, NativeAdrenoMethodWaitFence,
+++      &request, sizeof(request), NULL, 0), "wait fence");
++ }
++ 
++ static VkResult darwin_collect_retired(struct tu_device *dev);
++@@ -571,7 +584,17 @@
++ static int
++ darwin_submitqueue_new(struct tu_device *dev, struct tu_queue *queue)
++ {
++-   /* The kernel client has queue 0 from open(); every submission rides the one shared ring. */
+++   if (darwin_connection_for(dev)->async_caps.version) {
+++      NativeAdrenoAbiQueue request = {};
+++      NativeAdrenoAbiQueueReply reply = {};
+++      const kern_return_t status = dw_call(dev, NativeAdrenoMethodCreateQueue,
+++         &request, sizeof(request), &reply, sizeof(reply));
+++      if (status != KERN_SUCCESS) {
+++         return -1;
+++      }
+++      queue->msm_queue_id = reply.queue;
+++      return 0;
+++   }
++    queue->msm_queue_id = 0;
++    return 0;
++ }
++@@ -579,6 +602,10 @@
++ static void
++ darwin_submitqueue_close(struct tu_device *dev, struct tu_queue *queue)
++ {
+++   if (darwin_connection_for(dev)->async_caps.version) {
+++      const NativeAdrenoAbiQueue request = {queue->msm_queue_id};
+++      dw_call(dev, NativeAdrenoMethodCloseQueue, &request, sizeof(request), NULL, 0);
+++   }
++ }
++ 
++ /* ---- GPU address space: the client picks addresses out of [va_start, va_start + va_size). ---- */
++@@ -912,6 +939,12 @@
++       VkResult result = destroy ? darwin_release_bo_storage(dev, &node->bo) :
++          node->bo.fence && node->bo.fence != observed_fence ?
++          dw_wait_fence_raw(dev, node->bo.fence, os_time_get_nano() + 1000000) : VK_SUCCESS;
+++      if (!destroy && result == VK_SUCCESS && retire->connection.async_caps.version) {
+++         const NativeAdrenoAbiBoWait request = {node->bo.handle, 1000000,
+++            retire->connection.async_caps.epoch};
+++         result = dw_status_to_vk(dev, dw_call(dev, NativeAdrenoMethodWaitBoIdle,
+++            &request, sizeof(request), NULL, 0), "wait BO consumers");
+++      }
++ 
++       pthread_mutex_lock(&retire->lock);
++       if (destroy) {
++@@ -1950,6 +1983,15 @@
++    struct tu_bo *bo;
++    uint32_t access;
++ };
+++
+++static int
+++darwin_resource_handle_compare(const void *left, const void *right)
+++{
+++   const darwin_submit_resource *a = (const darwin_submit_resource *)left;
+++   const darwin_submit_resource *b = (const darwin_submit_resource *)right;
+++   return a->bo->darwin_handle < b->bo->darwin_handle ? -1 :
+++      a->bo->darwin_handle > b->bo->darwin_handle;
+++}
++ 
++ static NativeAdrenoAbiSubmitCaps
++ darwin_submit_caps(struct tu_device *dev)
++@@ -2211,6 +2253,9 @@
++       }
++    }
++    submit->native_ranges.size = merged * sizeof(*ranges);
+++   qsort(submit->resources.data,
+++      util_dynarray_num_elements(&submit->resources, struct darwin_submit_resource),
+++      sizeof(struct darwin_submit_resource), darwin_resource_handle_compare);
++    return VK_SUCCESS;
++ }
++ 
++@@ -2379,6 +2424,174 @@
++    .move = vk_darwin_sync_move,
++    .wait = vk_darwin_sync_wait,
++    .wait_many = vk_darwin_sync_wait_many,
+++};
+++
+++/* vk_darwin_async_sync owns one kernel timeline or binary payload. Accepted
+++ * jobs retain that payload, so reset and move can replace its userspace lease
+++ * while earlier queued work still refers to the original object. */
+++struct vk_darwin_async_sync {
+++   struct vk_sync vk;
+++   uint64_t handle;
+++};
+++
+++static VkResult
+++darwin_async_create(struct tu_device *device, bool timeline, uint64_t initial,
+++                    uint64_t *handle)
+++{
+++   const NativeAdrenoAbiSyncCreate request = {initial,
+++      timeline ? NativeAdrenoAsyncTimeline : 0u, 0};
+++   NativeAdrenoAbiSyncHandle reply = {};
+++   const kern_return_t status = dw_call(device, NativeAdrenoMethodSyncCreate,
+++      &request, sizeof(request), &reply, sizeof(reply));
+++   if (status == kIOReturnNoMemory || status == kIOReturnNoResources) {
+++      return VK_ERROR_OUT_OF_HOST_MEMORY;
+++   }
+++   if (status != KERN_SUCCESS) {
+++      return dw_status_to_vk(device, status, "create kernel sync");
+++   }
+++   *handle = reply.handle;
+++   return VK_SUCCESS;
+++}
+++
+++static void
+++darwin_async_release(struct tu_device *device, uint64_t handle)
+++{
+++   if (handle) {
+++      const NativeAdrenoAbiSyncHandle request = {handle};
+++      dw_call(device, NativeAdrenoMethodSyncRelease, &request, sizeof(request), NULL, 0);
+++   }
+++}
+++
+++static VkResult
+++vk_darwin_async_init(struct vk_device *base, struct vk_sync *sync, uint64_t initial)
+++{
+++   struct tu_device *device = container_of(base, struct tu_device, vk);
+++   struct vk_darwin_async_sync *payload = container_of(sync, struct vk_darwin_async_sync, vk);
+++   payload->handle = 0;
+++   return darwin_async_create(device, sync->flags & VK_SYNC_IS_TIMELINE, initial, &payload->handle);
+++}
+++
+++static void
+++vk_darwin_async_finish(struct vk_device *base, struct vk_sync *sync)
+++{
+++   struct tu_device *device = container_of(base, struct tu_device, vk);
+++   struct vk_darwin_async_sync *payload = container_of(sync, struct vk_darwin_async_sync, vk);
+++   darwin_async_release(device, payload->handle);
+++   payload->handle = 0;
+++}
+++
+++static VkResult
+++vk_darwin_async_reset(struct vk_device *base, struct vk_sync *sync)
+++{
+++   struct tu_device *device = container_of(base, struct tu_device, vk);
+++   struct vk_darwin_async_sync *payload = container_of(sync, struct vk_darwin_async_sync, vk);
+++   uint64_t replacement = 0;
+++   const VkResult result = darwin_async_create(device, false, 0, &replacement);
+++   if (result != VK_SUCCESS) {
+++      return result;
+++   }
+++   darwin_async_release(device, payload->handle);
+++   payload->handle = replacement;
+++   return VK_SUCCESS;
+++}
+++
+++static VkResult
+++vk_darwin_async_move(struct vk_device *base, struct vk_sync *dst, struct vk_sync *src)
+++{
+++   struct tu_device *device = container_of(base, struct tu_device, vk);
+++   struct vk_darwin_async_sync *target = container_of(dst, struct vk_darwin_async_sync, vk);
+++   struct vk_darwin_async_sync *source = container_of(src, struct vk_darwin_async_sync, vk);
+++   uint64_t replacement = 0;
+++   const VkResult result = darwin_async_create(device, false, 0, &replacement);
+++   if (result != VK_SUCCESS) {
+++      return result;
+++   }
+++   darwin_async_release(device, target->handle);
+++   target->handle = source->handle;
+++   source->handle = replacement;
+++   return VK_SUCCESS;
+++}
+++
+++static VkResult
+++vk_darwin_async_signal(struct vk_device *base, struct vk_sync *sync, uint64_t value)
+++{
+++   struct tu_device *device = container_of(base, struct tu_device, vk);
+++   struct vk_darwin_async_sync *payload = container_of(sync, struct vk_darwin_async_sync, vk);
+++   const NativeAdrenoAbiSyncPoint request = {payload->handle,
+++      sync->flags & VK_SYNC_IS_TIMELINE ? value : 1};
+++   return dw_status_to_vk(device, dw_call(device, NativeAdrenoMethodSyncSignal,
+++      &request, sizeof(request), NULL, 0), "signal kernel sync");
+++}
+++
+++static VkResult
+++vk_darwin_async_value(struct vk_device *base, struct vk_sync *sync, uint64_t *value)
+++{
+++   struct tu_device *device = container_of(base, struct tu_device, vk);
+++   struct vk_darwin_async_sync *payload = container_of(sync, struct vk_darwin_async_sync, vk);
+++   const NativeAdrenoAbiSyncHandle request = {payload->handle};
+++   NativeAdrenoAbiSyncValue reply = {};
+++   const VkResult result = dw_status_to_vk(device, dw_call(device, NativeAdrenoMethodSyncQuery,
+++      &request, sizeof(request), &reply, sizeof(reply)), "query kernel timeline");
+++   if (result == VK_SUCCESS) {
+++      *value = reply.value;
+++   }
+++   return result;
+++}
+++
+++static VkResult
+++vk_darwin_async_wait_many(struct vk_device *base, uint32_t count,
+++                         const struct vk_sync_wait *waits,
+++                         enum vk_sync_wait_flags flags, uint64_t absolute)
+++{
+++   struct tu_device *device = container_of(base, struct tu_device, vk);
+++   if (count > NativeAdrenoAsyncMaxWaits) {
+++      return VK_ERROR_OUT_OF_HOST_MEMORY;
+++   }
+++   NativeAdrenoAbiSyncWait request = {};
+++   request.version = NativeAdrenoAsyncVersion;
+++   request.count = count;
+++   request.epoch = darwin_connection_for(device)->async_caps.epoch;
+++   request.timeout_ns = darwin_relative_timeout(absolute);
+++   if (flags & VK_SYNC_WAIT_ANY) {
+++      request.flags |= NativeAdrenoAsyncWaitAny;
+++   }
+++   if (flags & VK_SYNC_WAIT_PENDING) {
+++      request.flags |= NativeAdrenoAsyncWaitPending;
+++   }
+++   for (uint32_t at = 0; at < count; ++at) {
+++      const struct vk_darwin_async_sync *payload =
+++         container_of(waits[at].sync, struct vk_darwin_async_sync, vk);
+++      request.points[at] = {payload->handle,
+++         waits[at].sync->flags & VK_SYNC_IS_TIMELINE ? waits[at].wait_value : 1};
+++   }
+++   return dw_status_to_vk(device, dw_call(device, NativeAdrenoMethodSyncWait,
+++      &request, sizeof(request), NULL, 0), "wait kernel sync");
+++}
+++
+++static VkResult
+++vk_darwin_async_wait(struct vk_device *device, struct vk_sync *sync, uint64_t value,
+++                    enum vk_sync_wait_flags flags, uint64_t absolute)
+++{
+++   const struct vk_sync_wait wait = {.sync = sync, .wait_value = value};
+++   return vk_darwin_async_wait_many(device, 1, &wait, flags, absolute);
+++}
+++
+++static const struct vk_sync_type vk_darwin_async_sync_type = {
+++   .size = sizeof(struct vk_darwin_async_sync),
+++   .features = (enum vk_sync_features)(VK_SYNC_FEATURE_BINARY |
+++      VK_SYNC_FEATURE_TIMELINE | VK_SYNC_FEATURE_GPU_WAIT |
+++      VK_SYNC_FEATURE_GPU_MULTI_WAIT | VK_SYNC_FEATURE_CPU_WAIT |
+++      VK_SYNC_FEATURE_CPU_RESET | VK_SYNC_FEATURE_CPU_SIGNAL |
+++      VK_SYNC_FEATURE_WAIT_ANY | VK_SYNC_FEATURE_WAIT_PENDING |
+++      VK_SYNC_FEATURE_WAIT_BEFORE_SIGNAL),
+++   .init = vk_darwin_async_init,
+++   .finish = vk_darwin_async_finish,
+++   .signal = vk_darwin_async_signal,
+++   .get_value = vk_darwin_async_value,
+++   .reset = vk_darwin_async_reset,
+++   .move = vk_darwin_async_move,
+++   .wait = vk_darwin_async_wait,
+++   .wait_many = vk_darwin_async_wait_many,
++ };
++ 
++ static void
++@@ -2430,19 +2643,27 @@
++ 
++ static VkResult
++ darwin_submit_v2(struct tu_queue *queue, struct tu_darwin_queue_submit *submit,
++-                  const NativeAdrenoAbiSubmitCaps &caps, uint32_t *fence)
+++                  const NativeAdrenoAbiSubmitCaps &caps, uint32_t *fence,
+++                  struct vk_sync_wait *waits = NULL, uint32_t wait_count = 0,
+++                  struct vk_sync_signal *signals = NULL, uint32_t signal_count = 0)
++ {
++    struct tu_device *dev = queue->device;
++    struct darwin_connection &dw = *darwin_connection_for(dev);
++    const uint32_t ib_count = util_dynarray_num_elements(&submit->commands, NativeAdrenoAbiSubmitBuffer);
++    const uint32_t resource_count =
++       util_dynarray_num_elements(&submit->native_ranges, NativeAdrenoAbiSubmitResourceV2);
++-   const size_t bytes = sizeof(NativeAdrenoAbiSubmitV2) +
+++   const bool asynchronous = dw.async_caps.version != 0;
+++   const size_t submit_bytes = sizeof(NativeAdrenoAbiSubmitV2) +
++       ib_count * sizeof(NativeAdrenoAbiSubmitIbV2) +
++       resource_count * sizeof(NativeAdrenoAbiSubmitResourceV2);
+++   const size_t bytes = submit_bytes + (asynchronous ? sizeof(NativeAdrenoAbiSubmitAsync) +
+++      (wait_count + signal_count) * sizeof(NativeAdrenoAbiSyncPoint) : 0);
++    if (ib_count > caps.max_ibs || resource_count > caps.max_resources || bytes > caps.max_packet_bytes) {
++       return vk_errorf(dev, VK_ERROR_OUT_OF_HOST_MEMORY, "native submit exceeds advertised resource or IB limit");
++    }
+++   if (wait_count > dw.async_caps.max_waits || signal_count > dw.async_caps.max_signals) {
+++      return vk_errorf(dev, VK_ERROR_OUT_OF_HOST_MEMORY, "native submission exceeds dependency capacity");
+++   }
++ 
++    uint8_t *packet = (uint8_t *)vk_zalloc(&dev->vk.alloc, bytes + 8, 8,
++                                          VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
++@@ -2450,16 +2671,45 @@
++       return VK_ERROR_OUT_OF_HOST_MEMORY;
++ 
++    ((uint32_t *)packet)[0] = DW_TUNNEL_MAGIC;
++-   ((uint32_t *)packet)[1] = NativeAdrenoMethodSubmitV2;
++-   NativeAdrenoAbiSubmitV2 *header = (NativeAdrenoAbiSubmitV2 *)(packet + 8);
+++   const uint32_t method = asynchronous ? NativeAdrenoMethodSubmitAsync : NativeAdrenoMethodSubmitV2;
+++   ((uint32_t *)packet)[1] = method;
+++   NativeAdrenoAbiSubmitAsync *async = asynchronous ? (NativeAdrenoAbiSubmitAsync *)(packet + 8) : NULL;
+++   NativeAdrenoAbiSubmitV2 *header = (NativeAdrenoAbiSubmitV2 *)(packet + 8 +
+++      (asynchronous ? sizeof(*async) : 0));
+++   if (asynchronous) {
+++      async->version = NativeAdrenoAsyncVersion;
+++      async->total_bytes = bytes;
+++      async->submit_offset = sizeof(*async);
+++      async->submit_bytes = submit_bytes;
+++      async->wait_offset = sizeof(*async) + submit_bytes;
+++      async->wait_count = wait_count;
+++      async->signal_offset = async->wait_offset + wait_count * sizeof(NativeAdrenoAbiSyncPoint);
+++      async->signal_count = signal_count;
+++      async->epoch = dw.async_caps.epoch;
+++      NativeAdrenoAbiSyncPoint *input = (NativeAdrenoAbiSyncPoint *)((uint8_t *)async + async->wait_offset);
+++      NativeAdrenoAbiSyncPoint *output = (NativeAdrenoAbiSyncPoint *)((uint8_t *)async + async->signal_offset);
+++      for (uint32_t at = 0; at < wait_count; ++at) {
+++         const struct vk_darwin_async_sync *payload =
+++            container_of(waits[at].sync, struct vk_darwin_async_sync, vk);
+++         input[at] = {payload->handle,
+++            waits[at].sync->flags & VK_SYNC_IS_TIMELINE ? waits[at].wait_value : 1};
+++      }
+++      for (uint32_t at = 0; at < signal_count; ++at) {
+++         const struct vk_darwin_async_sync *payload =
+++            container_of(signals[at].sync, struct vk_darwin_async_sync, vk);
+++         output[at] = {payload->handle,
+++            signals[at].sync->flags & VK_SYNC_IS_TIMELINE ? signals[at].signal_value : 1};
+++      }
+++   }
++    header->version = NativeAdrenoSubmitVersion;
++    header->header_bytes = sizeof(*header);
++-   header->total_bytes = bytes;
+++   header->total_bytes = submit_bytes;
++    header->ib_count = ib_count;
++    header->resource_count = resource_count;
++    header->ib_offset = sizeof(*header);
++    header->resource_offset = header->ib_offset + ib_count * sizeof(NativeAdrenoAbiSubmitIbV2);
++    header->epoch = caps.epoch;
+++   header->queue = queue->msm_queue_id;
++    if (submit->fallback_reasons) {
++       header->flags = NativeAdrenoSubmitAllMapped;
++       if (submit->fallback_reasons & TU_RESOURCE_FALLBACK_DEVICE_ADDRESS)
++@@ -2478,18 +2728,31 @@
++    const NativeAdrenoAbiSubmitBuffer *commands = (const NativeAdrenoAbiSubmitBuffer *)submit->commands.data;
++    memcpy(resources, submit->native_ranges.data, resource_count * sizeof(*resources));
++    for (uint32_t i = 0; i < ib_count; i++) {
++-      uint32_t object = 0;
++-      while (object < object_count && objects[object].bo->darwin_handle != commands[i].handle) {
++-         object++;
+++      uint32_t object = 0, object_end = object_count;
+++      while (object < object_end) {
+++         const uint32_t middle = object + (object_end - object) / 2;
+++         if (objects[middle].bo->darwin_handle < commands[i].handle) {
+++            object = middle + 1;
+++         } else {
+++            object_end = middle;
+++         }
++       }
++-      if (object == object_count) {
+++      if (object == object_count || objects[object].bo->darwin_handle != commands[i].handle) {
++          vk_free(&dev->vk.alloc, packet);
++          return vk_device_set_lost(&dev->vk, "native IB has no live retained BO");
++       }
++ 
++       const uint64_t offset = commands[i].iova - objects[object].bo->iova;
++-      uint32_t resource = 0;
++-      while (resource < resource_count) {
+++      uint32_t resource = 0, resource_end = resource_count;
+++      while (resource < resource_end) {
+++         const uint32_t middle = resource + (resource_end - resource) / 2;
+++         if (resources[middle].handle < commands[i].handle) {
+++            resource = middle + 1;
+++         } else {
+++            resource_end = middle;
+++         }
+++      }
+++      while (resource < resource_count && resources[resource].handle == commands[i].handle) {
++          const NativeAdrenoAbiSubmitResourceV2 &range = resources[resource];
++          if (range.handle == commands[i].handle && (range.access & TU_RESOURCE_READ) &&
++              offset >= range.offset && offset - range.offset <= range.bytes &&
++@@ -2498,7 +2761,7 @@
++          }
++          resource++;
++       }
++-      if (resource == resource_count) {
+++      if (resource == resource_count || resources[resource].handle != commands[i].handle) {
++          vk_free(&dev->vk.alloc, packet);
++          return vk_device_set_lost(&dev->vk, "native IB has no readable resource range");
++       }
++@@ -2511,11 +2774,12 @@
++       NativeAdrenoAbiSubmitV2Reply reply = {};
++       size_t output_size = sizeof(reply);
++       const kern_return_t status = IOConnectCallStructMethod(dw.conn,
++-         dw.tunnel ? dw.selector : NativeAdrenoMethodSubmitV2,
++-         dw.tunnel ? (void *)packet : (void *)header, bytes + (dw.tunnel ? 8 : 0),
+++         dw.tunnel ? dw.selector : method,
+++         dw.tunnel ? (void *)packet : (void *)(packet + 8), bytes + (dw.tunnel ? 8 : 0),
++          &reply, &output_size);
++       if (status == KERN_SUCCESS) {
++-         if (reply.epoch != caps.epoch || !reply.fence || reply.fence > UINT32_MAX) {
+++         if (reply.epoch != (asynchronous ? dw.async_caps.epoch : caps.epoch) ||
+++             !reply.fence || reply.fence > INT32_MAX) {
++             result = vk_device_set_lost(&dev->vk, "native submit returned an invalid completion identity");
++          } else {
++             *fence = reply.fence;
++@@ -2531,6 +2795,16 @@
++          break;
++       }
++ 
+++      if (asynchronous) {
+++         const NativeAdrenoAbiCapacityWait request = {darwin_relative_timeout(deadline), dw.async_caps.epoch};
+++         result = dw_status_to_vk(dev, dw_call(dev, NativeAdrenoMethodWaitCapacity,
+++            &request, sizeof(request), NULL, 0), "wait global submission capacity");
+++         if (result != VK_SUCCESS) {
+++            break;
+++         }
+++         continue;
+++      }
+++
++       pthread_mutex_lock(&dw.lock);
++       const uint32_t oldest = dw.inflight_count ? dw.inflight[0] : 0;
++       pthread_mutex_unlock(&dw.lock);
++@@ -2567,6 +2841,29 @@
++    if (submit->result != VK_SUCCESS)
++       return submit->result;
++ 
+++   if (dw.async_caps.version) {
+++      const NativeAdrenoAbiSubmitCaps caps = darwin_submit_caps(dev);
+++      VkResult result = darwin_collect_submit_resources(dev, submit, false);
+++      if (result != VK_SUCCESS) {
+++         return result;
+++      }
+++      uint32_t completion = 0;
+++      result = darwin_submit_v2(queue, submit, caps, &completion,
+++         waits, wait_count, signals, signal_count);
+++      if (result != VK_SUCCESS) {
+++         return result;
+++      }
+++      darwin_publish_resource_fence(submit, completion);
+++      p_atomic_set(&queue->fence, completion);
+++      pthread_mutex_lock(&dw.lock);
+++      darwin_note_fence(&dw, completion);
+++      pthread_mutex_unlock(&dw.lock);
+++      if (u_trace_submission_data) {
+++         u_trace_submission_data->gpu_ts_offset = 0;
+++      }
+++      return VK_SUCCESS;
+++   }
+++
++    /* The kernel client has one ring and no GPU-side waits: wait on the CPU before submitting. */
++    for (uint32_t i = 0; i < wait_count; i++) {
++       struct vk_darwin_sync *s = container_of(waits[i].sync, struct vk_darwin_sync, vk);
++@@ -2922,10 +3219,15 @@
++    device->ubwc_config.macrotile_mode =
++       info->macrotile_mode ? FDL_MACROTILE_8_CHANNEL : FDL_MACROTILE_4_CHANNEL;
++ 
++-   device->timeline_type = vk_sync_timeline_get_type(&vk_darwin_sync_type);
++-   device->sync_types[0] = &vk_darwin_sync_type;
++-   device->sync_types[1] = &device->timeline_type.sync;
++-   device->sync_types[2] = NULL;
+++   if (connection.async_caps.version) {
+++      device->sync_types[0] = &vk_darwin_async_sync_type;
+++      device->sync_types[1] = NULL;
+++   } else {
+++      device->timeline_type = vk_sync_timeline_get_type(&vk_darwin_sync_type);
+++      device->sync_types[0] = &vk_darwin_sync_type;
+++      device->sync_types[1] = &device->timeline_type.sync;
+++      device->sync_types[2] = NULL;
+++   }
++ 
++    device->heap.size = tu_get_system_heap_size(device);
++    device->heap.used = 0u;
++--- /dev/null
+++++ b/src/freedreno/vulkan/tu_darwin_async_abi.h
++@@ -0,0 +1,66 @@
+++/* SPDX-License-Identifier: MIT */
+++#ifndef TU_DARWIN_ASYNC_ABI_H
+++#define TU_DARWIN_ASYNC_ABI_H
+++
+++/* The asynchronous extension is queried separately from ABI v1. These records
+++ * allow one userspace build to talk to drivers with either capability set. */
+++#ifndef NATIVE_ADRENO_ASYNC_ABI
+++enum {
+++   NativeAdrenoMethodQueryAsync = 23,
+++   NativeAdrenoMethodSyncCreate = 24,
+++   NativeAdrenoMethodSyncRelease = 25,
+++   NativeAdrenoMethodSyncSignal = 26,
+++   NativeAdrenoMethodSyncQuery = 27,
+++   NativeAdrenoMethodSyncWait = 28,
+++   NativeAdrenoMethodSubmitAsync = 29,
+++   NativeAdrenoMethodWaitCompletion = 30,
+++   NativeAdrenoMethodWaitCapacity = 31,
+++   NativeAdrenoMethodWaitBoIdle = 32,
+++   NativeAdrenoAsyncVersion = 1,
+++   NativeAdrenoAsyncMaxWaits = 128,
+++   NativeAdrenoAsyncMaxSignals = 128,
+++   NativeAdrenoAsyncTimeline = 1,
+++   NativeAdrenoAsyncWaitAny = 1,
+++   NativeAdrenoAsyncWaitPending = 2,
+++};
+++struct NativeAdrenoAbiAsyncCaps {
+++   uint32_t version,max_jobs,max_waits,max_signals;
+++   uint64_t epoch;
+++};
+++struct NativeAdrenoAbiSyncCreate {
+++   uint64_t initial_value;
+++   uint32_t flags,reserved;
+++};
+++struct NativeAdrenoAbiSyncHandle {
+++   uint64_t handle;
+++};
+++struct NativeAdrenoAbiSyncPoint {
+++   uint64_t handle,value;
+++};
+++struct NativeAdrenoAbiSyncValue {
+++   uint64_t value;
+++};
+++struct NativeAdrenoAbiSubmitAsync {
+++   uint32_t version,total_bytes,submit_offset,submit_bytes;
+++   uint32_t wait_offset,wait_count,signal_offset,signal_count;
+++   uint64_t epoch;
+++};
+++struct NativeAdrenoAbiAsyncReply {
+++   uint64_t completion,epoch;
+++};
+++struct NativeAdrenoAbiSyncWait {
+++   uint32_t version,count,flags,reserved;
+++   uint64_t timeout_ns,epoch;
+++   NativeAdrenoAbiSyncPoint points[NativeAdrenoAsyncMaxWaits];
+++};
+++struct NativeAdrenoAbiCompletionWait {
+++   uint64_t completion,timeout_ns,epoch;
+++};
+++struct NativeAdrenoAbiCapacityWait {
+++   uint64_t timeout_ns,epoch;
+++};
+++struct NativeAdrenoAbiBoWait {
+++   uint64_t handle,timeout_ns,epoch;
+++};
+++#endif
+++#endif
 diff --git a/patches/mesa/turnip-darwin-bo-lifetime-v2-map.patch b/patches/mesa/turnip-darwin-bo-lifetime-v2-map.patch
 new file mode 100644
 index 0000000..f4b25c9
@@ -32313,22 +33211,30 @@ index b939db5..72a7854 100644
  
  ["adt"."defaults"]
 diff --git a/scripts/build-adreno-metal-bridge.py b/scripts/build-adreno-metal-bridge.py
-index 489c7a8..e9069ac 100644
+index 489c7a8..c6f4452 100644
 --- a/scripts/build-adreno-metal-bridge.py
 +++ b/scripts/build-adreno-metal-bridge.py
-@@ -27,8 +27,9 @@ PATCHES = [ROOT / 'drivers/AdrenoMetal/bridge/patches' / name for name in [
+@@ -27,8 +27,17 @@ PATCHES = [ROOT / 'drivers/AdrenoMetal/bridge/patches' / name for name in [
      '0001-optional-constant-output-members.patch', '0002-resource-wait-storage-dependencies.patch',
      '0003-cache-device-entry-point-priming.patch', '0004-fold-constant-global-field-loads.patch',
      '0005-keep-module-decodes-and-profile-fingerprints.patch', '0006-skip-draws-without-a-pipeline.patch',
 -    '0007-accept-two-plane-rgb-surfaces.patch', '0008-alias-padded-rows-of-written-textures.patch']]
 -tree_diff = subprocess.check_output(['git', '-C', str(SOURCE), 'diff', 'HEAD', '--'], text=True)
 +    '0007-accept-two-plane-rgb-surfaces.patch', '0008-alias-padded-rows-of-written-textures.patch',
-+    '0009-bound-idle-command-pools-on-ios.patch', '0010-coordinate-memory-pool-growth.patch']]
++    '0009-bound-idle-command-pools-on-ios.patch', '0010-coordinate-memory-pool-growth.patch',
++    '0011-preserve-metal-stages-and-host-visibility.patch',
++    '0012-resolve-depth-through-integer-attachments.patch',
++    '0013-extend-xr-sampling-blending-and-resolve.patch',
++    '0014-pvrtc-gpu-decoded-textures.patch',
++    '0015-tessellation-counts-and-icb-continuations.patch',
++    '0016-pass-runtime-sampler-maximum-lod.patch',
++    '0017-argument-sampler-filtering-metadata.patch',
++    '0018-sample-static-textures-with-argument-samplers.patch']]
 +tree_diff = subprocess.check_output(['git', '-C', str(SOURCE), 'diff', '--no-ext-diff', '--abbrev=7', 'HEAD', '--'], text=True)
  def canonical_diff(diff):
      # Independent patches touch disjoint files; Git orders the combined diff by
      # filename, rather than by the order the patches were applied.
-@@ -48,7 +49,7 @@ if tree_diff not in states:
+@@ -48,7 +57,7 @@ if tree_diff not in states:
      raise SystemExit('Translator source differs from the pinned revision plus its recorded patches')
  for patch in PATCHES[states.index(tree_diff):]:
      subprocess.run(['git', '-C', str(SOURCE), 'apply', str(patch)], check=True)
@@ -32337,7 +33243,7 @@ index 489c7a8..e9069ac 100644
      raise SystemExit('Translator patch result differs from its exact recorded source')
  out = ROOT / 'build/adreno-metal-bridge'
  out.mkdir(parents=True, exist_ok=True)
-@@ -66,6 +67,7 @@ manifest.write_text('\n'.join([
+@@ -66,6 +75,7 @@ manifest.write_text('\n'.join([
      '[dependencies]',
      'metal2vulkan = { path = ' + json.dumps(str(SOURCE / 'crates/metal2vulkan')) + ', features = ["ash"] }',
      'metal2vulkan-runtime = { path = ' + json.dumps(str(SOURCE / 'crates/metal2vulkan-runtime')) + ' }',
@@ -32345,6 +33251,17 @@ index 489c7a8..e9069ac 100644
      'libc = "0.2"',
      # The runtime hashes every shader-cache key and entry; without asm, sha2 0.10 on aarch64 is the portable software rounds, not the
      # ARMv8 SHA-256 instructions every target CPU has (cpufeatures answers sha2 true on Apple platforms).
+@@ -80,6 +90,10 @@ triple = 'aarch64-apple-ios' if args.target == 'ios' else 'aarch64-apple-darwin'
+ # finished while this stays the same (PrimeShaders.h).
+ runtime_id = hashlib.sha256((PIN + '\n' + canonical_diff(expected)).encode()).hexdigest()[:32]
+ env = dict(os.environ, NMB_RUNTIME_ID=runtime_id, NMB_FIXTURE_AIR=str(air), NMB_FC_AIR=str(fc_air), IPHONEOS_DEPLOYMENT_TARGET='17.0', MACOSX_DEPLOYMENT_TARGET='14.0')
++if 'M2V_GLSL_COMPILER' not in env:
++    bundled_glslang = ROOT / '.cache/mesa-tools/bin/glslang'
++    if bundled_glslang.is_file():
++        env['M2V_GLSL_COMPILER'] = str(bundled_glslang)
+ target_dir = ROOT / 'build/m2v-target'
+ log = out / ('build-%s.log' % args.target)
+ with log.open('w') as stream:
 diff --git a/scripts/build-adreno-metal-plugin.py b/scripts/build-adreno-metal-plugin.py
 index 7adae86..c593c75 100644
 --- a/scripts/build-adreno-metal-plugin.py
@@ -32510,10 +33427,10 @@ index 7c49d9d..a036489 100755
      git -C .cache/xnu-work apply --reverse "$LATE_PATCH"
    fi
 diff --git a/scripts/data/adreno-compiler-inputs.json b/scripts/data/adreno-compiler-inputs.json
-index b170e8e..1782cd3 100644
+index b170e8e..4ac367c 100644
 --- a/scripts/data/adreno-compiler-inputs.json
 +++ b/scripts/data/adreno-compiler-inputs.json
-@@ -53,7 +53,11 @@
+@@ -53,7 +53,13 @@
      "patches/mesa/turnip-graphics-cache-feedback.patch",
      "patches/mesa/turnip-empty-scissor.patch",
      "patches/mesa/turnip-builtin-shader-pack.patch",
@@ -32522,7 +33439,9 @@ index b170e8e..1782cd3 100644
 +    "patches/mesa/turnip-tile-store-allocation-error.patch",
 +    "patches/mesa/turnip-darwin-bo-lifetime-v2-map.patch",
 +    "patches/mesa/turnip-resource-submit-v2.patch",
-+    "patches/mesa/turnip-darwin-cached-coherent-memory.patch"
++    "patches/mesa/turnip-darwin-cached-coherent-memory.patch",
++    "patches/mesa/turnip-darwin-async-submit.patch",
++    "patches/mesa/turnip-a6xx-large-texel-buffers.patch"
    ],
    "integer_fma_reference": {
      "repository": "https://github.com/ucb-bar/berkeley-softfloat-3",

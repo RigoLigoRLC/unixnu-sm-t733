@@ -2,7 +2,7 @@
 
 日期：2026-10-28。设备：SM-T733 / SM7325 / Adreno 642L，iPadOS 17.7.11 21H461。
 
-本轮根据[提交研究](GPU_METAL_SUBMISSION_RESEARCH_2026-10-28.md)和[Metal family 研究](A642L_METAL_FAMILY_RESEARCH_2026-10-28.md)修改源码。构建身份和设备结果在完成后单独记录；下述源码状态不表示已在设备执行。DVFS 和 Apple4 起的 tile/imageblock/ROG 完整实现仍按既定范围延后。
+本轮根据[提交研究](GPU_METAL_SUBMISSION_RESEARCH_2026-10-28.md)和[Metal family 研究](A642L_METAL_FAMILY_RESEARCH_2026-10-28.md)修改源码。[62j 构建记录](GPU_STACK_62J_BUILD_2026-10-28.md)保存九阶段成功结果、固定源码和待刷入状态。DVFS 和 Apple4 起的 tile/imageblock/ROG 完整实现仍按既定范围延后。
 
 ## 内核任务与 timeline
 
@@ -58,4 +58,4 @@ Metal 前端向 runtime 传递资源使用、render/compute memory barrier 和 f
 
 ## 实施状态
 
-系统格式、Metal 同步、DPU 交接与深度 resolve 已有源码。异步 job/timeline、Apple3 前端扩展、256M texture buffer、PVRTC 和其余合法格式组合由独立子代理逐项完成。所有模块由协调代理统一固定版本、构建和交付。
+系统格式、Metal 同步、DPU 交接、深度 resolve、异步 job/timeline、Apple3 前端扩展、256M texture buffer、PVRTC 和 XR 格式路径已合入固定源码，62j 完成统一构建。设备当前未连接 MSC，刷入和本包运行结果待补。

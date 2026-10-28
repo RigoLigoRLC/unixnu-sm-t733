@@ -2,6 +2,8 @@
 
 日期：2026-10-28。对象：SM-T733 / SM7325 / Adreno 642L，当前 iPadOS 17.7.11。
 
+本文保留实施前的研究依据和缺口清单。后续源码与接口接入见 [Apple3 前端实施](APPLE3_FRONTEND_IMPLEMENTATION_2026-10-28.md)，[62j](GPU_STACK_62J_BUILD_2026-10-28.md) 已完成完整构建，尚未刷入。下文的“当前”指本研究采集时的源码状态。
+
 本研究读取 Apple 指定的官方 PDF、当前 Mesa/Turnip 源码、metal2vulkan runtime 和 AdrenoMetal Objective-C 前端。没有改驱动、执行测试、构建、设备 probe 或计算文件确认散列。文中的 Vulkan 值是本机 chip ID 走当前源码分支得到的值；本轮没有运行新的 Vulkan capability dump。
 
 ## 结论

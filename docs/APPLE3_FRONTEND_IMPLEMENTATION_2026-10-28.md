@@ -1,6 +1,6 @@
 # iPadOS 17 Metal 前端接口接入
 
-本轮把 iPadOS 17 可调用的参数编码、间接命令和细分曲面接口接到固定版本 metal2vulkan 的真实对象及编码方法。新增代码在 `AdrenoMetal/NativeBridgeMetalExtended.inc`、`bridge/NativeMetalExtended.h`、`bridge/NativeMetalExtended.rs`，基础前端与 Rust bridge 以 include 接入。公共 `components.toml` 的 `source_files` 包含三个新文件和基础 `NativeMetalObjects` 两个文件，组件源码输入变更能够触发重建。本文记录实现，未执行构建、测试或设备 probe。
+本轮把 iPadOS 17 可调用的参数编码、间接命令和细分曲面接口接到固定版本 metal2vulkan 的真实对象及编码方法。新增代码在 `AdrenoMetal/NativeBridgeMetalExtended.inc`、`bridge/NativeMetalExtended.h`、`bridge/NativeMetalExtended.rs`，基础前端与 Rust bridge 以 include 接入。公共 `components.toml` 的 `source_files` 包含三个新文件和基础 `NativeMetalObjects` 两个文件，组件源码输入变更能够触发重建。[62j](GPU_STACK_62J_BUILD_2026-10-28.md) 已完成九阶段构建，待设备连接后刷入。
 
 ## 已接入的调用
 

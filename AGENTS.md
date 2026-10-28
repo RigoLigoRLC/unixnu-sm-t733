@@ -1,23 +1,16 @@
 # Device repository instructions
 
-Current GPU source: CPU cache-maintenance removal is implemented and
-`system-gpu-coherent-60a` completed all nine build stages and was deployed by MSC
-on 2026-10-28 with Data preserved; reboot and runtime results are pending.
-The implementation, recovery commit and fixed build versions are recorded in
-`docs/GPU_CPU_CACHE_REMOVAL_60.md`.
-Per-frame timing source `system-gpu-frame-profile-61a` completed all nine build
-stages and was deployed by MSC on 2026-10-28 with Data preserved. It fixes the
-61 long-line truncation; complete frame capture after reboot is pending.
-Fields, limits and capture commands are in
-`docs/GPU_FRAME_PROFILE_61.md`; fence reference findings are in
-`docs/GPU_FENCE_WAIT_AUDIT_2026-10-28.md`.
+`system-gpu-stack-62j` completed all nine build stages on 2026-10-28. Its fixed
+source revisions, command and published build tag are in
+`docs/GPU_STACK_62J_BUILD_2026-10-28.md`. MSC currently has no device; deployment
+and runtime observations are pending. The passive USB collector waits for a
+connection. The latest deployed package remains `system-gpu-frame-profile-61a`.
 
-GPU optimization currently defers DVFS. Format selection, Metal API ordering,
-incremental dependency handling and per-Surface completion design are in
-`docs/GPU_METAL_SUBMISSION_RESEARCH_2026-10-28.md`; continue from its concrete
-source findings before changing the submission or display paths. Apple family
-requirements and current A642L implementation gaps are recorded in
-`docs/A642L_METAL_FAMILY_RESEARCH_2026-10-28.md`.
+The current implementation covers asynchronous GPU submission, per-Surface DPU
+handoff, system BGRA8 selection and iPadOS 17 Apple3 interfaces and format paths.
+Read `docs/GPU_STACK_IMPLEMENTATION_2026-10-28.md` for implementation and
+`docs/APPLE3_FRONTEND_IMPLEMENTATION_2026-10-28.md` for Metal entry points.
+DVFS and full Apple4 tile/imageblock/ROG support remain deferred.
 
 This directory is the source for UniXNU-SM-T733. The repository layout follows
 UniXNU-sheng; read README.md, docs/BUILDING.md and docs/REPOSITORY_LAYOUT.md.

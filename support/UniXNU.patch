@@ -25287,10 +25287,10 @@ index 0000000..3b7e461
 +    const struct ir3_shader_options options = {
 diff --git a/patches/mesa/turnip-darwin-async-submit.patch b/patches/mesa/turnip-darwin-async-submit.patch
 new file mode 100644
-index 0000000..b54d3f7
+index 0000000..5a04ebc
 --- /dev/null
 +++ b/patches/mesa/turnip-darwin-async-submit.patch
-@@ -0,0 +1,601 @@
+@@ -0,0 +1,603 @@
 +--- a/src/freedreno/vulkan/tu_knl_darwin.cc
 ++++ b/src/freedreno/vulkan/tu_knl_darwin.cc
 +@@ -16,6 +16,7 @@
@@ -25823,6 +25823,8 @@ index 0000000..b54d3f7
 + 
 +    device->heap.size = tu_get_system_heap_size(device);
 +    device->heap.used = 0u;
++diff --git a/src/freedreno/vulkan/tu_darwin_async_abi.h b/src/freedreno/vulkan/tu_darwin_async_abi.h
++new file mode 100644
 +--- /dev/null
 ++++ b/src/freedreno/vulkan/tu_darwin_async_abi.h
 +@@ -0,0 +1,66 @@

@@ -2,7 +2,7 @@
 
 日期：2026-10-28。设备：SM-T733 / SM7325 / Adreno 642L，iPadOS 17.7.11 21H461。
 
-分支归属：`unixnu-sm-t733` 保留本文的内核任务、timeline、IOSurface/DPU 交接和 Metal 同步优化；`unixnu-sm-t733-apple3` 另含系统 SDR 格式、深度 resolve、Metal IO、采样位置及 Apple3 功能。下文完整实施记录对应 62j，主分支使用原有系统表面格式和 Metal 功能路径作性能对照。
+分支归属：`unixnu-sm-t733` 保留本文的内核任务、timeline、IOSurface/DPU 交接、Metal 同步优化和系统 BGRA8 sRGB 格式选择；`unixnu-sm-t733-apple3` 另含深度 resolve、Metal IO、采样位置及 Apple3 功能。下文完整实施记录对应 62j，两分支使用相同的系统 SDR 格式策略。
 
 本轮根据[提交研究](GPU_METAL_SUBMISSION_RESEARCH_2026-10-28.md)和[Metal family 研究](A642L_METAL_FAMILY_RESEARCH_2026-10-28.md)修改源码。[62j 构建记录](GPU_STACK_62J_BUILD_2026-10-28.md)保存九阶段成功结果、固定源码和待刷入状态。DVFS 和 Apple4 起的 tile/imageblock/ROG 完整实现仍按既定范围延后。
 

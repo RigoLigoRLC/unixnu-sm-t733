@@ -30,6 +30,113 @@ static pid_t gpu_diagnostic_pid;
 static pid_t tools_pid;
 static volatile sig_atomic_t stopping;
 static volatile sig_atomic_t debugger_pid;
+static const char *display_policy_state = "not-requested";
+
+/* The display policy version belongs to the installed addon. A changed version
+ * removes only MobileGestalt's persisted answers. The boot timestamp records
+ * whether consumers still need a restart to discard their in-memory answers.
+ */
+static void refresh_display_policy_cache(void)
+{
+    static const char version[] = "21H461-srgb-bgra8-1";
+    static const char state_path[] = "/private/var/db/t733-display-policy";
+    FILE *request = fopen("/private/var/ngpu/addons/NativeAdrenoMetal.display-policy", "r");
+    if (!request) {
+        return;
+    }
+
+    char requested_version[64] = {0};
+    char *line = fgets(requested_version, sizeof(requested_version), request);
+    fclose(request);
+    requested_version[strcspn(requested_version, "\r\n")] = 0;
+    if (!line || strcmp(requested_version, version) != 0) {
+        display_policy_state = "unsupported-version";
+        syslog(LOG_ERR, "display policy addon version is unsupported");
+        return;
+    }
+
+    struct timeval boot = {0};
+    size_t boot_size = sizeof(boot);
+    if (sysctlbyname("kern.boottime", &boot, &boot_size, NULL, 0) < 0) {
+        display_policy_state = "boot-time-error";
+        syslog(LOG_ERR, "display policy boot time failed: %s", strerror(errno));
+        return;
+    }
+
+    int previous = open(state_path, O_RDONLY | O_NOFOLLOW);
+    char previous_state[128] = {0};
+    if (previous >= 0) {
+        ssize_t count = read(previous, previous_state, sizeof(previous_state) - 1);
+        close(previous);
+        if (count < 0) {
+            previous_state[0] = 0;
+        }
+    }
+
+    char previous_version[64] = {0};
+    long long previous_boot = 0;
+    if (sscanf(previous_state, "%63s %lld", previous_version, &previous_boot) == 2 &&
+        strcmp(previous_version, version) == 0) {
+        display_policy_state = previous_boot == (long long)boot.tv_sec ?
+            "awaiting-restart" : "cache-refreshed";
+        syslog(LOG_NOTICE, "display policy %s cache state=%s", version, display_policy_state);
+        return;
+    }
+
+    static const char *const cache_paths[] = {
+        "/private/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/com.apple.MobileGestalt.plist",
+        "/private/var/mobile/Library/Preferences/com.apple.MobileGestalt.plist",
+        "/private/var/mobile/Library/Preferences/com.apple.mobilegestalt.plist",
+        "/private/var/mobile/Library/Caches/com.apple.MobileGestalt.plist",
+    };
+    unsigned removed = 0;
+    for (size_t index = 0; index < sizeof(cache_paths) / sizeof(cache_paths[0]); ++index) {
+        if (unlink(cache_paths[index]) == 0) {
+            ++removed;
+        } else if (errno != ENOENT) {
+            display_policy_state = "cache-removal-error";
+            syslog(LOG_ERR, "display policy cache removal failed for %s: %s",
+                cache_paths[index], strerror(errno));
+            return;
+        }
+    }
+
+    char temporary[160];
+    snprintf(temporary, sizeof(temporary), "%s.%d", state_path, getpid());
+    int descriptor = open(temporary, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+    if (descriptor < 0) {
+        display_policy_state = "version-write-error";
+        syslog(LOG_ERR, "display policy version open failed: %s", strerror(errno));
+        return;
+    }
+
+    char state[128];
+    int length = snprintf(state, sizeof(state), "%s %lld\n", version, (long long)boot.tv_sec);
+    size_t written = 0;
+    while (written < (size_t)length) {
+        ssize_t count = write(descriptor, state + written, (size_t)length - written);
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            break;
+        }
+        written += (size_t)count;
+    }
+
+    int flush_error = fsync(descriptor);
+    close(descriptor);
+    if (written != (size_t)length || flush_error < 0 || rename(temporary, state_path) < 0) {
+        unlink(temporary);
+        display_policy_state = "version-write-error";
+        syslog(LOG_ERR, "display policy version save failed: %s", strerror(errno));
+        return;
+    }
+
+    display_policy_state = "awaiting-restart";
+    syslog(LOG_NOTICE, "display policy %s removed %u MobileGestalt caches; restart required for existing consumers",
+        version, removed);
+}
 
 static void publish_debug_status(const char *state)
 {
@@ -42,11 +149,11 @@ static void publish_debug_status(const char *state)
         return;
     }
 
-    char content[256];
+    char content[320];
     int length = snprintf(content, sizeof(content),
         "{\"state\":\"%s\",\"supervisor_pid\":%d,\"debugger_pid\":%d,"
-        "\"address\":\"192.168.73.2\",\"port\":1234}\n",
-        state, getpid(), (int)debugger_pid);
+        "\"address\":\"192.168.73.2\",\"port\":1234,\"display_policy\":\"%s\"}\n",
+        state, getpid(), (int)debugger_pid, display_policy_state);
     size_t written = 0;
     while (written < (size_t)length) {
         ssize_t count = write(descriptor, content + written, (size_t)length - written);
@@ -508,6 +615,7 @@ int main(void)
 {
     connect_console();
     openlog("T733DebugNetwork", LOG_PID | LOG_PERROR, LOG_DAEMON);
+    refresh_display_policy_cache();
     publish_debug_status("starting");
     struct sigaction action = {0};
     action.sa_handler = stop_service;

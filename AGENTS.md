@@ -1,12 +1,12 @@
 # Device repository instructions
 
 The `unixnu-sm-t733` branch contains GPU submission and synchronization
-optimizations with the prior Metal feature paths and system surface formats.
-The `unixnu-sm-t733-apple3` branch adds the Apple3 implementation and SDR format
-policy. Device, core, SoC and AdrenoMetal use the same two branch names and pin
-matching component revisions. GPU and display driver revisions are shared.
+optimizations with the system BGRA8 sRGB format policy. The
+`unixnu-sm-t733-apple3` branch adds the Apple3 implementation. Device, core, SoC
+and AdrenoMetal use the same two branch names and pin matching component
+revisions. GPU and display driver revisions are shared.
 
-The main branch is being built as `system-gpu-opt-63a`. The complete Apple3
+The main branch is being built as `system-gpu-opt-63b`. The complete Apple3
 implementation previously built as `system-gpu-stack-62j`; its fixed source and
 results remain in `docs/GPU_STACK_62J_BUILD_2026-10-28.md`. The latest deployed
 package remains `system-gpu-frame-profile-61a`. DVFS and full Apple4

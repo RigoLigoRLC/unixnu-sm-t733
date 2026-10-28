@@ -138,7 +138,7 @@ index dff2ced..d0904e9 100644
  	path = kits/XnuPrelink
  	url = https://github.com/UniXNU/XnuPrelink.git
 diff --git a/components.toml b/components.toml
-index 505cf96..65be0a4 100644
+index 505cf96..b02c9a2 100644
 --- a/components.toml
 +++ b/components.toml
 @@ -100,19 +100,19 @@ legacy_outputs = { "build/native-adreno/libNativeAdreno.a" = "build/adreno740/li
@@ -153,7 +153,7 @@ index 505cf96..65be0a4 100644
 -repository = "https://github.com/UniXNU/AdrenoMetal.git"
 -revision = "454ff2ce83766ce7b3e0f355e83f1d72907708b3"
 +repository = "https://github.com/RigoLigoRLC/unixnu-adrenometal.git"
-+revision = "fb3fd1205249fccaade1979ebab615d970c9ee19"
++revision = "cc4c26f3ba1091ecb7576d3644fdb5169db3efca"
  path = "drivers/AdrenoMetal"
  hardware = ["Turnip Darwin backend", "kernel GPU user-client ABI"]
  os_abi = ["ipados-17.7.11-21H461"]
@@ -161,7 +161,7 @@ index 505cf96..65be0a4 100644
  verified_devices = ["sheng"]
  dependencies = ["Adreno740", "AdrenoPM4"]
 -source_files = ["NativeAdrenoMetalPlugin.mm", "NativeBridgeMetalFrontend.mm", "bridge/NativeMetalBridge.rs"]
-+source_files = ["NativeAdrenoMetalPlugin.mm", "NativeBridgeMetalFrontend.mm", "bridge/NativeMetalBridge.rs", "bridge/NativeMetalObjects.rs", "bridge/NativeMetalObjects.h"]
++source_files = ["NativeAdrenoMetalPlugin.mm", "NativeAdrenoSystemFormatPolicy.h", "NativeBridgeMetalFrontend.mm", "bridge/NativeMetalBridge.rs", "bridge/NativeMetalObjects.rs", "bridge/NativeMetalObjects.h"]
  runtime_identifiers = ["NativeMetal", "NativeAdrenoMetalPlugin.mm", "NativeBridgeMetalFrontend.mm", "bridge/NativeMetalBridge.rs", "NativeAdrenoMetal.bundle", "NativeAdrenoMetal", "org.blu-sharky.NativeAdrenoMetal", "libvulkan_freedreno.dylib"]
  build_stage = "payload"
  build = ["build-adreno-metal-plugin.py"]
@@ -15114,10 +15114,10 @@ index 8816fe5..b8ab1d2 100644
 -- [README](https://github.com/kerrinz/UniXNU-zorn/blob/af23788d9ca7d48ff1576ff83664bbac975ba3ad/README.md)
 +- [README: kerrinz/UniXNU-zorn](https://github.com/kerrinz/UniXNU-zorn/blob/8e9d3a9cce8ea1f4e0641a124bc22baf7f4fd712/README.md)
 diff --git a/docs/drivers/adreno-metal.md b/docs/drivers/adreno-metal.md
-index f7f398e..59254fc 100644
+index f7f398e..85e6241 100644
 --- a/docs/drivers/adreno-metal.md
 +++ b/docs/drivers/adreno-metal.md
-@@ -15,8 +15,57 @@ the kernel GPU interface.
+@@ -15,8 +15,56 @@ the kernel GPU interface.
  | Verified device | sheng |
  | Runtime plugin | `NativeAdrenoMetal` |
  
@@ -15160,10 +15160,9 @@ index f7f398e..59254fc 100644
 +switched to its replacement.
 +
 +The `unixnu-sm-t733` branch keeps these submission and synchronization changes
-+with the existing Metal feature paths and system surface format policy.
-+The `unixnu-sm-t733-apple3` branch adds the Apple3 frontend, compiler and format
-+implementations, plus the device's SDR format policy. Each device branch pins
-+its corresponding core, SoC and Metal revisions.
++with the system BGRA8 sRGB format policy. The `unixnu-sm-t733-apple3` branch adds
++the Apple3 frontend, compiler and format implementations. Each device branch
++pins its corresponding core, SoC and Metal revisions.
 +
 +Device answers are cached by selector and argument. The frontend disables no-copy
 +rebind replay logs. A padded render target aliases its buffer only when the height
@@ -24223,10 +24222,10 @@ index 8d5e2d5..babb156 100644
 -- [README](https://github.com/kerrinz/UniXNU-zorn/blob/af23788d9ca7d48ff1576ff83664bbac975ba3ad/README.md)
 +- [README: kerrinz/UniXNU-zorn](https://github.com/kerrinz/UniXNU-zorn/blob/8e9d3a9cce8ea1f4e0641a124bc22baf7f4fd712/README.md)
 diff --git a/docs/zh/drivers/adreno-metal.md b/docs/zh/drivers/adreno-metal.md
-index e67ac6e..5e36b9b 100644
+index e67ac6e..ae7fea8 100644
 --- a/docs/zh/drivers/adreno-metal.md
 +++ b/docs/zh/drivers/adreno-metal.md
-@@ -14,8 +14,49 @@ AdrenoMetal 通过 metal2vulkan 和 Turnip 提供 Metal 前端。它通过 `MTLA
+@@ -14,8 +14,48 @@ AdrenoMetal 通过 metal2vulkan 和 Turnip 提供 Metal 前端。它通过 `MTLA
  | 已验证设备 | sheng |
  | 运行时插件 | `NativeAdrenoMetal` |
  
@@ -24262,10 +24261,9 @@ index e67ac6e..5e36b9b 100644
 +内核调度器，CPU 等待在所需时间点上睡眠。显示驱动持有 IOSurface backing
 +的读占用，直到 DPU 切换到下一张表面。
 +
-+`unixnu-sm-t733` 分支保留上述提交与同步优化，以及既有 Metal 功能路径和
-+系统表面格式策略。`unixnu-sm-t733-apple3` 分支增加 Apple3 前端、编译器和
-+格式实现，以及设备 SDR 格式策略。设备的两个分支分别固定对应的 core、SoC
-+和 Metal 版本。
++`unixnu-sm-t733` 分支保留上述提交与同步优化，以及系统 BGRA8 sRGB 格式
++策略。`unixnu-sm-t733-apple3` 分支增加 Apple3 前端、编译器和格式实现。
++设备的两个分支分别固定对应的 core、SoC 和 Metal 版本。
 +
 +设备查询按 selector 和参数缓存，前端关闭 no-copy 重绑所需的编码器回放记录。
 +带行间距的 render target 只有在高度是 4 的倍数、宽度向上取整至 16 像素后的
@@ -24685,12 +24683,12 @@ index 4e0314d..5c8c145 160000
 -Subproject commit 4e0314df8ad29d52f6fa3f9383a540adcd618b87
 +Subproject commit 5c8c1453c67d6ef6b10ec43ab1f8fc570a2f33e1
 diff --git a/drivers/AdrenoMetal b/drivers/AdrenoMetal
-index 454ff2c..fb3fd12 160000
+index 454ff2c..cc4c26f 160000
 --- a/drivers/AdrenoMetal
 +++ b/drivers/AdrenoMetal
 @@ -1 +1 @@
 -Subproject commit 454ff2ce83766ce7b3e0f355e83f1d72907708b3
-+Subproject commit fb3fd1205249fccaade1979ebab615d970c9ee19
++Subproject commit cc4c26f3ba1091ecb7576d3644fdb5169db3efca
 diff --git a/drivers/AppleKeyStoreState b/drivers/AppleKeyStoreState
 index 42ff83e..635b8f9 160000
 --- a/drivers/AppleKeyStoreState

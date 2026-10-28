@@ -116,9 +116,18 @@ index 0000000..a1b56e0
 +    with:
 +      revision: ${{ needs.sync.outputs.revision }}
 diff --git a/.gitmodules b/.gitmodules
-index dff2ced..7926317 100644
+index dff2ced..d0904e9 100644
 --- a/.gitmodules
 +++ b/.gitmodules
+@@ -24,7 +24,7 @@
+ 	url = https://github.com/UniXNU/AppleKeyStoreState.git
+ [submodule "drivers/AdrenoMetal"]
+ 	path = drivers/AdrenoMetal
+-	url = https://github.com/UniXNU/AdrenoMetal.git
++	url = https://github.com/RigoLigoRLC/unixnu-adrenometal.git
+ [submodule "drivers/GopFramebuffer"]
+ 	path = drivers/GopFramebuffer
+ 	url = https://github.com/UniXNU/GopFramebuffer.git
 @@ -48,7 +48,7 @@
  	url = https://github.com/UniXNU/AirNir.git
  [submodule "kits/ArmSmmu4K"]
@@ -129,14 +138,21 @@ index dff2ced..7926317 100644
  	path = kits/XnuPrelink
  	url = https://github.com/UniXNU/XnuPrelink.git
 diff --git a/components.toml b/components.toml
-index 505cf96..00eef44 100644
+index 505cf96..efa4052 100644
 --- a/components.toml
 +++ b/components.toml
-@@ -105,7 +105,7 @@ kind = "driver"
+@@ -100,12 +100,12 @@ legacy_outputs = { "build/native-adreno/libNativeAdreno.a" = "build/adreno740/li
+ 
+ [[component]]
+ id = "AdrenoMetal"
+-repository_id = 1426849428
++repository_id = 1436494638
+ kind = "driver"
  function = "Metal frontend through metal2vulkan and Turnip"
  scope = "graphics"
- repository = "https://github.com/UniXNU/AdrenoMetal.git"
+-repository = "https://github.com/UniXNU/AdrenoMetal.git"
 -revision = "454ff2ce83766ce7b3e0f355e83f1d72907708b3"
++repository = "https://github.com/RigoLigoRLC/unixnu-adrenometal.git"
 +revision = "0d69cf81e3d1e9e0cc897bf3049e480c94bc4556"
  path = "drivers/AdrenoMetal"
  hardware = ["Turnip Darwin backend", "kernel GPU user-client ABI"]

@@ -1,5 +1,7 @@
 # GitHub 仓库与适配分支
 
+2026-10-28 的 GPU 优化及固定依赖发布见[本轮仓库与提交清单](GPU_CPU_PUBLICATION_2026-10-28.md)。当前固定版本以 `support/repositories.json` 为准。
+
 截至 2026-10-25，`RigoLigoRLC` 账号已发布 18 个公开仓库：10 个 fork、8 个新仓。
 仓库名全部使用 `unixnu-` 前缀；适配分支和默认分支统一为
 `unixnu-sm-t733`。每个 description 都包含 `SM-T733` 和模块用途。

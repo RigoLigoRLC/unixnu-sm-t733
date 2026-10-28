@@ -1,7 +1,7 @@
 {
   "owner": "RigoLigoRLC",
   "created_on": "2026-10-24",
-  "updated_on": "2026-10-26",
+  "updated_on": "2026-10-28",
   "visibility": "public",
   "repositories": [
     {
@@ -24,8 +24,8 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "fb5e8ba88fcce2526e33fe8c4348d5e7aeb585d8",
       "description": "UniXNU core build and boot-menu adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "7eefbce83dc09b2c4ccb793046a6478f82b2132c",
-      "device_changes_pushed": false
+      "adaptation_commit": "2b582dcd1b6e27fda51062751346716f19e1d596",
+      "device_changes_pushed": true
     },
     {
       "name": "unixnu-mu-silicium",
@@ -36,8 +36,8 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "42fe563791e51bf5500c2e470ed294ca0c94b97c",
       "description": "Project Silicium UEFI firmware and Samsung boot packaging for Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "ea3fcb8bc3841720a0597d861b09a3e98abeba6a",
-      "device_changes_pushed": false
+      "adaptation_commit": "d511b74f971099e89356b4324dcf1d98c2cee029",
+      "device_changes_pushed": true
     },
     {
       "name": "unixnu-armcpu",
@@ -49,7 +49,7 @@
       "branch_base": "1951cc8444b340d7d8879e9418220cf29eb711d7",
       "description": "ArmCpu SMP, GIC and timer adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
       "adaptation_commit": "55cc0617ea9203e85f1cbbf81ae2669f4fa41645",
-      "device_changes_pushed": false
+      "device_changes_pushed": true
     },
     {
       "name": "unixnu-darwinboot",
@@ -85,7 +85,7 @@
       "branch_base": "8666a9950c9699b368931d18cac92c0fdb2ce9c0",
       "description": "DPU IOSurface scanout and native MobileFramebuffer presentation for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
       "adaptation_commit": "3ff9ff47cbefd400b7afdbc687662d7d47330cca",
-      "device_changes_pushed": false
+      "device_changes_pushed": true
     },
     {
       "name": "unixnu-nativeramblock",
@@ -205,7 +205,7 @@
       "branch_base": null,
       "description": "Qualcomm SM7325 shared SoC configuration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
       "adaptation_commit": "1829984554102bbee5ac2fafba945d7740d0590f",
-      "device_changes_pushed": false
+      "device_changes_pushed": true
     },
     {
       "name": "unixnu-adreno6xx",
@@ -217,7 +217,7 @@
       "branch_base": "4e0314df8ad29d52f6fa3f9383a540adcd618b87",
       "description": "A642L GPU backend for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
       "adaptation_commit": "bdb86b85e5320c19db395669c5a3a91ea6a2d93d",
-      "device_changes_pushed": false
+      "device_changes_pushed": true
     },
     {
       "name": "unixnu-arm-smmu4k",
@@ -229,7 +229,31 @@
       "branch_base": "3ba92451bd44bb742d11758fbfcd3a446ecad685",
       "description": "ARM SMMU BO mapping and page-table support for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
       "adaptation_commit": "599ba82f96f3e10b0afbd784c040127d38e2683a",
-      "device_changes_pushed": false
+      "device_changes_pushed": true
+    },
+    {
+      "name": "unixnu-adrenometal",
+      "url": "https://github.com/RigoLigoRLC/unixnu-adrenometal",
+      "kind": "fork",
+      "upstream": "UniXNU/AdrenoMetal",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": null,
+      "description": "Metal frontend, memory allocation and Turnip integration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
+      "adaptation_commit": "0d69cf81e3d1e9e0cc897bf3049e480c94bc4556",
+      "device_changes_pushed": true
+    },
+    {
+      "name": "unixnu-mu-basecore",
+      "url": "https://github.com/RigoLigoRLC/unixnu-mu-basecore",
+      "kind": "fork",
+      "upstream": "microsoft/mu_basecore",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "branch_base": null,
+      "description": "Mu Basecore firmware dependencies for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
+      "adaptation_commit": "3567108fd6d690147f929c2f9d1a7f3854cb5973",
+      "device_changes_pushed": true
     }
   ]
 }

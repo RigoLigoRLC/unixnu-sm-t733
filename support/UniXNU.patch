@@ -138,7 +138,7 @@ index dff2ced..d0904e9 100644
  	path = kits/XnuPrelink
  	url = https://github.com/UniXNU/XnuPrelink.git
 diff --git a/components.toml b/components.toml
-index 505cf96..0e1b7cc 100644
+index 505cf96..1a0f622 100644
 --- a/components.toml
 +++ b/components.toml
 @@ -100,19 +100,19 @@ legacy_outputs = { "build/native-adreno/libNativeAdreno.a" = "build/adreno740/li
@@ -153,7 +153,7 @@ index 505cf96..0e1b7cc 100644
 -repository = "https://github.com/UniXNU/AdrenoMetal.git"
 -revision = "454ff2ce83766ce7b3e0f355e83f1d72907708b3"
 +repository = "https://github.com/RigoLigoRLC/unixnu-adrenometal.git"
-+revision = "0edc1f3abcbace05bc9ed1370c5443d2f7a5273d"
++revision = "6a0eb2a3e5e3fe96e4e98145c140c739be26b4b3"
  path = "drivers/AdrenoMetal"
  hardware = ["Turnip Darwin backend", "kernel GPU user-client ABI"]
  os_abi = ["ipados-17.7.11-21H461"]
@@ -24696,12 +24696,12 @@ index 4e0314d..5c8c145 160000
 -Subproject commit 4e0314df8ad29d52f6fa3f9383a540adcd618b87
 +Subproject commit 5c8c1453c67d6ef6b10ec43ab1f8fc570a2f33e1
 diff --git a/drivers/AdrenoMetal b/drivers/AdrenoMetal
-index 454ff2c..0edc1f3 160000
+index 454ff2c..6a0eb2a 160000
 --- a/drivers/AdrenoMetal
 +++ b/drivers/AdrenoMetal
 @@ -1 +1 @@
 -Subproject commit 454ff2ce83766ce7b3e0f355e83f1d72907708b3
-+Subproject commit 0edc1f3abcbace05bc9ed1370c5443d2f7a5273d
++Subproject commit 6a0eb2a3e5e3fe96e4e98145c140c739be26b4b3
 diff --git a/drivers/AppleKeyStoreState b/drivers/AppleKeyStoreState
 index 42ff83e..635b8f9 160000
 --- a/drivers/AppleKeyStoreState

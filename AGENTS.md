@@ -8,8 +8,9 @@ revisions. GPU and display driver revisions are shared.
 
 The deployed 63b package failed Metal device creation because its userspace
 tunnel rejected the 2080-byte asynchronous wait request. Both core branches
-contain the fix. `system-gpu-opt-63c2` completed all nine build stages and awaits
-MSC deployment; evidence and revisions are in `docs/GPU_ASYNC_WAIT_63C_2026-10-28.md`.
+contain the fix. `system-gpu-opt-63c2` completed all nine build stages and was
+written through MSC with sync complete; startup confirmation is pending.
+Evidence and revisions are in `docs/GPU_ASYNC_WAIT_63C_2026-10-28.md`.
 Branch boundaries are in `docs/GPU_BRANCHES_63_2026-10-28.md`.
 DVFS and full Apple4 tile/imageblock/ROG support remain deferred.
 

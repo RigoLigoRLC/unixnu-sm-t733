@@ -32,4 +32,6 @@ bash tools/build-t733-recovery.sh system-gpu-opt-63c2 --system --payload-only \
   --local-module soc:sm7325=/Users/rigoligo/expm/unixnu-sm-t733/sources/unixnu-sm7325-common
 ```
 
-63c 的内核构建因主机沙箱阻止 sysctl 查询 CPU/内存参数而退出，原日志保留在 `build/releases/system-gpu-opt-63c/`。63c2 使用相同源码在允许该查询的环境构建，九阶段均退出 0，产物为 `build/releases/system-gpu-opt-63c2/payload.img`。当前等待 MSC 部署及启动结果。
+63c 的内核构建因主机沙箱阻止 sysctl 查询 CPU/内存参数而退出，原日志保留在 `build/releases/system-gpu-opt-63c/`。63c2 使用相同源码在允许该查询的环境构建，九阶段均退出 0，产物为 `build/releases/system-gpu-opt-63c2/payload.img`。
+
+63c2 已通过 MSC 完整写入 536870912 字节并完成 sync，返回 `write-fat completed`，退出 0，Data 保留。旧 FAT 完整备份为工作区 `backups/msc-system-gpu-opt-63c2/payload-before.img`，读写记录在 `logs/msc-system-gpu-opt-63c2/`。被动 USB 采集器已就绪，当前等待首次启动确认 GPU 合成恢复。

@@ -138,7 +138,7 @@ index dff2ced..d0904e9 100644
  	path = kits/XnuPrelink
  	url = https://github.com/UniXNU/XnuPrelink.git
 diff --git a/components.toml b/components.toml
-index 505cf96..b02c9a2 100644
+index 505cf96..5430162 100644
 --- a/components.toml
 +++ b/components.toml
 @@ -100,19 +100,19 @@ legacy_outputs = { "build/native-adreno/libNativeAdreno.a" = "build/adreno740/li
@@ -153,7 +153,7 @@ index 505cf96..b02c9a2 100644
 -repository = "https://github.com/UniXNU/AdrenoMetal.git"
 -revision = "454ff2ce83766ce7b3e0f355e83f1d72907708b3"
 +repository = "https://github.com/RigoLigoRLC/unixnu-adrenometal.git"
-+revision = "cc4c26f3ba1091ecb7576d3644fdb5169db3efca"
++revision = "effe11ea69880ad8c7df019cfed48b51f99cc53d"
  path = "drivers/AdrenoMetal"
  hardware = ["Turnip Darwin backend", "kernel GPU user-client ABI"]
  os_abi = ["ipados-17.7.11-21H461"]
@@ -161,7 +161,7 @@ index 505cf96..b02c9a2 100644
  verified_devices = ["sheng"]
  dependencies = ["Adreno740", "AdrenoPM4"]
 -source_files = ["NativeAdrenoMetalPlugin.mm", "NativeBridgeMetalFrontend.mm", "bridge/NativeMetalBridge.rs"]
-+source_files = ["NativeAdrenoMetalPlugin.mm", "NativeAdrenoSystemFormatPolicy.h", "NativeBridgeMetalFrontend.mm", "bridge/NativeMetalBridge.rs", "bridge/NativeMetalObjects.rs", "bridge/NativeMetalObjects.h"]
++source_files = ["NativeAdrenoMetalPlugin.mm", "NativeAdrenoSystemFormatPolicy.h", "NativeBridgeMetalFrontend.mm", "NativeBridgeMetalExtended.inc", "bridge/NativeMetalBridge.rs", "bridge/NativeMetalObjects.rs", "bridge/NativeMetalObjects.h", "bridge/NativeMetalExtended.rs", "bridge/NativeMetalExtended.h"]
  runtime_identifiers = ["NativeMetal", "NativeAdrenoMetalPlugin.mm", "NativeBridgeMetalFrontend.mm", "bridge/NativeMetalBridge.rs", "NativeAdrenoMetal.bundle", "NativeAdrenoMetal", "org.blu-sharky.NativeAdrenoMetal", "libvulkan_freedreno.dylib"]
  build_stage = "payload"
  build = ["build-adreno-metal-plugin.py"]
@@ -15114,10 +15114,22 @@ index 8816fe5..b8ab1d2 100644
 -- [README](https://github.com/kerrinz/UniXNU-zorn/blob/af23788d9ca7d48ff1576ff83664bbac975ba3ad/README.md)
 +- [README: kerrinz/UniXNU-zorn](https://github.com/kerrinz/UniXNU-zorn/blob/8e9d3a9cce8ea1f4e0641a124bc22baf7f4fd712/README.md)
 diff --git a/docs/drivers/adreno-metal.md b/docs/drivers/adreno-metal.md
-index f7f398e..85e6241 100644
+index f7f398e..5ec6ac1 100644
 --- a/docs/drivers/adreno-metal.md
 +++ b/docs/drivers/adreno-metal.md
-@@ -15,8 +15,56 @@ the kernel GPU interface.
+@@ -6,6 +6,11 @@ AdrenoMetal provides the Metal frontend through metal2vulkan and Turnip. It
+ publishes a device through `MTLAddDevice`, translates AIR, and submits work to
+ the kernel GPU interface.
+ 
++The SM-T733 `unixnu-sm-t733` branch contains driver optimizations and the system
++BGRA8 sRGB format policy. This `unixnu-sm-t733-apple3` branch adds Apple3
++frontend and format implementations. The device branch pins the matching core,
++SoC and Metal revisions.
++
+ | Field | Value |
+ | --- | --- |
+ | Repository | [UniXNU/AdrenoMetal](https://github.com/UniXNU/AdrenoMetal) |
+@@ -15,8 +20,63 @@ the kernel GPU interface.
  | Verified device | sheng |
  | Runtime plugin | `NativeAdrenoMetal` |
  
@@ -15159,10 +15171,17 @@ index f7f398e..85e6241 100644
 +requested point. Display holds a read of the IOSurface backing until DPU has
 +switched to its replacement.
 +
-+The `unixnu-sm-t733` branch keeps these submission and synchronization changes
-+with the system BGRA8 sRGB format policy. The `unixnu-sm-t733-apple3` branch adds
-+the Apple3 frontend, compiler and format implementations. Each device branch
-+pins its corresponding core, SoC and Metal revisions.
++Argument encoders, indirect command buffers and tessellation descriptors use
++the runtime's corresponding objects. Default sample-position queries read the
++Vulkan standard-location property and the runtime's supported sample counts.
++On iPadOS 17, Metal IO queues use the inherited system implementation with the
++bridge's blit encoders, shared events and stable resource trace identifiers.
++
++PVRTC sampling uses a GPU-decoded RGBA8 image whose mip levels are refreshed
++after uploads and blits. Depth Min/Max resolve can select samples into an integer
++color attachment and transfer those bits to the destination depth aspect.
++These implementations are part of the SM-T733 source adaptation; its device
++repository records build identities and hardware results.
 +
 +Device answers are cached by selector and argument. The frontend disables no-copy
 +rebind replay logs. A padded render target aliases its buffer only when the height
@@ -24222,10 +24241,20 @@ index 8d5e2d5..babb156 100644
 -- [README](https://github.com/kerrinz/UniXNU-zorn/blob/af23788d9ca7d48ff1576ff83664bbac975ba3ad/README.md)
 +- [README: kerrinz/UniXNU-zorn](https://github.com/kerrinz/UniXNU-zorn/blob/8e9d3a9cce8ea1f4e0641a124bc22baf7f4fd712/README.md)
 diff --git a/docs/zh/drivers/adreno-metal.md b/docs/zh/drivers/adreno-metal.md
-index e67ac6e..ae7fea8 100644
+index e67ac6e..7f2f55d 100644
 --- a/docs/zh/drivers/adreno-metal.md
 +++ b/docs/zh/drivers/adreno-metal.md
-@@ -14,8 +14,48 @@ AdrenoMetal 通过 metal2vulkan 和 Turnip 提供 Metal 前端。它通过 `MTLA
+@@ -1,5 +1,9 @@
+ # AdrenoMetal
+ 
++SM-T733 的 `unixnu-sm-t733` 主分支保留驱动优化和系统 BGRA8 sRGB 格式策略；
++当前 `unixnu-sm-t733-apple3` 分支增加 Apple3 前端和格式实现。
++设备分支固定对应的 core、SoC 和 Metal 版本。
++
+ 先按[适配流程](/zh/porting/gpu)准备板级输入、修改源码、接入构建并逐步验证。
+ 
+ AdrenoMetal 通过 metal2vulkan 和 Turnip 提供 Metal 前端。它通过 `MTLAddDevice`
+@@ -14,8 +18,54 @@ AdrenoMetal 通过 metal2vulkan 和 Turnip 提供 Metal 前端。它通过 `MTLA
  | 已验证设备 | sheng |
  | 运行时插件 | `NativeAdrenoMetal` |
  
@@ -24261,9 +24290,15 @@ index e67ac6e..ae7fea8 100644
 +内核调度器，CPU 等待在所需时间点上睡眠。显示驱动持有 IOSurface backing
 +的读占用，直到 DPU 切换到下一张表面。
 +
-+`unixnu-sm-t733` 分支保留上述提交与同步优化，以及系统 BGRA8 sRGB 格式
-+策略。`unixnu-sm-t733-apple3` 分支增加 Apple3 前端、编译器和格式实现。
-+设备的两个分支分别固定对应的 core、SoC 和 Metal 版本。
++参数编码器、间接命令缓冲区和细分描述符接入 runtime 的对应对象。默认采样
++位置查询读取 Vulkan 的标准位置属性及 runtime 支持的采样数。iPadOS 17 的
++Metal IO 队列沿继承的系统实现运行，使用桥接的 blit encoder、shared event
++和稳定资源追踪标识。
++
++PVRTC 采样使用 GPU 解码的 RGBA8 图像，上传和 blit 后刷新相应 mip 层。
++深度 Min/Max resolve 可以在整数颜色附件中保存所选样本，再将位模式传送到
++目标深度 aspect。这些实现属于 SM-T733 源码适配，构建身份和设备结果由设备
++仓库记录。
 +
 +设备查询按 selector 和参数缓存，前端关闭 no-copy 重绑所需的编码器回放记录。
 +带行间距的 render target 只有在高度是 4 的倍数、宽度向上取整至 16 像素后的
@@ -24683,12 +24718,12 @@ index 4e0314d..5c8c145 160000
 -Subproject commit 4e0314df8ad29d52f6fa3f9383a540adcd618b87
 +Subproject commit 5c8c1453c67d6ef6b10ec43ab1f8fc570a2f33e1
 diff --git a/drivers/AdrenoMetal b/drivers/AdrenoMetal
-index 454ff2c..cc4c26f 160000
+index 454ff2c..effe11e 160000
 --- a/drivers/AdrenoMetal
 +++ b/drivers/AdrenoMetal
 @@ -1 +1 @@
 -Subproject commit 454ff2ce83766ce7b3e0f355e83f1d72907708b3
-+Subproject commit cc4c26f3ba1091ecb7576d3644fdb5169db3efca
++Subproject commit effe11ea69880ad8c7df019cfed48b51f99cc53d
 diff --git a/drivers/AppleKeyStoreState b/drivers/AppleKeyStoreState
 index 42ff83e..635b8f9 160000
 --- a/drivers/AppleKeyStoreState
@@ -25025,6 +25060,262 @@ index 4b06ab4..3b2da2e 100644
    Pad = (Ui->RowHeight - Ch) / 2;
    Bg  = Selected ? mAccent : mRow;
    Tag = TypeTag (Entry);
+diff --git a/patches/mesa/turnip-a6xx-large-texel-buffers.patch b/patches/mesa/turnip-a6xx-large-texel-buffers.patch
+new file mode 100644
+index 0000000..8a62837
+--- /dev/null
++++ b/patches/mesa/turnip-a6xx-large-texel-buffers.patch
+@@ -0,0 +1,250 @@
++diff --git a/src/freedreno/vulkan/tu_buffer_view.cc b/src/freedreno/vulkan/tu_buffer_view.cc
++index 05cc2f8..e4db135 100644
++--- a/src/freedreno/vulkan/tu_buffer_view.cc
+++++ b/src/freedreno/vulkan/tu_buffer_view.cc
++@@ -25,6 +25,8 @@ tu_CreateBufferView(VkDevice _device,
++    if (!view)
++       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
++ 
+++   view->buffer = buffer;
+++
++    uint8_t swiz[4] = { PIPE_SWIZZLE_X, PIPE_SWIZZLE_Y, PIPE_SWIZZLE_Z,
++                        PIPE_SWIZZLE_W };
++ 
++diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd_buffer.cc
++index 43fb96e..39e8d41 100644
++--- a/src/freedreno/vulkan/tu_cmd_buffer.cc
+++++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
++@@ -4907,6 +4907,13 @@ tu_dirty_desc_sets(struct tu_cmd_buffer *cmd,
++    } else {
++       assert(pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS);
++       cmd->state.dirty |= TU_CMD_DIRTY_DESC_SETS;
+++      for (uint32_t stage = MESA_SHADER_VERTEX; stage <= MESA_SHADER_FRAGMENT; stage++) {
+++         const struct tu_shader *shader = cmd->state.shaders[stage];
+++         if (shader && shader->const_state.num_bindless_base_addresses) {
+++            cmd->state.dirty |= TU_CMD_DIRTY_SHADER_CONSTS;
+++            break;
+++         }
+++      }
++    }
++ }
++ 
++diff --git a/src/freedreno/vulkan/tu_device.cc b/src/freedreno/vulkan/tu_device.cc
++index 72122f8..2a61651 100644
++--- a/src/freedreno/vulkan/tu_device.cc
+++++ b/src/freedreno/vulkan/tu_device.cc
++@@ -1737,12 +1737,15 @@ tu_physical_device_init(struct tu_physical_device *device,
++       goto fail_free_name;
++    }
++ 
++-   /* D3D12 texel buffer range emulation requires the resbase instruction, which appeared in 7xx. */
+++   /* A6xx reads the emulation metadata from descriptor memory; A7xx uses resbase. */
+++   if (fd_dev_gen(&device->dev_id) >= 6 &&
+++       device->info->props.max_texel_buffer_range_elements < TU_D3D12_MAX_TEXEL_BUFFER_ELEMENTS) {
+++      device->enable_texel_buffer_emulation =
+++         instance->drirc.misc.enable_texel_buffer_emulation ||
+++         strcmp(instance->knl->name, "darwin") == 0;
+++   }
+++
++    if (fd_dev_gen(&device->dev_id) >= 7) {
++-      if (device->info->props.max_texel_buffer_range_elements < TU_D3D12_MAX_TEXEL_BUFFER_ELEMENTS) {
++-         assert(fd_dev_gen(&device->dev_id) == 7);
++-         device->enable_texel_buffer_emulation = instance->drirc.misc.enable_texel_buffer_emulation;
++-      }
++       if (device->info->props.max_storage_buffer_range_bytes < TU_D3D12_MAX_STORAGE_BUFFER_RANGE_BYTES) {
++          assert(fd_dev_gen(&device->dev_id) == 7);
++          device->enable_ssbo_emulation = instance->drirc.misc.enable_ssbo_emulation;
++diff --git a/src/freedreno/vulkan/tu_shader.cc b/src/freedreno/vulkan/tu_shader.cc
++index 2413157..e5c7e5b 100644
++--- a/src/freedreno/vulkan/tu_shader.cc
+++++ b/src/freedreno/vulkan/tu_shader.cc
++@@ -627,7 +627,7 @@ build_texel_buffer_as_image_coords(nir_builder *b,
++ {
++    nir_def *base_offset = nullptr;
++    nir_def *real_size = build_texel_buffer_size(b, desc, &base_offset);
++-   nir_def *oob = nir_ige(b, offset, real_size);
+++   nir_def *oob = nir_uge(b, offset, real_size);
++ 
++    offset = nir_iadd(b, offset, base_offset);
++ 
++@@ -1043,6 +1043,43 @@ struct lower_instr_params {
++    struct ir3_const_allocations *const_allocs;
++ };
++ 
+++static bool
+++shader_uses_texel_buffers(nir_shader *shader)
+++{
+++   nir_foreach_function_impl (impl, shader) {
+++      nir_foreach_block (block, impl) {
+++         nir_foreach_instr (instr, block) {
+++            if (instr->type == nir_instr_type_tex &&
+++                nir_instr_as_tex(instr)->sampler_dim == GLSL_SAMPLER_DIM_BUF) {
+++               return true;
+++            }
+++
+++            if (instr->type != nir_instr_type_intrinsic) {
+++               continue;
+++            }
+++
+++            nir_intrinsic_instr *intrinsic = nir_instr_as_intrinsic(instr);
+++            switch (intrinsic->intrinsic) {
+++            case nir_intrinsic_image_deref_load:
+++            case nir_intrinsic_image_deref_sparse_load:
+++            case nir_intrinsic_image_deref_store:
+++            case nir_intrinsic_image_deref_atomic:
+++            case nir_intrinsic_image_deref_atomic_swap:
+++            case nir_intrinsic_image_deref_size:
+++            case nir_intrinsic_image_deref_samples:
+++               if (nir_intrinsic_image_dim(intrinsic) == GLSL_SAMPLER_DIM_BUF) {
+++                  return true;
+++               }
+++               break;
+++            default:
+++               break;
+++            }
+++         }
+++      }
+++   }
+++   return false;
+++}
+++
++ static bool
++ lower_instr(nir_builder *b, nir_instr *instr, void *cb_data)
++ {
++@@ -1368,7 +1405,10 @@ tu_lower_io(nir_shader *shader, struct tu_device *dev,
++ 
++    ir3_const_alloc(const_allocs, IR3_CONST_ALLOC_INLINE_UNIFORM_ADDRS, ldgk_consts, 1);
++ 
++-   if (dev->physical_device->enable_ssbo_emulation) {
+++   const bool texel_descriptor_loads =
+++      dev->physical_device->enable_texel_buffer_emulation &&
+++      dev->compiler->gen == 6 && shader_uses_texel_buffers(shader);
+++   if (dev->physical_device->enable_ssbo_emulation || texel_descriptor_loads) {
++       const_state->num_bindless_base_addresses = layout->num_sets;
++       const_state->bindless_base_const_offset_vec4 = const_allocs->max_const_offset_vec4;
++ 
++@@ -1600,11 +1640,12 @@ get_ssbo_bindless(nir_intrinsic_instr *intr)
++ }
++ 
++ static nir_def *
++-build_ssbo_global_addr(nir_builder *b,
+++build_descriptor_words(nir_builder *b,
++                        nir_intrinsic_instr *bindless,
++                        struct tu_shader *shader,
++                        bool load_shader_consts_via_preamble,
++-                       const struct ir3_const_allocations *const_allocs)
+++                       const struct ir3_const_allocations *const_allocs,
+++                       unsigned first_dword)
++ {
++    nir_def *set_base;
++ 
++@@ -1624,22 +1665,43 @@ build_ssbo_global_addr(nir_builder *b,
++ 
++    nir_def *descriptor_offset = nir_iadd_imm(
++       b, nir_imul_imm(b, bindless->src[0].ssa, FDL6_TEX_CONST_DWORDS * 4),
++-      11 * 4);
++-   nir_def *descriptor_words = nir_load_global_ir3(
+++      first_dword * 4);
+++   return nir_load_global_ir3(
++       b, 2, 32, nir_pack_64_2x32(b, set_base), descriptor_offset,
++       .access = (enum gl_access_qualifier)(
++          ACCESS_NON_WRITEABLE | ACCESS_CAN_REORDER | ACCESS_CAN_SPECULATE),
++       .align_mul = 4, .align_offset = 0);
++-
++-   return nir_pack_64_2x32(b, descriptor_words);
++ }
++ 
++-struct lower_ssbo_address_size_state {
+++struct descriptor_load_state {
++    struct tu_shader *shader;
++    const struct ir3_const_allocations *const_allocs;
++    bool load_shader_consts_via_preamble;
++ };
++ 
+++static bool
+++lower_texel_buffer_resbase(nir_builder *b, nir_intrinsic_instr *intr, void *data)
+++{
+++   if (intr->intrinsic != nir_intrinsic_resbase_ir3) {
+++      return false;
+++   }
+++
+++   auto state = static_cast<const descriptor_load_state *>(data);
+++   nir_intrinsic_instr *bindless = nir_def_as_intrinsic(intr->src[0].ssa);
+++   assert(bindless->intrinsic == nir_intrinsic_bindless_resource_ir3);
+++   b->cursor = nir_before_instr(&intr->instr);
+++
+++   /* Descriptor words 7 and 8 hold the size and texel offset encoded by
+++    * write_emulated_texel_buffer_descriptor_common. Null descriptors hold zero. */
+++   nir_def *words = build_descriptor_words(
+++      b, bindless, state->shader, state->load_shader_consts_via_preamble,
+++      state->const_allocs, 7);
+++   nir_def *low = nir_iand_imm(b, nir_channel(b, words, 0), 0xffffffe0);
+++   nir_def *high = nir_iand_imm(b, nir_channel(b, words, 1), 0x1ffff);
+++   nir_def_replace(&intr->def, nir_vec2(b, low, high));
+++   return true;
+++}
+++
++ static bool
++ lower_ssbo_address_size(nir_builder *b, nir_intrinsic_instr *intr, void *data)
++ {
++@@ -1651,13 +1713,14 @@ lower_ssbo_address_size(nir_builder *b, nir_intrinsic_instr *intr, void *data)
++       return false;
++    }
++ 
++-   auto state = static_cast<const lower_ssbo_address_size_state *>(data);
+++   auto state = static_cast<const descriptor_load_state *>(data);
++    b->cursor = nir_before_instr(&intr->instr);
++ 
++    if (intr->intrinsic == nir_intrinsic_load_ssbo_address) {
++-      nir_def *base = build_ssbo_global_addr(
+++      nir_def *words = build_descriptor_words(
++          b, get_ssbo_bindless(intr), state->shader,
++-         state->load_shader_consts_via_preamble, state->const_allocs);
+++         state->load_shader_consts_via_preamble, state->const_allocs, 11);
+++      nir_def *base = nir_pack_64_2x32(b, words);
++       nir_def *offset = intr->src[1].ssa;
++ 
++       nir_foreach_use_safe (use, &intr->def) {
++@@ -1703,7 +1766,7 @@ lower_ssbo_address_size(nir_builder *b, nir_intrinsic_instr *intr, void *data)
++ static bool
++ tu_nir_lower_ssbo_address_size(
++-   nir_shader *shader, const struct lower_ssbo_address_size_state *state)
+++   nir_shader *shader, const struct descriptor_load_state *state)
++ {
++    return nir_shader_intrinsics_pass(shader, lower_ssbo_address_size,
++                                      nir_metadata_control_flow, (void *) state);
++ }
++@@ -3463,6 +3526,18 @@ tu_shader_create(struct tu_device *dev,
++             key->read_only_input_attachments, key->dynamic_renderpass,
++             &const_allocs);
++ 
+++   struct descriptor_load_state descriptor_loads = {
+++      .shader = shader,
+++      .const_allocs = &const_allocs,
+++      .load_shader_consts_via_preamble =
+++         dev->compiler->info->props.load_shader_consts_via_preamble,
+++   };
+++   if (dev->physical_device->enable_texel_buffer_emulation &&
+++       dev->compiler->gen == 6) {
+++      NIR_PASS(_, nir, nir_shader_intrinsics_pass, lower_texel_buffer_resbase,
+++               nir_metadata_control_flow, &descriptor_loads);
+++   }
+++
++    nir_shader_gather_info(nir, nir_shader_get_entrypoint(nir));
++ 
++    struct ir3_shader_nir_options nir_options;
++@@ -3484,13 +3559,7 @@ tu_shader_create(struct tu_device *dev,
++ 
++       NIR_PASS(_, nir, nir_lower_ssbo, &options);
++ 
++-      struct lower_ssbo_address_size_state lower_ssbo_state = {
++-         .shader = shader,
++-         .const_allocs = &const_allocs,
++-         .load_shader_consts_via_preamble =
++-            dev->compiler->info->props.load_shader_consts_via_preamble,
++-      };
++-      NIR_PASS(_, nir, tu_nir_lower_ssbo_address_size, &lower_ssbo_state);
+++      NIR_PASS(_, nir, tu_nir_lower_ssbo_address_size, &descriptor_loads);
++    }
++ 
++    const struct ir3_shader_options options = {
 diff --git a/patches/mesa/turnip-darwin-async-submit.patch b/patches/mesa/turnip-darwin-async-submit.patch
 new file mode 100644
 index 0000000..5a04ebc
@@ -32953,10 +33244,10 @@ index b939db5..72a7854 100644
  
  ["adt"."defaults"]
 diff --git a/scripts/build-adreno-metal-bridge.py b/scripts/build-adreno-metal-bridge.py
-index 489c7a8..53f2c2e 100644
+index 489c7a8..c6f4452 100644
 --- a/scripts/build-adreno-metal-bridge.py
 +++ b/scripts/build-adreno-metal-bridge.py
-@@ -27,8 +27,10 @@ PATCHES = [ROOT / 'drivers/AdrenoMetal/bridge/patches' / name for name in [
+@@ -27,8 +27,17 @@ PATCHES = [ROOT / 'drivers/AdrenoMetal/bridge/patches' / name for name in [
      '0001-optional-constant-output-members.patch', '0002-resource-wait-storage-dependencies.patch',
      '0003-cache-device-entry-point-priming.patch', '0004-fold-constant-global-field-loads.patch',
      '0005-keep-module-decodes-and-profile-fingerprints.patch', '0006-skip-draws-without-a-pipeline.patch',
@@ -32964,12 +33255,19 @@ index 489c7a8..53f2c2e 100644
 -tree_diff = subprocess.check_output(['git', '-C', str(SOURCE), 'diff', 'HEAD', '--'], text=True)
 +    '0007-accept-two-plane-rgb-surfaces.patch', '0008-alias-padded-rows-of-written-textures.patch',
 +    '0009-bound-idle-command-pools-on-ios.patch', '0010-coordinate-memory-pool-growth.patch',
-+    '0011-preserve-metal-stages-and-host-visibility.patch']]
++    '0011-preserve-metal-stages-and-host-visibility.patch',
++    '0012-resolve-depth-through-integer-attachments.patch',
++    '0013-extend-xr-sampling-blending-and-resolve.patch',
++    '0014-pvrtc-gpu-decoded-textures.patch',
++    '0015-tessellation-counts-and-icb-continuations.patch',
++    '0016-pass-runtime-sampler-maximum-lod.patch',
++    '0017-argument-sampler-filtering-metadata.patch',
++    '0018-sample-static-textures-with-argument-samplers.patch']]
 +tree_diff = subprocess.check_output(['git', '-C', str(SOURCE), 'diff', '--no-ext-diff', '--abbrev=7', 'HEAD', '--'], text=True)
  def canonical_diff(diff):
      # Independent patches touch disjoint files; Git orders the combined diff by
      # filename, rather than by the order the patches were applied.
-@@ -48,7 +50,7 @@ if tree_diff not in states:
+@@ -48,7 +57,7 @@ if tree_diff not in states:
      raise SystemExit('Translator source differs from the pinned revision plus its recorded patches')
  for patch in PATCHES[states.index(tree_diff):]:
      subprocess.run(['git', '-C', str(SOURCE), 'apply', str(patch)], check=True)
@@ -32978,7 +33276,7 @@ index 489c7a8..53f2c2e 100644
      raise SystemExit('Translator patch result differs from its exact recorded source')
  out = ROOT / 'build/adreno-metal-bridge'
  out.mkdir(parents=True, exist_ok=True)
-@@ -66,6 +68,7 @@ manifest.write_text('\n'.join([
+@@ -66,6 +75,7 @@ manifest.write_text('\n'.join([
      '[dependencies]',
      'metal2vulkan = { path = ' + json.dumps(str(SOURCE / 'crates/metal2vulkan')) + ', features = ["ash"] }',
      'metal2vulkan-runtime = { path = ' + json.dumps(str(SOURCE / 'crates/metal2vulkan-runtime')) + ' }',
@@ -32986,6 +33284,17 @@ index 489c7a8..53f2c2e 100644
      'libc = "0.2"',
      # The runtime hashes every shader-cache key and entry; without asm, sha2 0.10 on aarch64 is the portable software rounds, not the
      # ARMv8 SHA-256 instructions every target CPU has (cpufeatures answers sha2 true on Apple platforms).
+@@ -80,6 +90,10 @@ triple = 'aarch64-apple-ios' if args.target == 'ios' else 'aarch64-apple-darwin'
+ # finished while this stays the same (PrimeShaders.h).
+ runtime_id = hashlib.sha256((PIN + '\n' + canonical_diff(expected)).encode()).hexdigest()[:32]
+ env = dict(os.environ, NMB_RUNTIME_ID=runtime_id, NMB_FIXTURE_AIR=str(air), NMB_FC_AIR=str(fc_air), IPHONEOS_DEPLOYMENT_TARGET='17.0', MACOSX_DEPLOYMENT_TARGET='14.0')
++if 'M2V_GLSL_COMPILER' not in env:
++    bundled_glslang = ROOT / '.cache/mesa-tools/bin/glslang'
++    if bundled_glslang.is_file():
++        env['M2V_GLSL_COMPILER'] = str(bundled_glslang)
+ target_dir = ROOT / 'build/m2v-target'
+ log = out / ('build-%s.log' % args.target)
+ with log.open('w') as stream:
 diff --git a/scripts/build-adreno-metal-plugin.py b/scripts/build-adreno-metal-plugin.py
 index 7adae86..c593c75 100644
 --- a/scripts/build-adreno-metal-plugin.py
@@ -33151,10 +33460,10 @@ index 7c49d9d..a036489 100755
      git -C .cache/xnu-work apply --reverse "$LATE_PATCH"
    fi
 diff --git a/scripts/data/adreno-compiler-inputs.json b/scripts/data/adreno-compiler-inputs.json
-index b170e8e..fca2ced 100644
+index b170e8e..4ac367c 100644
 --- a/scripts/data/adreno-compiler-inputs.json
 +++ b/scripts/data/adreno-compiler-inputs.json
-@@ -53,7 +53,12 @@
+@@ -53,7 +53,13 @@
      "patches/mesa/turnip-graphics-cache-feedback.patch",
      "patches/mesa/turnip-empty-scissor.patch",
      "patches/mesa/turnip-builtin-shader-pack.patch",
@@ -33164,7 +33473,8 @@ index b170e8e..fca2ced 100644
 +    "patches/mesa/turnip-darwin-bo-lifetime-v2-map.patch",
 +    "patches/mesa/turnip-resource-submit-v2.patch",
 +    "patches/mesa/turnip-darwin-cached-coherent-memory.patch",
-+    "patches/mesa/turnip-darwin-async-submit.patch"
++    "patches/mesa/turnip-darwin-async-submit.patch",
++    "patches/mesa/turnip-a6xx-large-texel-buffers.patch"
    ],
    "integer_fma_reference": {
      "repository": "https://github.com/ucb-bar/berkeley-softfloat-3",

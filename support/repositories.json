@@ -9,7 +9,7 @@
       "url": "https://github.com/RigoLigoRLC/unixnu-sm-t733",
       "kind": "new",
       "upstream": null,
-      "branch": "unixnu-sm-t733",
+      "branch": "unixnu-sm-t733-apple3",
       "default_branch": "unixnu-sm-t733",
       "branch_base": null,
       "description": "UniXNU device configuration and build integration for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
@@ -20,11 +20,11 @@
       "url": "https://github.com/RigoLigoRLC/unixnu-core",
       "kind": "fork",
       "upstream": "UniXNU/UniXNU",
-      "branch": "unixnu-sm-t733",
+      "branch": "unixnu-sm-t733-apple3",
       "default_branch": "unixnu-sm-t733",
       "branch_base": "fb5e8ba88fcce2526e33fe8c4348d5e7aeb585d8",
       "description": "UniXNU core build and boot-menu adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "00048c9d23b612d943517746aea70097ba6a380c",
+      "adaptation_commit": "d95e21c80e31ec2a2c9004fda798f5b772a69712",
       "device_changes_pushed": true
     },
     {
@@ -200,11 +200,11 @@
       "url": "https://github.com/RigoLigoRLC/unixnu-sm7325-common",
       "kind": "new",
       "upstream": null,
-      "branch": "unixnu-sm-t733",
+      "branch": "unixnu-sm-t733-apple3",
       "default_branch": "unixnu-sm-t733",
       "branch_base": null,
       "description": "Qualcomm SM7325 shared SoC configuration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
-      "adaptation_commit": "9af303d1bcae2469d81fc0377d0f747d3ec59609",
+      "adaptation_commit": "f5920f5aa4bdda37771cd153c82e74d43b40545d",
       "device_changes_pushed": true
     },
     {
@@ -236,11 +236,11 @@
       "url": "https://github.com/RigoLigoRLC/unixnu-adrenometal",
       "kind": "fork",
       "upstream": "UniXNU/AdrenoMetal",
-      "branch": "unixnu-sm-t733",
+      "branch": "unixnu-sm-t733-apple3",
       "default_branch": "unixnu-sm-t733",
       "branch_base": null,
       "description": "Metal frontend, memory allocation and Turnip integration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
-      "adaptation_commit": "cc4c26f3ba1091ecb7576d3644fdb5169db3efca",
+      "adaptation_commit": "effe11ea69880ad8c7df019cfed48b51f99cc53d",
       "device_changes_pushed": true
     },
     {

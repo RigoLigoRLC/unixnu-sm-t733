@@ -1,16 +1,16 @@
 # Device repository instructions
 
-`system-gpu-stack-62j` completed all nine build stages on 2026-10-28. Its fixed
-source revisions, command and published build tag are in
-`docs/GPU_STACK_62J_BUILD_2026-10-28.md`. MSC currently has no device; deployment
-and runtime observations are pending. The passive USB collector waits for a
-connection. The latest deployed package remains `system-gpu-frame-profile-61a`.
+The `unixnu-sm-t733` branch contains GPU submission and synchronization
+optimizations with the prior Metal feature paths and system surface formats.
+The `unixnu-sm-t733-apple3` branch adds the Apple3 implementation and SDR format
+policy. Device, core, SoC and AdrenoMetal use the same two branch names and pin
+matching component revisions. GPU and display driver revisions are shared.
 
-The current implementation covers asynchronous GPU submission, per-Surface DPU
-handoff, system BGRA8 selection and iPadOS 17 Apple3 interfaces and format paths.
-Read `docs/GPU_STACK_IMPLEMENTATION_2026-10-28.md` for implementation and
-`docs/APPLE3_FRONTEND_IMPLEMENTATION_2026-10-28.md` for Metal entry points.
-DVFS and full Apple4 tile/imageblock/ROG support remain deferred.
+The main branch is being built as `system-gpu-opt-63a`. The complete Apple3
+implementation previously built as `system-gpu-stack-62j`; its fixed source and
+results remain in `docs/GPU_STACK_62J_BUILD_2026-10-28.md`. The latest deployed
+package remains `system-gpu-frame-profile-61a`. DVFS and full Apple4
+tile/imageblock/ROG support remain deferred.
 
 This directory is the source for UniXNU-SM-T733. The repository layout follows
 UniXNU-sheng; read README.md, docs/BUILDING.md and docs/REPOSITORY_LAYOUT.md.
@@ -82,8 +82,8 @@ their original build identities.
   all selected commits and the build command with an immutable build tag.
   Private inputs and keys remain ignored. Never assign today's commits to an
   older binary whose uncommitted source was not preserved.
-- Use the existing unixnu-sm-t733 adaptation branch. Do not create checkpoint
-  branches for individual builds; ordinary commits and build tags record them.
+- Keep GPU optimizations on unixnu-sm-t733 and the complete Apple3 implementation
+  on unixnu-sm-t733-apple3. Use commits and build tags for individual builds.
 - Never calculate file hashes for confirmation. Keep UNIXNU_RECORD_HASHES=0.
   Do not add or run tests unless the user requests them.
 - Kernel diagnostic output truncates near 255 bytes per call. Keep each fully

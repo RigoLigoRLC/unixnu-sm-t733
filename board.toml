@@ -200,9 +200,6 @@ kernel_args = [
 # CoreUI shape-effect flattening returns a retained input CGImage, preserving
 # image ownership when its CI context is unavailable. Text effects use the
 # existing CoreGraphics glyph drawing path instead of CoreImage rendering.
-# Display entries select native BGRA8 for ordinary RenderBox RGB output and
-# advertise the implemented SDR scanout capabilities before framework startup.
-# Exact 21H461 instructions are in docs/DISPLAY_FORMAT_POLICY_2026-10-28.md.
 text_fixups = [
   "dyld_shared_cache_arm64.15,421e8bc,28ad1bb0008544f9,c0035fd6008544f9",
   "dyld_shared_cache_arm64.13,1b05bec,44008052,24008052",
@@ -220,14 +217,6 @@ text_fixups = [
   "lockdownd,2c894,05008052,05718252",
   "lockdownd,2ca3c,61008052,61228052",
   "lockdownd,2ca48,05008052,05718252",
-  "dyld_shared_cache_arm64.31,40c448,4001899ac2fc1736e7ffff17,4001899ae8ffff17e7ffff17",
-  "dyld_shared_cache_arm64.03,27cfe84,f39c35f060423839c0010034,f39c35f07f423839c0010034",
-  "dyld_shared_cache_arm64.03,27cfebc,e8079f1a68423839e80740f9,e8079f1a7f423839e80740f9",
-  "dyld_shared_cache_arm64.03,272df00,08a2359000813039e00313aa,08a235901f813039e00313aa",
-  "dyld_shared_cache_arm64.03,272dea4,08a2359000412539e00313aa,08a235901f412539e00313aa",
-  "dyld_shared_cache_arm64.03,28d6ae4,490932b028013b39fd7bc1a8,490932b03f013b39fd7bc1a8",
-  "dyld_shared_cache_arm64.03,28d7b7c,4809329000813b39fd7bc1a8,480932901f813b39fd7bc1a8",
-  "dyld_shared_cache_arm64.03,28d7ce0,2900805209c12339c0035fd6,290080521fc12339c0035fd6",
 ]
 
 [payload.adt]
@@ -257,7 +246,6 @@ model-number = "SM-T733"
 
 [adt.product.string]
 model = "SM-T733"
-artwork-display-gamut = "sRGB"
 
 [adt.product.u32]
 thin-bezel = 1

@@ -130,6 +130,5 @@ model-number = "SM-T733"
 [adt.product.string]
 product-name = "Samsung Galaxy Tab S7 FE Wi-Fi"
 model = "SM-T733"
-artwork-display-gamut = "sRGB"
 
 # Runtime FDT memory spans 0x80000000..0x200000000; UEFI excludes its holes.

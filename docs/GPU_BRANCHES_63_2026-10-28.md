@@ -36,7 +36,7 @@ bash tools/build-t733-recovery.sh system-gpu-opt-63b --system --payload-only \
   --local-module soc:sm7325=/Users/rigoligo/expm/unixnu-sm-t733/sources/unixnu-sm7325-common
 ```
 
-完整 Apple3 实现已有 [62j 构建记录](GPU_STACK_62J_BUILD_2026-10-28.md)。本次分支整理没有给旧镜像重新指定源码身份。63a 是尚未加入系统 SDR 策略的中间包，日常优化分支产物使用 63b。两个新包均未刷入，未执行额外测试。
+完整 Apple3 实现已有 [62j 构建记录](GPU_STACK_62J_BUILD_2026-10-28.md)。本次分支整理没有给旧镜像重新指定源码身份。63a 是尚未加入系统 SDR 策略的中间包。63b 已刷入，实际启动暴露异步等待请求被用户态转发长度限制拒绝的问题；两个分支均已加入修复，主分支 63c2 九阶段构建成功，等待部署。后续提交和故障证据见[63c2 记录](GPU_ASYNC_WAIT_63C_2026-10-28.md)。
 
 ## 切换源码
 

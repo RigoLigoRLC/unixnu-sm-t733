@@ -72,7 +72,7 @@ def main():
         "NativeAdrenoCpInit.cpp", "NativeAdrenoIrq.cpp", "NativeAdrenoSubmit.cpp",
         "NativeAdrenoTimer.cpp", "NativeAdrenoKernelTime.cpp", "NativeAdrenoUserClient.cpp",
         "NativeAdrenoClient.cpp", "NativeAdrenoPublish.cpp", "NativeAdrenoAccelerator.cpp",
-        "NativeAdrenoScheduler.cpp",
+        "NativeAdrenoScheduler.cpp", "NativeAdrenoGpuProfile.cpp",
     ]
     sources = [driver / name for name in driver_sources]
     sources.extend(tree / "kits/ArmSmmu4K" / (name + ".c") for name in (

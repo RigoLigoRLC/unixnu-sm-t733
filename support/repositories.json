@@ -1,7 +1,7 @@
 {
   "owner": "RigoLigoRLC",
   "created_on": "2026-10-24",
-  "updated_on": "2026-10-28",
+  "updated_on": "2026-10-29",
   "visibility": "public",
   "repositories": [
     {
@@ -204,7 +204,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": null,
       "description": "Qualcomm SM7325 shared SoC configuration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
-      "adaptation_commit": "9af303d1bcae2469d81fc0377d0f747d3ec59609",
+      "adaptation_commit": "c457080507222cda6b722752a3d178c4cd793773",
       "device_changes_pushed": true
     },
     {
@@ -216,7 +216,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "4e0314df8ad29d52f6fa3f9383a540adcd618b87",
       "description": "A642L GPU backend for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "512567f430e4a35f58a3c06aaedc1b2c45e24868",
+      "adaptation_commit": "a212e1eeb696acc99ae38d934e2a07a985d9eeaf",
       "device_changes_pushed": true
     },
     {

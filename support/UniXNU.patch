@@ -25027,10 +25027,10 @@ index 4b06ab4..3b2da2e 100644
    Tag = TypeTag (Entry);
 diff --git a/patches/mesa/turnip-darwin-async-submit.patch b/patches/mesa/turnip-darwin-async-submit.patch
 new file mode 100644
-index 0000000..5a04ebc
+index 0000000..9ff4e2f
 --- /dev/null
 +++ b/patches/mesa/turnip-darwin-async-submit.patch
-@@ -0,0 +1,603 @@
+@@ -0,0 +1,618 @@
 +--- a/src/freedreno/vulkan/tu_knl_darwin.cc
 ++++ b/src/freedreno/vulkan/tu_knl_darwin.cc
 +@@ -16,6 +16,7 @@
@@ -25049,7 +25049,22 @@ index 0000000..5a04ebc
 +    bool submit_caps_checked;
 + };
 + 
-+@@ -501,6 +503,12 @@
++@@ -180,6 +182,12 @@
++-   uint8_t buffer[8 + sizeof(NativeAdrenoAbiSubmit)];
++-   if (in_size > sizeof(NativeAdrenoAbiSubmit))
+++   /* The tunnel carries every slot in the fixed-size asynchronous wait record,
+++    * including the unused slots when the caller waits on one sync object. */
+++   constexpr size_t input_capacity =
+++      MAX2(sizeof(NativeAdrenoAbiSubmit), sizeof(NativeAdrenoAbiSyncWait));
+++   uint8_t buffer[8 + input_capacity];
+++   if (in_size > input_capacity) {
++       return kIOReturnBadArgument;
+++   }
+++
++    const uint32_t header[2] = {DW_TUNNEL_MAGIC, method};
++    memcpy(buffer, header, sizeof(header));
++    if (in_size)
++@@ -501,6 +509,12 @@
 +                                "NativeAdreno query failed: 0x%x", kr);
 +    }
 +    dw.open = true;
@@ -25062,7 +25077,7 @@ index 0000000..5a04ebc
 +    dw.inflight_count = 0;
 +    dw.last_fence = 0;
 +    return VK_SUCCESS;
-+@@ -528,26 +536,31 @@
++@@ -528,26 +542,31 @@
 +    return vk_device_set_lost(&dev->vk, "%s failed: 0x%x", what, kr);
 + }
 + 
@@ -25110,7 +25125,7 @@ index 0000000..5a04ebc
 + }
 + 
 + static VkResult darwin_collect_retired(struct tu_device *dev);
-+@@ -571,7 +584,17 @@
++@@ -571,7 +590,17 @@
 + static int
 + darwin_submitqueue_new(struct tu_device *dev, struct tu_queue *queue)
 + {
@@ -25129,7 +25144,7 @@ index 0000000..5a04ebc
 +    queue->msm_queue_id = 0;
 +    return 0;
 + }
-+@@ -579,6 +602,10 @@
++@@ -579,6 +608,10 @@
 + static void
 + darwin_submitqueue_close(struct tu_device *dev, struct tu_queue *queue)
 + {
@@ -25140,7 +25155,7 @@ index 0000000..5a04ebc
 + }
 + 
 + /* ---- GPU address space: the client picks addresses out of [va_start, va_start + va_size). ---- */
-+@@ -912,6 +939,12 @@
++@@ -912,6 +945,12 @@
 +       VkResult result = destroy ? darwin_release_bo_storage(dev, &node->bo) :
 +          node->bo.fence && node->bo.fence != observed_fence ?
 +          dw_wait_fence_raw(dev, node->bo.fence, os_time_get_nano() + 1000000) : VK_SUCCESS;
@@ -25153,7 +25168,7 @@ index 0000000..5a04ebc
 + 
 +       pthread_mutex_lock(&retire->lock);
 +       if (destroy) {
-+@@ -1950,6 +1983,15 @@
++@@ -1950,6 +1989,15 @@
 +    struct tu_bo *bo;
 +    uint32_t access;
 + };
@@ -25169,7 +25184,7 @@ index 0000000..5a04ebc
 + 
 + static NativeAdrenoAbiSubmitCaps
 + darwin_submit_caps(struct tu_device *dev)
-+@@ -2211,6 +2253,9 @@
++@@ -2211,6 +2259,9 @@
 +       }
 +    }
 +    submit->native_ranges.size = merged * sizeof(*ranges);
@@ -25179,7 +25194,7 @@ index 0000000..5a04ebc
 +    return VK_SUCCESS;
 + }
 + 
-+@@ -2379,6 +2424,174 @@
++@@ -2379,6 +2430,174 @@
 +    .move = vk_darwin_sync_move,
 +    .wait = vk_darwin_sync_wait,
 +    .wait_many = vk_darwin_sync_wait_many,
@@ -25354,7 +25369,7 @@ index 0000000..5a04ebc
 + };
 + 
 + static void
-+@@ -2430,19 +2643,27 @@
++@@ -2430,19 +2649,27 @@
 + 
 + static VkResult
 + darwin_submit_v2(struct tu_queue *queue, struct tu_darwin_queue_submit *submit,
@@ -25384,7 +25399,7 @@ index 0000000..5a04ebc
 + 
 +    uint8_t *packet = (uint8_t *)vk_zalloc(&dev->vk.alloc, bytes + 8, 8,
 +                                          VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
-+@@ -2450,16 +2671,45 @@
++@@ -2450,16 +2677,45 @@
 +       return VK_ERROR_OUT_OF_HOST_MEMORY;
 + 
 +    ((uint32_t *)packet)[0] = DW_TUNNEL_MAGIC;
@@ -25433,7 +25448,7 @@ index 0000000..5a04ebc
 +    if (submit->fallback_reasons) {
 +       header->flags = NativeAdrenoSubmitAllMapped;
 +       if (submit->fallback_reasons & TU_RESOURCE_FALLBACK_DEVICE_ADDRESS)
-+@@ -2478,18 +2728,31 @@
++@@ -2478,18 +2734,31 @@
 +    const NativeAdrenoAbiSubmitBuffer *commands = (const NativeAdrenoAbiSubmitBuffer *)submit->commands.data;
 +    memcpy(resources, submit->native_ranges.data, resource_count * sizeof(*resources));
 +    for (uint32_t i = 0; i < ib_count; i++) {
@@ -25471,7 +25486,7 @@ index 0000000..5a04ebc
 +          const NativeAdrenoAbiSubmitResourceV2 &range = resources[resource];
 +          if (range.handle == commands[i].handle && (range.access & TU_RESOURCE_READ) &&
 +              offset >= range.offset && offset - range.offset <= range.bytes &&
-+@@ -2498,7 +2761,7 @@
++@@ -2498,7 +2767,7 @@
 +          }
 +          resource++;
 +       }
@@ -25480,7 +25495,7 @@ index 0000000..5a04ebc
 +          vk_free(&dev->vk.alloc, packet);
 +          return vk_device_set_lost(&dev->vk, "native IB has no readable resource range");
 +       }
-+@@ -2511,11 +2774,12 @@
++@@ -2511,11 +2780,12 @@
 +       NativeAdrenoAbiSubmitV2Reply reply = {};
 +       size_t output_size = sizeof(reply);
 +       const kern_return_t status = IOConnectCallStructMethod(dw.conn,
@@ -25496,7 +25511,7 @@ index 0000000..5a04ebc
 +             result = vk_device_set_lost(&dev->vk, "native submit returned an invalid completion identity");
 +          } else {
 +             *fence = reply.fence;
-+@@ -2531,6 +2795,16 @@
++@@ -2531,6 +2801,16 @@
 +          break;
 +       }
 + 
@@ -25513,7 +25528,7 @@ index 0000000..5a04ebc
 +       pthread_mutex_lock(&dw.lock);
 +       const uint32_t oldest = dw.inflight_count ? dw.inflight[0] : 0;
 +       pthread_mutex_unlock(&dw.lock);
-+@@ -2567,6 +2841,29 @@
++@@ -2567,6 +2847,29 @@
 +    if (submit->result != VK_SUCCESS)
 +       return submit->result;
 + 
@@ -25543,7 +25558,7 @@ index 0000000..5a04ebc
 +    /* The kernel client has one ring and no GPU-side waits: wait on the CPU before submitting. */
 +    for (uint32_t i = 0; i < wait_count; i++) {
 +       struct vk_darwin_sync *s = container_of(waits[i].sync, struct vk_darwin_sync, vk);
-+@@ -2922,10 +3219,15 @@
++@@ -2922,10 +3225,15 @@
 +    device->ubwc_config.macrotile_mode =
 +       info->macrotile_mode ? FDL_MACROTILE_8_CHANNEL : FDL_MACROTILE_4_CHANNEL;
 + 

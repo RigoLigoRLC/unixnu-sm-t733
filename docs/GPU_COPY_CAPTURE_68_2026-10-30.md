@@ -39,3 +39,19 @@ Commit `8e109a1` queues up to 32 transmit frames and 16 receive buffers in DWC3
 TRBs, retaining the existing worker sleep. Transfer completion determines when
 the fixed DMA buffers can be reused. Implementation and reference details are
 in `drivers/NativeUsbDebug/NETWORK_DMA.md`.
+
+## Producer capacity and timing commands
+
+The producer retains 4096 events in two independent 2048-entry queues. GPU
+timestamps and CPU metadata each have reserved capacity. The transport worker
+alternates between nonempty queues, and only the GPU timestamp worker waits
+for its own queue. Metal recording retains the existing immediate drop count
+when its bounded queue is full.
+
+Instrumentation records count WFI words at their actual emission sites.
+Bit 16 in the instrumentation event flags identifies measured WFI counts;
+older captures omitted this measurement and wrote zero. The host labels those
+older values as unmeasured. Command word counts describe generated commands,
+including recordings that were never submitted, and do not measure execution
+counts or time. Package 68 compiled before these accounting changes and was
+not deployed; 68a includes them.

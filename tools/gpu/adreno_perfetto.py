@@ -83,13 +83,15 @@ def event_arguments(event):
         value = arguments["layers_samples"]
         arguments["layers"] = value & 0xffffffff
         arguments["samples"] = value >> 32
+        arguments["pass_description"] = "final" if event.flags >> 16 else "initial"
 
     if "format_actions" in arguments:
         value = arguments["format_actions"]
         arguments["metal_pixel_format"] = value & 0xffffffff
         arguments["load_action"] = (value >> 32) & 0xff
         arguments["store_action"] = (value >> 40) & 0xff
-        arguments["attachment_slot"] = event.flags >> 16
+        arguments["attachment_slot"] = (event.flags >> 16) & 0x7fff
+        arguments["attachment_actions"] = "final" if event.flags & 0x80000000 else "initial"
 
     if "format_depth" in arguments:
         value = arguments["format_depth"]
@@ -307,6 +309,8 @@ class PerfettoCapture:
         self.tracks[key] = identifier
         packet = self.builder.create_packet()
         packet.trusted_packet_sequence_id = SEQUENCE
+        packet.timestamp = self.capture.status["started_ns"]
+        packet.timestamp_clock_id = MONOTONIC
         descriptor = packet.track_descriptor
         descriptor.uuid = identifier
         descriptor.name = name
@@ -349,6 +353,8 @@ class PerfettoCapture:
         for cpu, gpu, _ in self.clock.pairs:
             packet = self.builder.create_packet()
             packet.trusted_packet_sequence_id = SEQUENCE
+            packet.timestamp = cpu
+            packet.timestamp_clock_id = MONOTONIC
             snapshot = packet.clock_snapshot
             snapshot.primary_trace_clock = MONOTONIC
             reading = snapshot.clocks.add()
@@ -523,16 +529,17 @@ class PerfettoCapture:
             self.builder.write_packet(packet)
 
         lost = sum(self.capture.status[field] for field in (
-            "sample_dropped", "job_dropped", "event_dropped", "producer_dropped", "producer_failed"))
+            "sample_dropped", "job_dropped", "event_dropped", "producer_dropped"))
         activity = self.summary["counter_activity"]
         self.summary["hardware_counters_populated"] = self.summary["counter_values"] > 0 and any(activity.values())
         self.summary["shader_activity_populated"] = any(activity.get(name, 0) > 0 for name in (
             "vs_alu", "fs_alu", "fs_tex", "vs_tex"))
         self.summary["dropped_records"] = lost
+        self.summary["incomplete_producers"] = self.capture.status["producer_failed"]
         self.summary["complete"] = bool(
             self.summary["gpu_jobs"] and self.summary["gpu_stages"] and self.summary["metal_events_linked"] and
             self.summary["hardware_counters_populated"] and self.summary["shader_activity_populated"] and
-            not lost and not self.capture.status["access_error"] and
+            not lost and not self.summary["incomplete_producers"] and not self.capture.status["access_error"] and
             not self.summary["unmatched_begin"] and not self.summary["unmatched_end"] and
             not self.summary["invalid_events"] and not self.summary["invalid_jobs"])
         return self.summary

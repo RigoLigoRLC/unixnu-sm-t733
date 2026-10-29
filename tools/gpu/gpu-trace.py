@@ -101,7 +101,7 @@ def main():
         command.add_argument("--timeout", type=float, default=120, help="Maximum seconds to wait for GPU and producer drain")
         command.add_argument("--raw-only", action="store_true", help="Save binary records without creating a Perfetto file")
         if name == "capture":
-            command.add_argument("--seconds", type=float, default=20)
+            command.add_argument("--seconds", type=float, default=5)
 
     command = commands.add_parser("export", help="Create Perfetto tracks from an already saved binary capture")
     command.add_argument("directory", type=Path)

@@ -146,7 +146,7 @@ class TraceConnection:
         generation = status["generation"]
         for section, filename, count_field, size_field in SECTIONS:
             expected = status[count_field] * status[size_field]
-            if expected > 16 * 1024 * 1024:
+            if expected > 32 * 1024 * 1024:
                 raise ValueError(f"{filename} exceeds the capture capacity")
 
             offset = 0

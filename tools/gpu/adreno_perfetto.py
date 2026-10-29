@@ -5,7 +5,7 @@ monotonic clock. GPU stages retain their GPU timestamps. Metal metadata and
 submission receipts identify the commands that produced each stage.
 """
 
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 import math
 
@@ -27,6 +27,13 @@ METAL_ARGUMENTS = {
     5: ("encoder_id", "metal_pipeline_id", "vulkan_pipeline", "draw_kind"),
     6: ("encoder_id", "metal_pipeline_id", "element_count", "instance_count"),
     7: ("metal_command_buffer_id", "encoder_id", "encoder_kind", "reserved"),
+    8: ("copy_operation_id", "source_buffer", "destination_image", "region_count"),
+    9: ("copy_operation_id", "buffer_offset", "buffer_dimensions", "extent"),
+    10: ("copy_operation_id", "aspect_mip", "array_layers", "depth_offset_z"),
+    11: ("copy_operation_id", "offset_xy", "row_stride_bytes", "copy_path"),
+    12: ("texture_id", "vulkan_image", "vulkan_buffer", "in_place_refusal"),
+    13: ("vulkan_image", "metal_row_pitch", "vulkan_row_pitch", "image_required_bytes"),
+    14: ("vulkan_image", "reason_byte_range", "reason_bytes_low", "reason_bytes_high"),
 }
 TURNIP_ARGUMENTS = {
     1: "width", 2: "height", 3: "bin_count", 4: "samples", 5: "draw_count",
@@ -39,6 +46,25 @@ TURNIP_ARGUMENTS = {
     27: "unsubmitted_commands", 28: "unexecuted_gmem_points",
     29: "source_format", 30: "destination_format", 31: "bytes",
     32: "reserved_bytes_high_water", 33: "budget_bytes",
+    34: "source_buffer", 35: "destination_image", 36: "copy_operation_id",
+}
+COPY_ORIGINS = {
+    1: "synchronize buffer contents to a shadow image",
+    2: "copy requested by a Metal blit encoder",
+    3: "upload host texture contents",
+    4: "initialize or upload texture contents on first use",
+    5: "copy issued by another runtime operation",
+}
+SHADOW_COPY_CAUSES = {
+    0: "not recorded",
+    1: "first shadow use",
+    2: "draw reads texels outside the rectangle previously copied to the shadow",
+    3: "another shadow changed the contents",
+    4: "contents changed through two write paths",
+    5: "buffer contents were written",
+    6: "a written rectangle cannot be matched to the shadow's stale texels",
+    7: "discarded shadow writes must be restored from the unchanged backing",
+    8: "synchronize a bounded range",
 }
 COUNTER_NAMES = {
     "core": "GPU core cycles", "sp_busy": "Shader processor busy cycles",
@@ -104,7 +130,149 @@ def event_arguments(event):
         arguments["shader_stage"] = (event.flags >> 16) & 0xff
         arguments["texture_slot"] = event.flags >> 24
 
+    if event.source == 1 and event.point == 8:
+        arguments["copy_cause"] = event.flags >> 16
+        arguments["copy_origin"] = COPY_ORIGINS.get((event.flags >> 16) & 0xff, "not recorded")
+        arguments["shadow_copy_cause"] = SHADOW_COPY_CAUSES.get((event.flags >> 24) & 0x7f,
+                                                               "not recorded")
+        arguments["copy_regions_truncated"] = bool(event.flags & 0x80000000)
+
+    if event.source == 1 and event.point in (9, 10, 11):
+        arguments["region_index"] = event.flags >> 16
+
+    if event.source == 1 and event.point == 11:
+        arguments["copy_call_source_line"] = arguments["copy_path"] >> 32
+        arguments["copy_call_origin"] = arguments["copy_path"] & 0xffffffff
+        arguments["row_stride_recorded"] = arguments["row_stride_bytes"] != 0
+
+    if event.source == 1 and event.point == 12:
+        arguments["texture_storage"] = event.flags >> 16
+
+    pairs = {
+        "buffer_dimensions": ("buffer_row_length", "buffer_image_height"),
+        "aspect_mip": ("aspect_mask", "mip_level"),
+        "array_layers": ("base_array_layer", "layer_count"),
+        "depth_offset_z": ("depth", "offset_z"),
+        "offset_xy": ("offset_x", "offset_y"),
+    }
+    for packed, names in pairs.items():
+        if packed in arguments:
+            value = arguments[packed]
+            for name, component in zip(names, (value & 0xffffffff, value >> 32)):
+                if name.startswith("offset_") and component & 0x80000000:
+                    component -= 1 << 32
+                arguments[name] = component
+
     return arguments
+
+
+class CopyWork:
+    """CopyWork associates each GPU copy with its recorded Vulkan resources.
+
+    Metal records a unique operation ID immediately before issuing the copy.
+    Turnip retains that ID in the existing GPU timestamp payload. Region
+    records use the same ID, while image descriptions are selected from the
+    last description recorded before that copy in the same process.
+    """
+
+    def __init__(self, events):
+        self.operations = defaultdict(list)
+        self.images = defaultdict(list)
+        self.image_times = {}
+        self.reasons = defaultdict(list)
+        current_reasons = {}
+        for event in events:
+            if event.source != 1 or event.flags & INVALID:
+                continue
+
+            args = event_arguments(event)
+            if event.point in (8, 9, 10, 11):
+                operation = (event.process_id, args.get("copy_operation_id", 0))
+                self.operations[operation].append((event, args))
+            elif event.point in (12, 13):
+                image = (event.process_id, args.get("vulkan_image", 0), event.point)
+                self.images[image].append((event, args))
+            elif event.point == 14:
+                image = (event.process_id, args["vulkan_image"])
+                offset = args["reason_byte_range"] & 0xffffffff
+                total_bytes = args["reason_byte_range"] >> 32
+                if offset == 0 or image not in current_reasons:
+                    reason = {"timestamp": event.timestamp_ns, "total_bytes": total_bytes, "parts": {}}
+                    current_reasons[image] = reason
+                    self.reasons[image].append(reason)
+
+                current_reasons[image]["parts"][offset] = (
+                    args["reason_bytes_low"].to_bytes(8, "little") +
+                    args["reason_bytes_high"].to_bytes(8, "little")
+                )
+
+        for image, records in self.images.items():
+            records.sort(key=lambda item: item[0].timestamp_ns)
+            self.image_times[image] = [event.timestamp_ns for event, _ in records]
+
+    def describe(self, event, args):
+        operation = args.get("copy_operation_id", 0)
+        records = self.operations.get((event.process_id, operation), ())
+        headers = [(record, values) for record, values in records if record.point == 8]
+        if not operation or not headers:
+            return {"copy_source_recorded": False}
+
+        header, values = headers[0]
+        if (values.get("source_buffer") != args.get("source_buffer") or
+                values.get("destination_image") != args.get("destination_image")):
+            return {"copy_source_recorded": False, "copy_resource_mismatch": True}
+
+        result = {
+            "copy_source_recorded": True,
+            "copy_cause": values["copy_cause"],
+            "copy_origin": values["copy_origin"],
+            "shadow_copy_cause": values["shadow_copy_cause"],
+            "copy_regions_truncated": values["copy_regions_truncated"],
+            "copy_region_count": values["region_count"],
+        }
+        region_fields = (
+            "buffer_offset", "buffer_row_length", "buffer_image_height", "width", "height",
+            "aspect_mask", "mip_level", "base_array_layer", "layer_count", "depth",
+            "offset_x", "offset_y", "offset_z", "row_stride_bytes", "row_stride_recorded",
+            "copy_path", "copy_call_source_line", "copy_call_origin",
+        )
+        for record, values in records:
+            if record.point not in (9, 10, 11):
+                continue
+
+            prefix = f"region_{values['region_index']}_"
+            for name in region_fields:
+                if name in values:
+                    result[prefix + name] = values[name]
+
+        for point in (12, 13):
+            image = (event.process_id, args["destination_image"], point)
+            index = bisect_right(self.image_times.get(image, ()), header.timestamp_ns) - 1
+            if index < 0:
+                continue
+
+            _, values = self.images[image][index]
+            for name in ("texture_id", "texture_storage", "in_place_refusal", "metal_row_pitch",
+                         "vulkan_row_pitch", "image_required_bytes"):
+                if name in values:
+                    result[name] = values[name]
+
+        reasons = self.reasons.get((event.process_id, args["destination_image"]), ())
+        previous = [reason for reason in reasons if reason["timestamp"] <= header.timestamp_ns]
+        if previous:
+            reason = max(previous, key=lambda value: value["timestamp"])
+            content = bytearray()
+            for offset in range(0, min(reason["total_bytes"], 256), 16):
+                if offset not in reason["parts"]:
+                    break
+
+                content.extend(reason["parts"][offset])
+
+            content = content[:reason["total_bytes"]]
+            result["in_place_refusal_description"] = content.decode("utf-8", errors="replace")
+            result["in_place_refusal_description_complete"] = len(content) == reason["total_bytes"]
+
+        return result
 
 
 class MetalWork:
@@ -292,6 +460,7 @@ class PerfettoCapture:
         self.capture = capture
         self.clock = ClockAlignment(capture)
         self.work = MetalWork(capture.events)
+        self.copy_work = CopyWork(capture.events)
         self.builder = StreamingTraceProtoBuilder(stream)
         self.tracks = {}
         self.pending = []
@@ -480,6 +649,8 @@ class PerfettoCapture:
                 continue
 
             arguments.update(self.work.describe(start.process_id, start.command_buffer_id))
+            if start.name == "copy_buffer_to_image":
+                arguments.update(self.copy_work.describe(start, arguments))
             self.slice(parent, start.name, start.timestamp_ns, end.timestamp_ns, arguments,
                        flow=start.completion_id or None)
             self.summary["gpu_stages"] += 1

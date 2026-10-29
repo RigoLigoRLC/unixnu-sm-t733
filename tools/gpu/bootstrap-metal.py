@@ -13,6 +13,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 
 
 def run(command, environment, directory):
@@ -38,6 +39,43 @@ def ios_toolchain_installed(rustup, environment, directory):
     return False
 
 
+def prepare_translator(source, pin, environment, directory):
+    """The translator checkout contains the selected revision and recorded patches.
+
+    A revision change preserves the previous checkout beside it, including its
+    expanded patches. The replacement reuses the available Git objects and
+    checks out the new revision before the core builder applies its series.
+    """
+    if (source / ".git").exists():
+        revision = subprocess.check_output(
+            ["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+        if revision == pin["commit"]:
+            return
+
+        previous = source.with_name(f"{source.name}-{revision[:12]}-{time.time_ns()}")
+        source.rename(previous)
+        print(f"Preserved translator source: {previous}", flush=True)
+        run(["git", "clone", "--no-checkout", "--no-hardlinks", previous, source],
+            environment, directory)
+        run(["git", "-C", source, "remote", "set-url", "origin", pin["repository"]],
+            environment, directory)
+    else:
+        source.parent.mkdir(parents=True, exist_ok=True)
+        run(["git", "init", source], environment, directory)
+        run(["git", "-C", source, "remote", "add", "origin", pin["repository"]],
+            environment, directory)
+
+    available = subprocess.run(
+        ["git", "-C", str(source), "rev-parse", "--verify", pin["commit"] + "^{commit}"],
+        env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if available.returncode:
+        run(["git", "-C", source, "fetch", "--depth=1", "origin", pin["commit"]],
+            environment, directory)
+
+    run(["git", "-C", source, "checkout", "--detach", pin["commit"]],
+        environment, directory)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core", type=Path, required=True)
@@ -58,12 +96,7 @@ def main():
         str(Path(rustup).parent), str(cache / "mesa-tools/bin"),
         environment.get("PATH", ""),
     ])
-    if not (source / ".git").exists():
-        source.parent.mkdir(parents=True, exist_ok=True)
-        run(["git", "init", source], environment, core)
-        run(["git", "-C", source, "remote", "add", "origin", pin["repository"]], environment, core)
-        run(["git", "-C", source, "fetch", "--depth=1", "origin", pin["commit"]], environment, core)
-        run(["git", "-C", source, "checkout", "--detach", pin["commit"]], environment, core)
+    prepare_translator(source, pin, environment, core)
 
     run([rustup, "set", "auto-self-update", "disable"], environment, core)
     if not ios_toolchain_installed(rustup, environment, core):

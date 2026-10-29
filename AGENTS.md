@@ -19,8 +19,8 @@ DVFS and full Apple4 tile/imageblock/ROG support remain deferred.
 The optimization branch uses metal2vulkan development 624bab39 with the upstream
 runtime patches and the SM7325 memory and synchronization policies. The user
 requested leaving Apple3 unchanged for this update. Source and build records
-are in `docs/GPU_UPSTREAM_M2V_65_2026-10-29.md`; the deployed package remains 64a
-until a later deployment is recorded.
+are in `docs/GPU_UPSTREAM_M2V_65_2026-10-29.md`. The 65c package passed all nine
+build stages and has not been deployed; the device remains on 64a.
 
 The current GPU investigation measures hardware execution, shader activity,
 cache waits and GMEM traffic. CPU timing analysis is deferred. The bounded

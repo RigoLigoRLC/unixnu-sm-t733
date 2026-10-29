@@ -31,22 +31,29 @@ Turnip 保留本机异步提交、资源范围、BO 缓存及硬件一致性补�
 
 主分支已登记上游 20 份补丁与本机 `0021` 至 `0023`，分别承载内存池及一致性选择、空闲命令池边界、资源阶段和 CPU 可见性。64a 的实机采样仍见 [硬件采集记录](GPU_HARDWARE_CAPTURE_64_2026-10-29.md)。
 
-## 65a 构建输入
+## 65c 构建结果
+
+`system-gpu-upstream-65c` 的 configure、resolve、kernel、menu、turnip、metal、wallpaper、debug-tools、payload 九阶段均退出 0。启动 FAT 为 536870912 字节。源码在构建前提交并固定标签；后续文档提交不改变产物来源。实机仍运行 64a，本轮未部署。
 
 | 仓库 | 提交 |
 | --- | --- |
-| core | `d16b3384aee7908234831ff1f28d8beff03c3810` |
-| AdrenoMetal | `6fb945121e11bd851d236becc7204e8690c50322` |
-| SM7325 | `7f308116117a92bc315de97ed3c5e3a6b308f999` |
+| 设备 | `3196c7362b174a2f97399bbc82cb710c946f2b99` |
+| core | `f793b96cfbedf8f7302c3b84cde74903c3700922` |
+| AdrenoMetal | `d72ce3886cd6509f203057fa6185e50d496cca32` |
+| SM7325 | `058fc5950f3feeafa0665764f695db85eca1ed73` |
 | Adreno6xx | `83a0453e981567a30cecd6486bdb8b3b33d64683` |
 
-设备及组件使用不可移动标签 `build/system-gpu-upstream-65a-source-1`。统一命令：
+设备及组件使用不可移动标签 `build/system-gpu-upstream-65c-source-1`。统一命令：
 
 ```sh
 source tools/activate.sh
-bash tools/build-t733-recovery.sh system-gpu-upstream-65a --system --payload-only \
+bash tools/build-t733-recovery.sh system-gpu-upstream-65c --system --payload-only \
   --local-module soc:sm7325=/Users/rigoligo/expm/unixnu-sm-t733/sources/unixnu-sm7325-common
 ```
+
+产物目录为 `build/releases/system-gpu-upstream-65c/`，包含 `payload.img`、`stages.tsv`、`source-revisions.json` 和完整阶段日志。`logs/rust-bridge.log` 保存 Rust release 编译输出。所有更新仅发布到 `unixnu-sm-t733`，Apple3 分支引用未变。
+
+## 编译修正记录
 
 65a 的前五阶段退出 0，Metal 阶段退出 1：本机 render pass 切分补丁仍直接比较新的 `Versioned<PassShape>` 包装。修正为比较解引用后的 `PassShape`，对应固定源码保存在 65b 的构建记录。65a 原始输出与标签保留。实机仍运行 64a；本轮未部署。
 

@@ -49,3 +49,5 @@ bash tools/build-t733-recovery.sh system-gpu-upstream-65a --system --payload-onl
 ```
 
 65a 的前五阶段退出 0，Metal 阶段退出 1：本机 render pass 切分补丁仍直接比较新的 `Versioned<PassShape>` 包装。修正为比较解引用后的 `PassShape`，对应固定源码保存在 65b 的构建记录。65a 原始输出与标签保留。实机仍运行 64a；本轮未部署。
+
+65b 的 Rust 运行时与桥接 release 编译成功，Objective-C 编译发现新 `rotation` 实现旁保留了旧方法。删除旧声明后以 65c 固定新源码继续构建；65b 的 `logs/rust-bridge.log` 保存完整 Rust 编译结果。

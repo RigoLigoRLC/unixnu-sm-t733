@@ -48,4 +48,4 @@ bash tools/build-t733-recovery.sh system-gpu-upstream-65a --system --payload-onl
   --local-module soc:sm7325=/Users/rigoligo/expm/unixnu-sm-t733/sources/unixnu-sm7325-common
 ```
 
-构建输出为 `build/releases/system-gpu-upstream-65a/`，各阶段返回值记录在 `stages.tsv`。实机仍运行 64a；本轮未部署。
+65a 的前五阶段退出 0，Metal 阶段退出 1：本机 render pass 切分补丁仍直接比较新的 `Versioned<PassShape>` 包装。修正为比较解引用后的 `PassShape`，对应固定源码保存在 65b 的构建记录。65a 原始输出与标签保留。实机仍运行 64a；本轮未部署。

@@ -35,6 +35,9 @@ TURNIP_ARGUMENTS = {
     14: "group_count", 15: "indirect", 16: "cache_flush_bits",
     17: "secondary_command_buffer_id", 20: "timestamp_dwords", 21: "timestamp_copy_dwords",
     22: "wait_for_me_dwords", 23: "additional_wait_for_idle_dwords",
+    24: "budget_dropped", 25: "queue_dropped", 26: "append_dropped",
+    27: "unsubmitted_commands", 28: "unexecuted_gmem_points",
+    29: "source_format", 30: "destination_format", 31: "bytes",
 }
 COUNTER_NAMES = {
     "core": "GPU core cycles", "sp_busy": "Shader processor busy cycles",

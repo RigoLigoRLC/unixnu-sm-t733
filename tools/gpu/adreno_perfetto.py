@@ -104,6 +104,12 @@ def event_arguments(event):
             name = f"argument_{key}"
         arguments[name] = value
 
+    if event.source == 2 and event.point == 65538:
+        arguments["wait_for_idle_words_measured"] = bool(event.flags & 0x10000)
+        arguments["command_word_counts_are"] = "generated commands, including unsubmitted recordings"
+        if not arguments["wait_for_idle_words_measured"]:
+            arguments.pop("additional_wait_for_idle_dwords", None)
+
     if "extent" in arguments:
         extent = arguments["extent"]
         arguments["width"] = extent & 0xffffffff

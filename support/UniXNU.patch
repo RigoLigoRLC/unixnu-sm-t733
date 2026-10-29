@@ -21,7 +21,7 @@ index dff2ced..d0904e9 100644
  	path = kits/XnuPrelink
  	url = https://github.com/UniXNU/XnuPrelink.git
 diff --git a/components.toml b/components.toml
-index 505cf96..0325f64 100644
+index 505cf96..97c61b8 100644
 --- a/components.toml
 +++ b/components.toml
 @@ -100,19 +100,19 @@ legacy_outputs = { "build/native-adreno/libNativeAdreno.a" = "build/adreno740/li
@@ -36,7 +36,7 @@ index 505cf96..0325f64 100644
 -repository = "https://github.com/UniXNU/AdrenoMetal.git"
 -revision = "454ff2ce83766ce7b3e0f355e83f1d72907708b3"
 +repository = "https://github.com/RigoLigoRLC/unixnu-adrenometal.git"
-+revision = "d72ce3886cd6509f203057fa6185e50d496cca32"
++revision = "afa075ccb01b7cdc8967e09c9c5e676fd9d36edf"
  path = "drivers/AdrenoMetal"
  hardware = ["Turnip Darwin backend", "kernel GPU user-client ABI"]
  os_abi = ["ipados-17.7.11-21H461"]
@@ -77,13 +77,197 @@ index 505cf96..0325f64 100644
  path = "kits/ArmSmmu4K"
  hardware = ["ARM SMMU", "MMU-500"]
  os_abi = []
+diff --git a/docs/TURNIP_DARWIN_CAPTURE.md b/docs/TURNIP_DARWIN_CAPTURE.md
+new file mode 100644
+index 0000000..1ba03fc
+--- /dev/null
++++ b/docs/TURNIP_DARWIN_CAPTURE.md
+@@ -0,0 +1,45 @@
++# Darwin Turnip GPU capture
++
++`patches/mesa/turnip-darwin-perfetto-capture.patch` adds a bounded consumer to
++Mesa u_trace. `NativeAdrenoTrace.h` comes from the selected kernel ABI directory.
++The SM-T733 resolved driver directory is a symlink to the device repository,
++so both ABI headers enter the same include directory. A Darwin build whose
++kernel ABI lacks the trace header keeps the disabled callback implementations.
++
++The transport thread polls capture state every 10 ms and registers one producer
++for each active generation. It sends at most eight 176-byte events per IOKit
++call. GPU and Metal callbacks append to a 2048-event CPU queue. Each device
++accepts at most 8192 GPU trace events per generation and 64 recorded primary
++command buffers awaiting submission. Timestamp allocation uses 64-entry chunks.
++Overflow increments the explicit dropped count. Capture stop closes admission,
++drains submitted u_trace work, sends remaining records, and ends the producer.
++A three-second drain timeout reports an incomplete producer.
++
++The A6xx timestamp command is Mesa's `CP_EVENT_WRITE(RB_DONE_TS)`. Mesa waits for
++the native completion receipt before reading the timestamp BO. The conversion
++uses integer quotient and remainder at 19.2 MHz. A missing timestamp or failed
++completion wait marks the event invalid. No new CPU register access occurs.
++
++The default points include render pass, binning, sysmem/tile draw, compute,
++copy/clear, GMEM load/store, main-stream cache flushes, and the final tile store
++IB. Individual draw timing stays disabled. GMEM load/store reuse Mesa's render
++pass timestamp cloning. During capture, A6xx performs the existing tile-tail
++WFI before that clone, then emits the clone's WAIT_FOR_ME and CP_MEMCPY. The
++move crosses only the timestamp-copy commands; draw, final store, and the tile
++render-end marker retain their ordering. Outside capture the original command
++sequence remains. The instrumentation event records encoded timestamp,
++CP_MEMCPY, WAIT_FOR_ME, and additional WFI dword counts. These counters describe
++capture commands; they do not measure shader or cache execution time.
++
++Each command-buffer recording receives a process-wide monotonically increasing
++ID. Metal metadata converts its Vulkan handle to that ID. The submit event
++associates the recording ID with Turnip's submission number plus one and the
++kernel completion receipt. Execute-secondary events associate secondary IDs
++with the primary. Begin and end GPU events share point, name, and recording ID.
++The shared ABI header lists Turnip point and argument IDs. Metal metadata uses
++point IDs 1 through 7, argument key `point * 16 + argument_index`, and source
++flags in event flags bits 16 through 31.
++
++The host owns Perfetto protobuf encoding and GPU/CPU clock alignment. GPU
++intervals represent completed render-backend timestamps; subtraction between
++neighboring stages alone does not identify a pure wait interval.
+diff --git a/docs/drivers/adreno-metal.md b/docs/drivers/adreno-metal.md
+index 79b7bca..763e688 100644
+--- a/docs/drivers/adreno-metal.md
++++ b/docs/drivers/adreno-metal.md
+@@ -28,6 +28,50 @@ A render pass that cannot be encoded still returns an encoder, and its command
+ buffer is refused: RenderBox caches encoder methods and cannot take nil. The first problem of each process is written to the driver's
+ per-process text line from the thread that hit it.
+ 
++The selected board supplies the same `NativeAdrenoABI.h` to Turnip and the plugin.
++Turnip reads the reported ABI version and sends 16 indirect buffers in a 416-byte
++record for version 1, or 128 in a 3104-byte record for version 2. The diagnostic
++mailbox retains the 16-buffer record. Host-import pages remain retained until the
++kernel acknowledges removal of their GPU mapping.
++
++On a Darwin device advertising cached coherent memory, Turnip exposes that memory
++as the default type for resources, heaps and internal command storage. CPU maps
++use write-back caching, and the kernel selects GPU mapping attributes from the
++allocation or imported pages. Metal Shared storage, WriteCombined hints, Private
++resources and eagerly allocated Memoryless attachments prefer cached coherent
++memory on unified-memory GPUs. The frontend's device query recognizes hardware
++coherence and kernel-managed visibility; either removes IOSurface flush-range
++collection and userspace cache operations from submission and completion.
++
++The SM7325 adaptation passes resource declarations, render memory barriers and
++fence stages through the frontend into metal2vulkan. Encoding accumulates access
++summaries, and submission exports GPU writes to the CPU only for allocations
++with CPU consumers. Turnip's asynchronous Darwin extension submits timeline
++dependencies and output points to the kernel scheduler; CPU waits sleep on the
++requested point. Display holds a read of the IOSurface backing until DPU has
++switched to its replacement.
++
++The `unixnu-sm-t733` branch keeps these submission and synchronization changes
++with the system BGRA8 sRGB format policy. The `unixnu-sm-t733-apple3` branch adds
++the Apple3 frontend, compiler and format implementations. Each device branch
++pins its corresponding core, SoC and Metal revisions.
++
++The SM7325 bridge uses metal2vulkan development commit
++`624bab3918de5b978e1101517abca2b4fa426565` and the ordered patches in
++`AdrenoMetal/bridge/patches/series`. The new runtime's fence stages retain the
++local resource visibility and cached coherent memory policies.
++
++Device answers are cached by selector and argument. The frontend disables no-copy
++rebind replay logs. Host-page textures use their imported memory directly when
++the runtime accepts the layout. Turnip uses draw loads and 2D stores for linear
++imported attachments whose dimensions do not fill complete GMEM blocks. Those
++transfers cover the valid texels within the owner's row pitch.
++
++Frame trace and pipeline journal files default off through
++`NATIVE_ADRENO_FRAME_TRACE=0` and `NATIVE_ADRENO_PIPELINE_JOURNAL=0`. Periodic
++in-memory statistics remain available. Frontend and host-import release errors
++each print at most 32 entries per process.
++
+ ```sh
+ python3 scripts/build-turnip-darwin.py --target ios
+ python3 scripts/build-adreno-metal-plugin.py
+diff --git a/docs/drivers/arm-smmu4k.md b/docs/drivers/arm-smmu4k.md
+index ccc4cde..f900306 100644
+--- a/docs/drivers/arm-smmu4k.md
++++ b/docs/drivers/arm-smmu4k.md
+@@ -12,6 +12,11 @@ ARM SMMUv2 native 4 KiB table kit. Builds and programs stage-1/stage-2 context t
+ 
+ Used by Adreno740 and the storage drivers.
+ 
++`coherent_walk = 1` configures outer-shareable WBWA table reads. The platform
++retains CPU write-back table memory and uses the publication callback to order
++CPU stores before device access. Live updates retain their TLB invalidation
++and synchronization sequence.
++
+ Live updates map or unmap a batch of pages in one transaction: one page publication, one TLB synchronization and one recheck per batch. `ArmSmmu4KLiveMapContextBatchExclusive` maps pages the caller owns exclusively and skips the alias check against the existing ranges; the changes are still checked against each other. An unmap of up to 512 pages invalidates each removed page with TLBIVAL; a larger unmap invalidates the ASID.
+ 
+ ## Build
+diff --git a/docs/zh/drivers/adreno-metal.md b/docs/zh/drivers/adreno-metal.md
+index 701f294..74f5ee7 100644
+--- a/docs/zh/drivers/adreno-metal.md
++++ b/docs/zh/drivers/adreno-metal.md
+@@ -26,6 +26,42 @@ render server 的沙盒访问不到 cryptex 路径。120 Hz 下空闲桌面每 2
+ encoder 的方法，不能接受 nil。每个进程的第一个问题由出错
+ 的线程写入驱动的进程文本行。
+ 
++板级构建向 Turnip 和插件提供同一份 `NativeAdrenoABI.h`。Turnip 按查询到的
++ABI 版本选择提交记录：版本 1 为 16 个 IB、416 字节，版本 2 为 128 个 IB、
++3104 字节。诊断 mailbox 保留 16 个 IB 的记录。host-import 只有收到内核
++移除 GPU 映射的成功确认后，才释放调用者持有的页面。
++
++Darwin 设备声明支持缓存一致性内存时，Turnip 将其作为资源、heap 和内部命令
++存储的默认类型。CPU 映射使用 write-back，内核根据分配对象或导入页面的实际
++属性建立 GPU 映射。在统一内存 GPU 上，Metal Shared、WriteCombined 提示、
++Private 资源以及实际分配存储的 Memoryless 附件均优先选择缓存一致性内存。
++前端查询识别硬件一致性和内核负责的可见性处理；两者都会移除提交和完成路径
++中的 IOSurface 刷新范围收集及用户态缓存操作。
++
++SM7325 适配将资源声明、render memory barrier 和 fence 的阶段参数传给
++metal2vulkan。编码时累加访问摘要，提交时只为存在 CPU 消费者的分配对象
++导出 GPU 写入。Turnip 的 Darwin 异步扩展把 timeline 依赖和输出时间点交给
++内核调度器，CPU 等待在所需时间点上睡眠。显示驱动持有 IOSurface backing
++的读占用，直到 DPU 切换到下一张表面。
++
++`unixnu-sm-t733` 分支保留上述提交与同步优化，以及系统 BGRA8 sRGB 格式
++策略。`unixnu-sm-t733-apple3` 分支增加 Apple3 前端、编译器和格式实现。
++设备的两个分支分别固定对应的 core、SoC 和 Metal 版本。
++
++SM7325 桥接使用 metal2vulkan development 提交
++`624bab3918de5b978e1101517abca2b4fa426565`，补丁顺序由
++`AdrenoMetal/bridge/patches/series` 记录。本机资源可见性和缓存一致性内存
++策略接入新运行时的 fence 阶段模型。
++
++设备查询按 selector 和参数缓存，前端关闭 no-copy 重绑所需的编码器回放记录。
++运行时接受纹理布局时，host-page 纹理直接使用导入内存。对于尺寸未填满 GMEM
++块的外部线性附件，Turnip 使用 draw load 和 2D store，传输只覆盖所属行跨度
++内的有效像素。
++
++`NATIVE_ADRENO_FRAME_TRACE=0` 与 `NATIVE_ADRENO_PIPELINE_JOURNAL=0` 默认关闭
++逐命令追踪和管线文件日志，保留周期读取的内存统计。前端错误与 host-import
++释放错误各自最多输出 32 条。
++
+ ```sh
+ python3 scripts/build-turnip-darwin.py --target ios
+ python3 scripts/build-adreno-metal-plugin.py
+diff --git a/docs/zh/drivers/arm-smmu4k.md b/docs/zh/drivers/arm-smmu4k.md
+index 2186ed1..c756fb5 100644
+--- a/docs/zh/drivers/arm-smmu4k.md
++++ b/docs/zh/drivers/arm-smmu4k.md
+@@ -12,6 +12,10 @@ ARM SMMUv2 原生 4 KiB 表 kit。构建并编程 stage-1/stage-2 context 表。
+ 
+ Adreno740 和存储驱动使用它。
+ 
++`coherent_walk = 1` 将页表读取设为 Outer Shareable、WBWA。平台持有 CPU
++write-back 页表内存，并在发布回调中通过写屏障确保 CPU 写入先于设备访问。
++live 更新继续执行对应的 TLB 失效和同步顺序。
++
+ live 更新在一个事务内映射或解除一批页：每批只发布一次页表页、同步一次 TLB、复查一次。`ArmSmmu4KLiveMapContextBatchExclusive` 映射调用方独占的物理页，跳过与已有区间的别名检查，批内各页之间仍互相检查。解除不超过 512 页时逐页发 TLBIVAL，更多时按 ASID 失效。
+ 
+ ## 构建
 diff --git a/drivers/AdrenoMetal b/drivers/AdrenoMetal
-index ce5e19e..d72ce38 160000
+index ce5e19e..afa075c 160000
 --- a/drivers/AdrenoMetal
 +++ b/drivers/AdrenoMetal
 @@ -1 +1 @@
 -Subproject commit ce5e19e33e05e1873d38d818e23cabfe0ac708c3
-+Subproject commit d72ce3886cd6509f203057fa6185e50d496cca32
++Subproject commit afa075ccb01b7cdc8967e09c9c5e676fd9d36edf
 diff --git a/drivers/AppleKeyStoreState b/drivers/AppleKeyStoreState
 index 42ff83e..635b8f9 160000
 --- a/drivers/AppleKeyStoreState
@@ -3960,6 +4144,1153 @@ index 0000000..a310b92
 +       pthread_mutex_lock(&retire->lock);
 +       retire->worker_stop = true;
 +       darwin_wake_worker_locked(retire);
+diff --git a/patches/mesa/turnip-darwin-perfetto-capture.patch b/patches/mesa/turnip-darwin-perfetto-capture.patch
+new file mode 100644
+index 0000000..ae93559
+--- /dev/null
++++ b/patches/mesa/turnip-darwin-perfetto-capture.patch
+@@ -0,0 +1,1141 @@
++diff --git a/src/util/perf/u_trace.h b/src/util/perf/u_trace.h
++--- a/src/util/perf/u_trace.h
+++++ b/src/util/perf/u_trace.h
++@@ -183,6 +183,12 @@
++ typedef void (*u_trace_delete_flush_data)(struct u_trace_context *utctx,
++                                           void *flush_data);
++ 
+++typedef bool (*u_trace_accept_event)(struct u_trace *ut, uint32_t count);
+++typedef void (*u_trace_consume_event)(struct u_trace_context *utctx,
+++                                    uint32_t generation, uint64_t timestamp_ns,
+++                                    const char *name, uint16_t point, uint32_t type,
+++                                    const void *flush_data, const void *payload);
+++
++ enum u_trace_type {
++    U_TRACE_TYPE_PRINT = 1u << 0,
++    U_TRACE_TYPE_JSON = 1u << 1,
++@@ -192,6 +198,7 @@
++    U_TRACE_TYPE_INDIRECTS = 1u << 5,
++    U_TRACE_TYPE_CSV = 1u << 6,
++    U_TRACE_TYPE_RANGES = 1u << 7,
+++   U_TRACE_TYPE_EXTERNAL = 1u << 8,
++ 
++    U_TRACE_TYPE_PRINT_CSV = U_TRACE_TYPE_PRINT | U_TRACE_TYPE_CSV,
++    U_TRACE_TYPE_PRINT_JSON = U_TRACE_TYPE_PRINT | U_TRACE_TYPE_JSON,
++@@ -201,12 +208,12 @@
++    /*
++     * A mask of traces that require appending to the tracepoint chunk list.
++     */
++-   U_TRACE_TYPE_REQUIRE_QUEUING = U_TRACE_TYPE_PRINT | U_TRACE_TYPE_PERFETTO | U_TRACE_TYPE_RANGES,
+++   U_TRACE_TYPE_REQUIRE_QUEUING = U_TRACE_TYPE_PRINT | U_TRACE_TYPE_PERFETTO | U_TRACE_TYPE_RANGES | U_TRACE_TYPE_EXTERNAL,
++    /*
++     * A mask of traces that require processing the tracepoint chunk list.
++     */
++    U_TRACE_TYPE_REQUIRE_PROCESSING =
++-      U_TRACE_TYPE_PRINT | U_TRACE_TYPE_PERFETTO_ACTIVE | U_TRACE_TYPE_RANGES,
+++      U_TRACE_TYPE_PRINT | U_TRACE_TYPE_PERFETTO_ACTIVE | U_TRACE_TYPE_RANGES | U_TRACE_TYPE_EXTERNAL,
++ };
++ 
++ struct u_trace_tracepoint_range {
++@@ -237,6 +244,8 @@
++    u_trace_record_ts record_timestamp;
++    u_trace_read_ts read_timestamp;
++    u_trace_delete_flush_data delete_flush_data;
+++   u_trace_accept_event accept_external_event;
+++   u_trace_consume_event consume_external_event;
++ 
++    uint64_t timestamp_size_bytes;
++    uint64_t max_indirect_size_bytes;
++@@ -300,6 +309,7 @@
++  */
++ struct u_trace {
++    struct u_trace_context *utctx;
+++   uint32_t external_generation;
++ 
++    linear_ctx *linear_alloc;
++    struct util_dynarray events;
++diff --git a/src/util/perf/u_trace.c b/src/util/perf/u_trace.c
++--- a/src/util/perf/u_trace.c
+++++ b/src/util/perf/u_trace.c
++@@ -427,6 +427,8 @@
++    utctx->get_data = get_data;
++    utctx->read_timestamp = read_timestamp;
++    utctx->delete_flush_data = delete_flush_data;
+++   utctx->accept_external_event = NULL;
+++   utctx->consume_external_event = NULL;
++    utctx->timestamp_size_bytes = timestamp_size_bytes;
++    utctx->max_indirect_size_bytes = max_indirect_size_bytes;
++ 
++@@ -725,6 +727,7 @@
++       }
++ 
++       int32_t delta;
+++      const bool external_timestamp_valid = timestamp != U_TRACE_NO_TIMESTAMP;
++ 
++       if (!utctx->first_time_ns)
++          utctx->first_time_ns = timestamp;
++@@ -754,6 +757,13 @@
++       if (utctx->out) {
++          utctx->out_printer->event(utctx, event, timestamp, delta, indirect_data);
++       }
+++      if (ut->external_generation && utctx->consume_external_event) {
+++         utctx->consume_external_event(utctx, ut->external_generation,
+++                                      external_timestamp_valid ? timestamp : 0,
+++                                      event->tp->name, event->tp->tp_idx,
+++                                      event->tp->type, flush->flush_data,
+++                                      event->payload);
+++      }
++ #ifdef HAVE_PERFETTO
++       if (event->tp->perfetto &&
++           (p_atomic_read_relaxed(&utctx->enabled_traces) &
++@@ -891,7 +901,7 @@
++       }
++    }
++ 
++-   uint32_t min_size = TIMESTAMP_BUF_SIZE;
+++   uint32_t min_size = ut->external_generation ? 64 : TIMESTAMP_BUF_SIZE;
++    if (list_index == u_trace_buffer_list_timestamps)
++       min_size *= ut->utctx->timestamp_size_bytes;
++    else
++@@ -935,6 +945,11 @@
++    if (u_trace_iterator_equal(begin_it, end_it))
++       return;
++ 
+++   if (into->external_generation && into->utctx->accept_external_event &&
+++       !into->utctx->accept_external_event(into, end_it.event_idx - begin_it.event_idx)) {
+++      return;
+++   }
+++
++    linear_ctx *linear_alloc = u_trace_get_linear_alloc(into);
++ 
++    struct u_trace_buffer_view src_timestamp = {0}, dst_timestamp = {0}, src_indirect = {0}, dst_indirect = {0};
++@@ -1038,6 +1053,11 @@
++ {
++    assert(tp->payload_sz == ALIGN_NPOT(tp->payload_sz, 8));
++ 
+++   if (ut->external_generation && ut->utctx->accept_external_event &&
+++       !ut->utctx->accept_external_event(ut, 1)) {
+++      return NULL;
+++   }
+++
++    unsigned payload_sz = ALIGN_NPOT(tp->payload_sz + variable_sz, 8);
++    struct u_trace_event *event =
++       linear_alloc_child(u_trace_get_linear_alloc(ut),
++diff --git a/src/util/perf/u_trace.py b/src/util/perf/u_trace.py
++--- a/src/util/perf/u_trace.py
+++++ b/src/util/perf/u_trace.py
++@@ -360,6 +360,9 @@
++ %    endfor
++ ) {
++    enum u_trace_type enabled_traces = p_atomic_read_relaxed(&ut->utctx->enabled_traces);
+++   if (!ut->external_generation) {
+++      enabled_traces = (enum u_trace_type)(enabled_traces & ~U_TRACE_TYPE_EXTERNAL);
+++   }
++    if (!unlikely(enabled_traces != 0 &&
++                  ${trace.enabled_expr(trace_toggle_name)}))
++       return;
++@@ -658,6 +661,9 @@
++   % endif
++                                                     ) :
++       &entry;
+++   if (!__entry) {
+++      return;
+++   }
++  % for arg in trace.tp_struct:
++   % if arg.copy_func is None:
++    __entry->${arg.name} = ${arg.var};
++diff --git a/src/freedreno/vulkan/tu_device.cc b/src/freedreno/vulkan/tu_device.cc
++--- a/src/freedreno/vulkan/tu_device.cc
+++++ b/src/freedreno/vulkan/tu_device.cc
++@@ -36,6 +36,7 @@
++ #include "tu_clear_blit.h"
++ #include "tu_builtin_cache.h"
++ #include "tu_cmd_buffer.h"
+++#include "tu_darwin_trace.h"
++ #include "tu_cs.h"
++ #include "tu_descriptor_set.h"
++ #include "tu_dynamic_rendering.h"
++@@ -2219,7 +2220,8 @@
++     *
++     * TODO we should probably query this value from kernel..
++     */
++-   return ts * (1000000000 / 19200000);
+++   return (ts / 19200000) * 1000000000 +
+++          (ts % 19200000) * 1000000000 / 19200000;
++ }
++ 
++ struct u_trace_context *
++@@ -2288,6 +2290,8 @@
++    struct tu_cs *ts_cs = (struct tu_cs *) cs;
++ 
++    tu_cs_use_range(ts_cs, bo->iova + offset_B, sizeof(uint64_t), TU_RESOURCE_WRITE);
+++   tu_darwin_trace_command_cost((struct tu_device *)ut->utctx->pctx,
+++                                ut->external_generation, CHIP == A6XX ? 5 : 4, 0, 0);
++ 
++    if (CHIP == A6XX) {
++       tu_cs_emit_pkt7(ts_cs, CP_EVENT_WRITE, 4);
++@@ -2321,15 +2325,22 @@
++ 
++    /* Only need to stall on results for the first entry: */
++    if (offset_B == 0) {
++-      tu_queue_wait_fence(submission_data->queue, submission_data->fence,
++-                          1000000000);
+++      VkResult result;
+++      do {
+++         result = tu_queue_wait_fence(submission_data->queue, submission_data->fence,
+++                                      1000000000);
+++      } while (result == VK_TIMEOUT);
+++      if (result != VK_SUCCESS) {
+++         submission_data->darwin_trace_failed = true;
+++      }
++    }
++ 
++    uint64_t *ts = (uint64_t *) ((char *) tu_suballoc_bo_map(bo) + offset_B);
++ 
++    /* Don't translate the no-timestamp marker: */
++-   if (*ts == U_TRACE_NO_TIMESTAMP)
+++   if (*ts == U_TRACE_NO_TIMESTAMP) {
++       return U_TRACE_NO_TIMESTAMP;
+++   }
++ 
++    return tu_device_ticks_to_ns(device, *ts);
++ }
++@@ -2367,6 +2378,8 @@
++    tu_cs_emit(cs, size_B / sizeof(uint32_t));
++    tu_cs_emit_qw(cs, src_iova);
++    tu_cs_emit_qw(cs, bo_to->iova + to_offset_B);
+++   tu_darwin_trace_command_cost((struct tu_device *)utctx->pctx,
+++                                0, 0, 6, 0);
++ }
++ 
++ static void
++@@ -2535,6 +2548,8 @@
++    struct tu_device *device,
++    struct tu_u_trace_submission_data *submission_data)
++ {
+++   tu_darwin_trace_retire(device, submission_data);
+++
++    if (submission_data->timestamp_copy_data) {
++       if (u_trace_enabled(&device->trace_context)) {
++          tu_cs_reset(&submission_data->timestamp_copy_data->cs);
++@@ -3236,6 +3251,8 @@
++                      tu_trace_get_data,
++                      tu_trace_delete_flush_data);
++ 
+++   tu_darwin_trace_init(device);
+++
++    tu_breadcrumbs_init(device);
++ 
++    if (FD_RD_DUMP(ENABLE)) {
++@@ -3336,6 +3353,7 @@
++ 
++    tu_breadcrumbs_finish(device);
++ 
+++   tu_darwin_trace_finish(device);
++    u_trace_context_fini(&device->trace_context);
++ 
++    for (unsigned i = 0; i < ARRAY_SIZE(device->scratch_bos); i++) {
++diff --git a/src/freedreno/vulkan/tu_device.h b/src/freedreno/vulkan/tu_device.h
++--- a/src/freedreno/vulkan/tu_device.h
+++++ b/src/freedreno/vulkan/tu_device.h
++@@ -479,6 +479,7 @@
++    struct tu_device_memory *msrtss_depth_temporary;
++ 
++    struct u_trace_context trace_context;
+++   void *darwin_trace;
++    struct list_head copy_timestamp_cs_pool;
++    mtx_t copy_timestamp_cs_pool_mutex;
++ 
++@@ -671,6 +672,9 @@
++     */
++    struct tu_queue *queue;
++    uint32_t fence;
+++
+++   uint32_t darwin_trace_generation;
+++   bool darwin_trace_failed;
++ 
++    uint32_t cmd_buffer_count;
++    uint32_t last_buffer_with_tracepoints;
++diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd_buffer.cc
++--- a/src/freedreno/vulkan/tu_cmd_buffer.cc
+++++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
++@@ -21,6 +21,7 @@
++ #include "tu_buffer.h"
++ #include "tu_clear_blit.h"
++ #include "tu_cs.h"
+++#include "tu_darwin_trace.h"
++ #include "tu_event.h"
++ #include "tu_image.h"
++ #include "tu_knl.h"
++@@ -244,7 +245,8 @@
++ static void
++ tu_clone_trace_range(struct tu_cmd_buffer *cmd, struct tu_cs *cs,
++                      struct u_trace *dst,
++-                     struct u_trace_iterator begin, struct u_trace_iterator end)
+++                     struct u_trace_iterator begin, struct u_trace_iterator end,
+++                     bool already_idle = false)
++ {
++    if (u_trace_iterator_equal(begin, end))
++       return;
++@@ -269,8 +271,11 @@
++       tu_cond_exec_end(cs);
++    }
++ 
++-   tu_cs_emit_wfi(cs);
+++   if (!already_idle) {
+++      tu_cs_emit_wfi(cs);
+++   }
++    tu_cs_emit_pkt7(cs, CP_WAIT_FOR_ME, 0);
+++   tu_darwin_trace_command_cost(cmd->device, dst->external_generation, 0, 0, 1);
++    u_trace_clone_append(begin, end, dst, cs, tu_copy_buffer);
++ }
++ 
++@@ -490,6 +495,11 @@
++       flushes |= TU_CMD_FLAG_WAIT_MEM_WRITES |
++                  TU_CMD_FLAG_WAIT_FOR_IDLE |
++                  TU_CMD_FLAG_WAIT_FOR_ME;
+++
+++   const bool trace_flush = flushes && cs == &cmd_buffer->cs;
+++   if (trace_flush) {
+++      trace_start_cache_flush(&cmd_buffer->trace, cs, cmd_buffer, flushes);
+++   }
++ 
++    /* Experiments show that invalidating CCU while it still has data in it
++     * doesn't work, so make sure to always flush before invalidating in case
++@@ -539,6 +549,10 @@
++       tu_cs_emit_wfi(cs);
++    if (flushes & TU_CMD_FLAG_WAIT_FOR_ME)
++       tu_cs_emit_pkt7(cs, CP_WAIT_FOR_ME, 0);
+++
+++   if (trace_flush) {
+++      trace_end_cache_flush(&cmd_buffer->trace, cs);
+++   }
++ }
++ 
++ static void
++@@ -3904,10 +3918,21 @@
++       tu_cs_emit(cs, 0x0);
++    }
++ 
+++   trace_start_tile_store_ib(&cmd->trace, cs, cmd);
++    tu_cs_emit_call(cs, &cmd->tile_store_cs);
+++   trace_end_tile_store_ib(&cmd->trace, cs);
++ 
++-   tu_clone_trace_range<CHIP>(cmd, cs, &cmd->trace, cmd->trace_renderpass_start, u_trace_end_iterator(&cmd->rp_trace));
++-   tu_cs_emit_wfi(cs);
+++   if (CHIP == A6XX && cmd->trace.external_generation) {
+++      /* The existing tile wait retires draw and store commands before the
+++       * CP copies their timestamp words into this tile's private buffer. */
+++      tu_cs_emit_wfi(cs);
+++      tu_clone_trace_range<CHIP>(cmd, cs, &cmd->trace, cmd->trace_renderpass_start,
+++                                 u_trace_end_iterator(&cmd->rp_trace), true);
+++   } else {
+++      tu_clone_trace_range<CHIP>(cmd, cs, &cmd->trace, cmd->trace_renderpass_start,
+++                                 u_trace_end_iterator(&cmd->rp_trace));
+++      tu_cs_emit_wfi(cs);
+++   }
++ 
++    tu_set_render_mode<CHIP>(cs, {RM6_BIN_RENDER_END});
++ 
++@@ -4384,6 +4409,8 @@
++    struct tu_cmd_buffer *cmd_buffer =
++       container_of(vk_cmd_buffer, struct tu_cmd_buffer, vk);
++ 
+++   tu_darwin_trace_release(cmd_buffer);
+++
++    util_dynarray_fini(&cmd_buffer->resource_ranges);
++    util_dynarray_fini(&cmd_buffer->resource_descriptor_sets);
++ 
++@@ -4465,6 +4492,8 @@
++    struct tu_cmd_buffer *cmd_buffer =
++       container_of(vk_cmd_buffer, struct tu_cmd_buffer, vk);
++ 
+++   tu_darwin_trace_release(cmd_buffer);
+++
++    util_dynarray_clear(&cmd_buffer->resource_ranges);
++    util_dynarray_clear(&cmd_buffer->resource_descriptor_sets);
++    cmd_buffer->resource_fallback_reasons = 0;
++@@ -4596,6 +4625,8 @@
++    tu_cache_init(&cmd_buffer->state.renderpass_cache);
++    cmd_buffer->usage_flags = pBeginInfo->flags;
++ 
+++   tu_darwin_trace_begin(cmd_buffer);
+++
++    tu_cs_begin(&cmd_buffer->cs);
++    tu_cs_begin(&cmd_buffer->draw_cs);
++    tu_cs_begin(&cmd_buffer->draw_epilogue_cs);
++@@ -6568,6 +6599,8 @@
++ 
++    for (uint32_t i = 0; i < commandBufferCount; i++) {
++       VK_FROM_HANDLE(tu_cmd_buffer, secondary, pCmdBuffers[i]);
+++
+++      tu_darwin_trace_execute(cmd, secondary);
++ 
++       result = tu_cmd_record_result(secondary);
++       if (result != VK_SUCCESS) {
++diff --git a/src/freedreno/vulkan/tu_cmd_buffer.h b/src/freedreno/vulkan/tu_cmd_buffer.h
++--- a/src/freedreno/vulkan/tu_cmd_buffer.h
+++++ b/src/freedreno/vulkan/tu_cmd_buffer.h
++@@ -667,6 +667,9 @@
++ 
++    struct u_trace_iterator trace_renderpass_start;
++    struct u_trace trace, rp_trace;
+++   uint64_t darwin_trace_id;
+++   uint32_t darwin_trace_generation;
+++   bool darwin_trace_pending;
++ 
++    tu_autotune::cmd_buf_ctx autotune_ctx;
++ 
++diff --git a/src/freedreno/vulkan/tu_queue.cc b/src/freedreno/vulkan/tu_queue.cc
++--- a/src/freedreno/vulkan/tu_queue.cc
+++++ b/src/freedreno/vulkan/tu_queue.cc
++@@ -14,6 +14,7 @@
++ #include "tu_buffer.h"
++ #include "tu_cmd_buffer.h"
++ #include "tu_device.h"
+++#include "tu_darwin_trace.h"
++ #include "tu_dynamic_rendering.h"
++ #include "tu_image.h"
++ #include "tu_knl.h"
++@@ -652,6 +653,8 @@
++ 
++    tu_debug_bos_print_stats(device);
++ 
+++   tu_darwin_trace_submit(queue, cmd_buffers, cmdbuf_count, u_trace_submission_data);
+++
++    if (u_trace_submission_data) {
++       u_trace_submission_data->submission_id = device->submit_count;
++       u_trace_submission_data->queue = queue;
++diff --git a/src/freedreno/vulkan/tu_knl_darwin.cc b/src/freedreno/vulkan/tu_knl_darwin.cc
++--- a/src/freedreno/vulkan/tu_knl_darwin.cc
+++++ b/src/freedreno/vulkan/tu_knl_darwin.cc
++@@ -30,6 +30,7 @@
++ #include "tu_cmd_buffer.h"
++ #include "tu_cs.h"
++ #include "tu_device.h"
+++#include "tu_darwin_trace.h"
++ #include "tu_dynamic_rendering.h"
++ #include "tu_knl.h"
++ #include "tu_queue.h"
++@@ -234,6 +235,14 @@
++    return dw_call(darwin_connection_for(dev), method, in, in_size, out, out_size);
++ }
++ 
+++int
+++tu_darwin_trace_call(struct tu_device *device, uint32_t method,
+++                     const void *input, size_t input_size,
+++                     void *output, size_t output_size)
+++{
+++   return dw_call(device, method, input, input_size, output, output_size);
+++}
+++
++ static void darwin_refresh_mapping_budget(struct tu_device *dev, bool force);
++ 
++ static VkResult
++@@ -2957,6 +2966,12 @@
++ darwin_GetDeviceProcAddr(VkDevice _device, const char *name)
++ {
++    VK_FROM_HANDLE(tu_device, device, _device);
+++   if (!strcmp(name, "vkNativeAdrenoTraceEnabled")) {
+++      return (PFN_vkVoidFunction)tu_NativeAdrenoTraceEnabled;
+++   }
+++   if (!strcmp(name, "vkNativeAdrenoTraceMetal")) {
+++      return (PFN_vkVoidFunction)tu_NativeAdrenoTraceMetal;
+++   }
++    if (!strcmp(name, "vkNativeAdrenoDeviceHostCoherent") ||
++        !strcmp(name, "vkNativeAdrenoDeviceCacheMaintenance")) {
++       return (PFN_vkVoidFunction)tu_NativeAdrenoDeviceHostCoherent;
++diff --git a/src/freedreno/vulkan/tu_tracepoints.py b/src/freedreno/vulkan/tu_tracepoints.py
++--- a/src/freedreno/vulkan/tu_tracepoints.py
+++++ b/src/freedreno/vulkan/tu_tracepoints.py
++@@ -49,7 +49,7 @@
++ #
++ 
++ command_buffer_arg = ArgStruct(type='struct tu_cmd_buffer *', var='cmd')
++-command_buffer_struct = Arg(type='VkCommandBuffer', name='command_buffer_handle', var='vk_command_buffer_to_handle(&cmd->vk)', c_format='%" PRIu64 "', to_prim_type='(uint64_t){}', perfetto_field=True)
+++command_buffer_struct = Arg(type='uint64_t', name='command_buffer_handle', var='cmd->darwin_trace_id ? cmd->darwin_trace_id : (uint64_t)vk_command_buffer_to_handle(&cmd->vk)', c_format='%" PRIu64 "', to_prim_type='(uint64_t){}', perfetto_field=True)
++ 
++ def begin_end_tp(name, args=[], tp_struct=None, tp_print=None,
++                  end_args=[], end_tp_struct=None, end_tp_print=None,
++@@ -70,6 +70,7 @@
++ 
++     Tracepoint('start_{0}'.format(name),
++                toggle_name=toggle_name,
+++               tp_type='u_tracepoint_type_begin_range',
++                args=args,
++                tp_struct=tp_struct,
++                tp_perfetto='tu_perfetto_start_{0}'.format(name) if queue_tp else None,
++@@ -77,9 +78,10 @@
++                tp_markers='tu_cs_trace_start' if marker_tp else None)
++     Tracepoint('end_{0}'.format(name),
++                toggle_name=toggle_name,
+++               tp_type='u_tracepoint_type_end_range',
++                args=end_args,
++                tp_struct=end_tp_struct,
++-               tp_perfetto='tu_perfetto_end_{0}'.format(name),
+++               tp_perfetto='tu_perfetto_end_{0}'.format(name) if queue_tp else None,
++                tp_print=end_tp_print if queue_tp else None,
++                tp_markers='tu_cs_trace_end' if marker_tp else None)
++ 
++@@ -171,6 +173,12 @@
++ begin_end_tp('draw_ib_gmem')
++ begin_end_tp('concurrent_binning_barrier')
++ 
+++begin_end_tp('cache_flush',
+++    args=[Arg(type='uint32_t', var='flush_bits', c_format='%u')],
+++    tp_default_enabled=False, queue_tp=False)
+++
+++begin_end_tp('tile_store_ib', tp_default_enabled=False, queue_tp=False)
+++
++ begin_end_tp('generic_clear',
++     args=[Arg(type='enum VkFormat',  var='format',  c_format='%s', to_prim_type='vk_format_description({})->short_name'),
++           Arg(type='bool',           var='ubwc',    c_format='%s', to_prim_type='({} ? "true" : "false")'),
++diff --git a/src/freedreno/vulkan/meson.build b/src/freedreno/vulkan/meson.build
++--- a/src/freedreno/vulkan/meson.build
+++++ b/src/freedreno/vulkan/meson.build
++@@ -139,7 +139,7 @@
++ 
++ if freedreno_kmds.contains('darwin')
++   tu_flags += '-DTU_HAS_DARWIN'
++-  libtu_files += files('tu_knl_darwin.cc', 'tu_builtin_cache.cc')
+++  libtu_files += files('tu_knl_darwin.cc', 'tu_builtin_cache.cc', 'tu_darwin_trace.cc')
++   tu_flags += '-DTU_BUILTIN_SOURCE_ID="' + get_option('tu-builtin-source-id') + '"'
++   if get_option('tu-builtin-pack-header') != ''
++     tu_flags += '-DTU_BUILTIN_PACK_HEADER="' + get_option('tu-builtin-pack-header') + '"'
++diff --git a/src/freedreno/vulkan/tu_darwin_trace.cc b/src/freedreno/vulkan/tu_darwin_trace.cc
++new file mode 100644
++--- /dev/null
+++++ b/src/freedreno/vulkan/tu_darwin_trace.cc
++@@ -0,0 +1,556 @@
+++/* SPDX-License-Identifier: MIT */
+++#include "tu_darwin_trace.h"
+++
+++#if __has_include("NativeAdrenoTrace.h")
+++#include <mach/mach_time.h>
+++#include <pthread.h>
+++#include <stdio.h>
+++#include <stdlib.h>
+++#include <string.h>
+++#include <unistd.h>
+++
+++#include "NativeAdrenoTrace.h"
+++#include "tu_cmd_buffer.h"
+++#include "tu_device.h"
+++#include "tu_queue.h"
+++#include "tu_tracepoints.h"
+++#include "util/u_atomic.h"
+++
+++enum {
+++   TRACE_LOCAL_EVENTS = 2048,
+++   TRACE_GPU_EVENTS = 8192,
+++   TRACE_PENDING_COMMANDS = 64,
+++};
+++
+++static uint64_t trace_next_command;
+++
+++/* tu_darwin_trace_state owns one device's bounded CPU event queue. The u_trace
+++ * worker supplies completed GPU timestamps; Metal supplies command metadata.
+++ * The transport thread polls capture control, sends batches, and releases its
+++ * producer only after recorded command buffers and submitted traces retire. */
+++struct tu_darwin_trace_state {
+++   struct tu_device *device;
+++   pthread_t worker;
+++   pthread_mutex_t mutex;
+++   bool stop;
+++   uint32_t active_generation;
+++   NativeAdrenoTraceProducer producer;
+++   NativeAdrenoTraceEvent events[TRACE_LOCAL_EVENTS];
+++   uint32_t head;
+++   uint32_t count;
+++   uint32_t dropped;
+++   uint32_t gpu_events;
+++   uint32_t pending_commands;
+++   uint32_t pending_submissions;
+++   uint64_t stopped_ns;
+++   uint64_t timestamp_dwords;
+++   uint64_t copy_dwords;
+++   uint64_t wait_dwords;
+++   uint64_t stage_commands[12];
+++   mach_timebase_info_data_t timebase;
+++};
+++
+++static tu_darwin_trace_state *
+++trace_state(struct tu_device *device)
+++{
+++   return (tu_darwin_trace_state *)device->darwin_trace;
+++}
+++
+++static uint64_t
+++trace_now(tu_darwin_trace_state *state)
+++{
+++   const uint64_t ticks = mach_absolute_time();
+++   return (ticks / state->timebase.denom) * state->timebase.numer +
+++          (ticks % state->timebase.denom) * state->timebase.numer / state->timebase.denom;
+++}
+++
+++static void
+++trace_argument(NativeAdrenoTraceEvent *event, uint32_t key, uint64_t value)
+++{
+++   if (event->argument_count < 4) {
+++      event->args[event->argument_count++] = {key, NativeAdrenoTraceArgumentUnsigned, value};
+++   }
+++}
+++
+++static NativeAdrenoTraceEvent
+++trace_cpu_event(tu_darwin_trace_state *state, uint32_t point, const char *name)
+++{
+++   NativeAdrenoTraceEvent event = {};
+++   event.source = NativeAdrenoTraceSourceTurnip;
+++   event.point = point;
+++   event.phase = NativeAdrenoTracePhaseInstant;
+++   event.clock_domain = NativeAdrenoTraceClockMonotonicNanoseconds;
+++   event.timestamp_ns = trace_now(state);
+++   event.process_id = getpid();
+++   snprintf(event.name, sizeof(event.name), "%s", name);
+++   return event;
+++}
+++
+++static void
+++trace_append_locked(tu_darwin_trace_state *state, uint32_t generation,
+++                    const NativeAdrenoTraceEvent &event)
+++{
+++   if (!state->producer.producer_id || generation != state->producer.generation) {
+++      return;
+++   }
+++   if (state->count == TRACE_LOCAL_EVENTS) {
+++      state->dropped++;
+++      return;
+++   }
+++
+++   state->events[(state->head + state->count) % TRACE_LOCAL_EVENTS] = event;
+++   state->count++;
+++}
+++
+++static void
+++trace_append(tu_darwin_trace_state *state, uint32_t generation,
+++              const NativeAdrenoTraceEvent &event)
+++{
+++   pthread_mutex_lock(&state->mutex);
+++   trace_append_locked(state, generation, event);
+++   pthread_mutex_unlock(&state->mutex);
+++}
+++
+++static bool
+++trace_accept(struct u_trace *trace, uint32_t count)
+++{
+++   tu_darwin_trace_state *state = trace_state((tu_device *)trace->utctx->pctx);
+++   pthread_mutex_lock(&state->mutex);
+++   const bool accept = trace->external_generation == state->producer.generation &&
+++                       state->producer.producer_id &&
+++                       count <= TRACE_GPU_EVENTS - state->gpu_events;
+++   if (accept) {
+++      state->gpu_events += count;
+++   } else {
+++      state->dropped += count;
+++   }
+++   pthread_mutex_unlock(&state->mutex);
+++   return accept;
+++}
+++
+++static uint32_t
+++trace_point(const char *name)
+++{
+++   if (!strcmp(name, "render_pass")) {
+++      return NativeAdrenoTraceTurnipRenderPass;
+++   }
+++   if (!strcmp(name, "binning_ib")) {
+++      return NativeAdrenoTraceTurnipBinning;
+++   }
+++   if (!strcmp(name, "draw_ib_sysmem")) {
+++      return NativeAdrenoTraceTurnipDrawSysmem;
+++   }
+++   if (!strcmp(name, "draw_ib_gmem")) {
+++      return NativeAdrenoTraceTurnipDrawGmem;
+++   }
+++   if (!strcmp(name, "compute")) {
+++      return NativeAdrenoTraceTurnipCompute;
+++   }
+++   if (!strcmp(name, "compute_indirect")) {
+++      return NativeAdrenoTraceTurnipComputeIndirect;
+++   }
+++   if (!strcmp(name, "gmem_load")) {
+++      return NativeAdrenoTraceTurnipGmemLoad;
+++   }
+++   if (!strcmp(name, "gmem_store")) {
+++      return NativeAdrenoTraceTurnipGmemStore;
+++   }
+++   if (!strcmp(name, "cache_flush")) {
+++      return NativeAdrenoTraceTurnipCacheFlush;
+++   }
+++   if (!strcmp(name, "tile_store_ib")) {
+++      return NativeAdrenoTraceTurnipTileStore;
+++   }
+++   return NativeAdrenoTraceTurnipCopy;
+++}
+++
+++static void
+++trace_consume(struct u_trace_context *context, uint32_t generation, uint64_t timestamp,
+++               const char *name, uint16_t point, uint32_t type,
+++               const void *flush_data, const void *payload)
+++{
+++   tu_darwin_trace_state *state = trace_state((tu_device *)context->pctx);
+++   const tu_u_trace_submission_data *submit = (const tu_u_trace_submission_data *)flush_data;
+++   NativeAdrenoTraceEvent event = {};
+++   const bool begin = type == 0;
+++   const char *stage = begin ? name + 6 : type == 1 ? name + 4 : name;
+++   event.source = NativeAdrenoTraceSourceTurnip;
+++   event.point = trace_point(stage);
+++   event.phase = type + 1;
+++   event.clock_domain = NativeAdrenoTraceClockGpuNanoseconds;
+++   event.timestamp_ns = timestamp;
+++   event.submission_id = (uint64_t)submit->submission_id + 1;
+++   event.completion_id = submit->fence;
+++   event.process_id = getpid();
+++   event.queue_id = submit->queue->msm_queue_id;
+++   event.flags = submit->darwin_trace_failed || !timestamp ? NativeAdrenoTraceEventInvalid : 0;
+++   snprintf(event.name, sizeof(event.name), "%s", stage);
+++   if (begin) {
+++      memcpy(&event.command_buffer_id, payload, sizeof(event.command_buffer_id));
+++      state->stage_commands[event.point] = event.command_buffer_id;
+++   } else {
+++      event.command_buffer_id = state->stage_commands[event.point];
+++   }
+++
+++   if (event.point == NativeAdrenoTraceTurnipRenderPass && begin) {
+++      const struct trace_start_render_pass *data = (const struct trace_start_render_pass *)payload;
+++      trace_argument(&event, NativeAdrenoTraceArgWidth, data->width);
+++      trace_argument(&event, NativeAdrenoTraceArgHeight, data->height);
+++      trace_argument(&event, NativeAdrenoTraceArgBins, data->numberOfBins);
+++      trace_argument(&event, NativeAdrenoTraceArgSamples, data->maxSamples);
+++   } else if (event.point == NativeAdrenoTraceTurnipRenderPass) {
+++      const struct trace_end_render_pass *data = (const struct trace_end_render_pass *)payload;
+++      trace_argument(&event, NativeAdrenoTraceArgDrawCount, data->drawCount);
+++      trace_argument(&event, NativeAdrenoTraceArgTiled, data->tiledRender);
+++      trace_argument(&event, NativeAdrenoTraceArgBandwidth, data->avgPerSampleBandwidth);
+++      trace_argument(&event, NativeAdrenoTraceArgLrz, data->lrz);
+++   } else if (event.point == NativeAdrenoTraceTurnipCacheFlush && begin) {
+++      const struct trace_start_cache_flush *data = (const struct trace_start_cache_flush *)payload;
+++      trace_argument(&event, NativeAdrenoTraceArgFlushBits, data->flush_bits);
+++   } else if (event.point == NativeAdrenoTraceTurnipGmemLoad && begin) {
+++      const struct trace_start_gmem_load *data = (const struct trace_start_gmem_load *)payload;
+++      trace_argument(&event, NativeAdrenoTraceArgFormat, data->format);
+++      trace_argument(&event, NativeAdrenoTraceArgForceLoad, data->force_load);
+++   } else if (event.point == NativeAdrenoTraceTurnipGmemStore && begin) {
+++      const struct trace_start_gmem_store *data = (const struct trace_start_gmem_store *)payload;
+++      trace_argument(&event, NativeAdrenoTraceArgFormat, data->format);
+++      trace_argument(&event, NativeAdrenoTraceArgFastPath, data->fast_path);
+++      trace_argument(&event, NativeAdrenoTraceArgUnaligned, data->unaligned);
+++   } else if (event.point == NativeAdrenoTraceTurnipCompute && begin) {
+++      const struct trace_start_compute *data = (const struct trace_start_compute *)payload;
+++      trace_argument(&event, NativeAdrenoTraceArgLocalSize,
+++                     (uint64_t)data->local_size_x | ((uint64_t)data->local_size_y << 16) |
+++                     ((uint64_t)data->local_size_z << 32));
+++      trace_argument(&event, NativeAdrenoTraceArgGroupCount,
+++                     (uint64_t)data->num_groups_x | ((uint64_t)data->num_groups_y << 16) |
+++                     ((uint64_t)data->num_groups_z << 32));
+++      trace_argument(&event, NativeAdrenoTraceArgIndirect, data->indirect);
+++   }
+++
+++   trace_append(state, generation, event);
+++}
+++
+++static void
+++trace_send(tu_darwin_trace_state *state)
+++{
+++   for (;;) {
+++      NativeAdrenoTraceBatch batch = {};
+++      pthread_mutex_lock(&state->mutex);
+++      if (!state->count || !state->producer.producer_id) {
+++         pthread_mutex_unlock(&state->mutex);
+++         return;
+++      }
+++      batch.version = NativeAdrenoTraceVersion;
+++      batch.generation = state->producer.generation;
+++      batch.producer_id = state->producer.producer_id;
+++      batch.count = MIN2(state->count, (uint32_t)NativeAdrenoTraceBatchEvents);
+++      for (uint32_t i = 0; i < batch.count; ++i) {
+++         batch.events[i] = state->events[state->head];
+++         state->head = (state->head + 1) % TRACE_LOCAL_EVENTS;
+++      }
+++      state->count -= batch.count;
+++      pthread_mutex_unlock(&state->mutex);
+++
+++      if (tu_darwin_trace_call(state->device, NativeAdrenoMethodAppendTrace,
+++                               &batch, sizeof(batch), NULL, 0)) {
+++         pthread_mutex_lock(&state->mutex);
+++         state->dropped += batch.count;
+++         pthread_mutex_unlock(&state->mutex);
+++      }
+++   }
+++}
+++
+++static void
+++trace_end(tu_darwin_trace_state *state, bool incomplete)
+++{
+++   pthread_mutex_lock(&state->mutex);
+++   NativeAdrenoTraceEvent cost = trace_cpu_event(state, NativeAdrenoTraceTurnipInstrumentation,
+++                                                "trace_command_dwords");
+++   trace_argument(&cost, NativeAdrenoTraceArgTimestampDwords, state->timestamp_dwords);
+++   trace_argument(&cost, NativeAdrenoTraceArgCopyDwords, state->copy_dwords);
+++   trace_argument(&cost, NativeAdrenoTraceArgWaitForMeDwords, state->wait_dwords);
+++   trace_argument(&cost, NativeAdrenoTraceArgExtraWaitForIdleDwords, 0);
+++   trace_append_locked(state, state->producer.generation, cost);
+++   pthread_mutex_unlock(&state->mutex);
+++   trace_send(state);
+++
+++   pthread_mutex_lock(&state->mutex);
+++   NativeAdrenoTraceProducer producer = state->producer;
+++   producer.dropped = state->dropped;
+++   producer.flags = incomplete ? NativeAdrenoTraceProducerIncomplete : 0;
+++   state->producer = {};
+++   state->pending_commands = 0;
+++   state->pending_submissions = 0;
+++   pthread_mutex_unlock(&state->mutex);
+++   tu_darwin_trace_call(state->device, NativeAdrenoMethodEndTraceProducer,
+++                        &producer, sizeof(producer), NULL, 0);
+++}
+++
+++static void *
+++trace_worker(void *opaque)
+++{
+++   tu_darwin_trace_state *state = (tu_darwin_trace_state *)opaque;
+++   for (;;) {
+++      NativeAdrenoTraceStatus status = {};
+++      const bool query_ok = !tu_darwin_trace_call(state->device, NativeAdrenoMethodQueryTrace,
+++                                                  NULL, 0, &status, sizeof(status));
+++      const bool running = query_ok && status.state == NativeAdrenoTraceRunning &&
+++                           !p_atomic_read(&state->stop);
+++      if (running && !state->producer.producer_id) {
+++         NativeAdrenoTraceProducer producer = {};
+++         producer.version = NativeAdrenoTraceVersion;
+++         producer.generation = status.generation;
+++         producer.source = NativeAdrenoTraceSourceTurnip;
+++         if (!tu_darwin_trace_call(state->device, NativeAdrenoMethodRegisterTraceProducer,
+++                                   &producer, sizeof(producer), &producer, sizeof(producer))) {
+++            pthread_mutex_lock(&state->mutex);
+++            state->producer = producer;
+++            state->gpu_events = 0;
+++            state->dropped = 0;
+++            state->timestamp_dwords = 0;
+++            state->copy_dwords = 0;
+++            state->wait_dwords = 0;
+++            state->stopped_ns = 0;
+++            p_atomic_set(&state->active_generation, producer.generation);
+++            pthread_mutex_unlock(&state->mutex);
+++         }
+++      }
+++      if (!running) {
+++         p_atomic_set(&state->active_generation, 0);
+++      }
+++      trace_send(state);
+++
+++      pthread_mutex_lock(&state->mutex);
+++      const bool draining = state->producer.producer_id && !running;
+++      if (draining && !state->stopped_ns) {
+++         state->stopped_ns = trace_now(state);
+++      }
+++      const bool pending = state->pending_commands || state->pending_submissions;
+++      const bool expired = draining && trace_now(state) - state->stopped_ns > 3000000000ull;
+++      pthread_mutex_unlock(&state->mutex);
+++      if (draining && (!pending || expired)) {
+++         trace_end(state, pending);
+++      }
+++      if (p_atomic_read(&state->stop) && !state->producer.producer_id) {
+++         return NULL;
+++      }
+++      usleep(10000);
+++   }
+++}
+++
+++void
+++tu_darwin_trace_init(struct tu_device *device)
+++{
+++   if (!device->darwin_retire || device->physical_device->info->chip != A6XX) {
+++      return;
+++   }
+++   tu_darwin_trace_state *state = (tu_darwin_trace_state *)calloc(1, sizeof(*state));
+++   if (!state) {
+++      return;
+++   }
+++   state->device = device;
+++   mach_timebase_info(&state->timebase);
+++   if (pthread_mutex_init(&state->mutex, NULL)) {
+++      free(state);
+++      return;
+++   }
+++   device->darwin_trace = state;
+++   device->trace_context.accept_external_event = trace_accept;
+++   device->trace_context.consume_external_event = trace_consume;
+++   device->trace_context.enabled_traces = (u_trace_type)(device->trace_context.enabled_traces |
+++                                                        U_TRACE_TYPE_EXTERNAL);
+++   tu_gpu_tracepoint = TU_GPU_TRACEPOINT_RENDER_PASS | TU_GPU_TRACEPOINT_BINNING_IB |
+++                      TU_GPU_TRACEPOINT_DRAW_IB_SYSMEM | TU_GPU_TRACEPOINT_DRAW_IB_GMEM |
+++                      TU_GPU_TRACEPOINT_COMPUTE | TU_GPU_TRACEPOINT_COMPUTE_INDIRECT |
+++                      TU_GPU_TRACEPOINT_CLEAR_BLIT | TU_GPU_TRACEPOINT_GMEM_LOAD |
+++                      TU_GPU_TRACEPOINT_GMEM_STORE | TU_GPU_TRACEPOINT_CACHE_FLUSH |
+++                      TU_GPU_TRACEPOINT_TILE_STORE_IB;
+++   if (pthread_create(&state->worker, NULL, trace_worker, state)) {
+++      device->darwin_trace = NULL;
+++      device->trace_context.accept_external_event = NULL;
+++      device->trace_context.consume_external_event = NULL;
+++      device->trace_context.enabled_traces = (u_trace_type)(device->trace_context.enabled_traces &
+++                                                           ~U_TRACE_TYPE_EXTERNAL);
+++      pthread_mutex_destroy(&state->mutex);
+++      free(state);
+++   }
+++}
+++
+++void
+++tu_darwin_trace_finish(struct tu_device *device)
+++{
+++   tu_darwin_trace_state *state = trace_state(device);
+++   if (!state) {
+++      return;
+++   }
+++   p_atomic_set(&state->stop, true);
+++   pthread_join(state->worker, NULL);
+++   util_queue_finish(&device->trace_context.queue);
+++   device->trace_context.accept_external_event = NULL;
+++   device->trace_context.consume_external_event = NULL;
+++   device->darwin_trace = NULL;
+++   pthread_mutex_destroy(&state->mutex);
+++   free(state);
+++}
+++
+++void
+++tu_darwin_trace_begin(struct tu_cmd_buffer *cmd)
+++{
+++   tu_darwin_trace_state *state = trace_state(cmd->device);
+++   if (!state) {
+++      return;
+++   }
+++   tu_darwin_trace_release(cmd);
+++   pthread_mutex_lock(&state->mutex);
+++   cmd->darwin_trace_id = p_atomic_inc_return(&trace_next_command);
+++   cmd->darwin_trace_generation = p_atomic_read(&state->active_generation);
+++   if (cmd->darwin_trace_generation &&
+++       cmd->vk.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY &&
+++       (cmd->usage_flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)) {
+++      if (state->pending_commands < TRACE_PENDING_COMMANDS) {
+++         state->pending_commands++;
+++         cmd->darwin_trace_pending = true;
+++         cmd->trace.external_generation = cmd->darwin_trace_generation;
+++         cmd->rp_trace.external_generation = cmd->darwin_trace_generation;
+++      } else {
+++         state->dropped++;
+++      }
+++   }
+++   pthread_mutex_unlock(&state->mutex);
+++}
+++
+++void
+++tu_darwin_trace_release(struct tu_cmd_buffer *cmd)
+++{
+++   tu_darwin_trace_state *state = trace_state(cmd->device);
+++   if (state && cmd->darwin_trace_pending) {
+++      pthread_mutex_lock(&state->mutex);
+++      if (cmd->darwin_trace_generation == state->producer.generation && state->pending_commands) {
+++         state->pending_commands--;
+++      }
+++      pthread_mutex_unlock(&state->mutex);
+++   }
+++   cmd->darwin_trace_pending = false;
+++   cmd->darwin_trace_generation = 0;
+++   cmd->trace.external_generation = 0;
+++   cmd->rp_trace.external_generation = 0;
+++}
+++
+++void
+++tu_darwin_trace_execute(struct tu_cmd_buffer *cmd, struct tu_cmd_buffer *secondary)
+++{
+++   tu_darwin_trace_state *state = trace_state(cmd->device);
+++   if (!state || !cmd->darwin_trace_generation) {
+++      return;
+++   }
+++   NativeAdrenoTraceEvent event = trace_cpu_event(state, NativeAdrenoTraceTurnipExecute,
+++                                                 "execute_secondary");
+++   event.command_buffer_id = cmd->darwin_trace_id;
+++   trace_argument(&event, NativeAdrenoTraceArgSecondaryCommand, secondary->darwin_trace_id);
+++   trace_append(state, cmd->darwin_trace_generation, event);
+++}
+++
+++void
+++tu_darwin_trace_submit(struct tu_queue *queue, struct tu_cmd_buffer **commands,
+++                       uint32_t count, struct tu_u_trace_submission_data *data)
+++{
+++   tu_darwin_trace_state *state = trace_state(queue->device);
+++   if (!state) {
+++      return;
+++   }
+++   pthread_mutex_lock(&state->mutex);
+++   for (uint32_t i = 0; i < count; ++i) {
+++      tu_cmd_buffer *cmd = commands[i];
+++      if (cmd->darwin_trace_generation != state->producer.generation ||
+++          !state->producer.producer_id) {
+++         continue;
+++      }
+++      NativeAdrenoTraceEvent event = trace_cpu_event(state, NativeAdrenoTraceTurnipSubmit,
+++                                                    "submit_command_buffer");
+++      event.command_buffer_id = cmd->darwin_trace_id;
+++      event.submission_id = (uint64_t)queue->device->submit_count + 1;
+++      event.completion_id = queue->fence;
+++      event.queue_id = queue->msm_queue_id;
+++      trace_append_locked(state, cmd->darwin_trace_generation, event);
+++      if (data && u_trace_has_points(&cmd->trace) && !data->darwin_trace_generation) {
+++         data->darwin_trace_generation = cmd->darwin_trace_generation;
+++         state->pending_submissions++;
+++      }
+++      if (cmd->darwin_trace_pending) {
+++         cmd->darwin_trace_pending = false;
+++         state->pending_commands--;
+++      }
+++   }
+++   pthread_mutex_unlock(&state->mutex);
+++}
+++
+++void
+++tu_darwin_trace_retire(struct tu_device *device, struct tu_u_trace_submission_data *data)
+++{
+++   tu_darwin_trace_state *state = trace_state(device);
+++   if (!state || !data->darwin_trace_generation) {
+++      return;
+++   }
+++   pthread_mutex_lock(&state->mutex);
+++   if (data->darwin_trace_generation == state->producer.generation && state->pending_submissions) {
+++      state->pending_submissions--;
+++   }
+++   pthread_mutex_unlock(&state->mutex);
+++}
+++
+++void
+++tu_darwin_trace_command_cost(struct tu_device *device, uint32_t generation,
+++                             uint32_t timestamp_dwords, uint32_t copy_dwords,
+++                             uint32_t wait_dwords)
+++{
+++   tu_darwin_trace_state *state = trace_state(device);
+++   if (!state || (!generation && !copy_dwords)) {
+++      return;
+++   }
+++   pthread_mutex_lock(&state->mutex);
+++   if (state->producer.producer_id && (!generation || generation == state->producer.generation)) {
+++      state->timestamp_dwords += timestamp_dwords;
+++      state->copy_dwords += copy_dwords;
+++      state->wait_dwords += wait_dwords;
+++   }
+++   pthread_mutex_unlock(&state->mutex);
+++}
+++
+++VkBool32 VKAPI_CALL
+++tu_NativeAdrenoTraceEnabled(VkDevice handle)
+++{
+++   VK_FROM_HANDLE(tu_device, device, handle);
+++   tu_darwin_trace_state *state = trace_state(device);
+++   return state && p_atomic_read(&state->active_generation) ? VK_TRUE : VK_FALSE;
+++}
+++
+++void VKAPI_CALL
+++tu_NativeAdrenoTraceMetal(VkDevice handle, VkCommandBuffer command,
+++                          uint32_t type, uint32_t flags,
+++                          const uint64_t *words, uint32_t count)
+++{
+++   VK_FROM_HANDLE(tu_device, device, handle);
+++   tu_darwin_trace_state *state = trace_state(device);
+++   if (!state || !words || type < 1 || type > 7 || count > 4) {
+++      return;
+++   }
+++   const uint32_t generation = p_atomic_read(&state->active_generation);
+++   if (!generation) {
+++      return;
+++   }
+++   static const char *names[] = {"", "metal_encoder", "metal_render_pass", "metal_attachment",
+++                                "metal_texture", "metal_pipeline", "metal_draw", "metal_encoder_end"};
+++   NativeAdrenoTraceEvent event = trace_cpu_event(state, type, names[type]);
+++   event.source = NativeAdrenoTraceSourceMetal;
+++   event.flags = flags << 16;
+++   if (command) {
+++      VK_FROM_HANDLE(tu_cmd_buffer, cmd, command);
+++      event.command_buffer_id = cmd->darwin_trace_id;
+++   }
+++   for (uint32_t i = 0; i < count; ++i) {
+++      trace_argument(&event, type * 16 + i, words[i]);
+++   }
+++   trace_append(state, generation, event);
+++}
+++
+++#endif
++diff --git a/src/freedreno/vulkan/tu_darwin_trace.h b/src/freedreno/vulkan/tu_darwin_trace.h
++new file mode 100644
++--- /dev/null
+++++ b/src/freedreno/vulkan/tu_darwin_trace.h
++@@ -0,0 +1,71 @@
+++/* SPDX-License-Identifier: MIT */
+++#ifndef TU_DARWIN_TRACE_H
+++#define TU_DARWIN_TRACE_H
+++
+++#include <stddef.h>
+++#include <stdint.h>
+++#include <vulkan/vulkan_core.h>
+++
+++struct tu_device;
+++struct tu_cmd_buffer;
+++struct tu_queue;
+++struct tu_u_trace_submission_data;
+++
+++#if defined(TU_HAS_DARWIN) && __has_include("NativeAdrenoTrace.h")
+++void tu_darwin_trace_init(struct tu_device *device);
+++void tu_darwin_trace_finish(struct tu_device *device);
+++void tu_darwin_trace_begin(struct tu_cmd_buffer *cmd);
+++void tu_darwin_trace_release(struct tu_cmd_buffer *cmd);
+++void tu_darwin_trace_execute(struct tu_cmd_buffer *cmd, struct tu_cmd_buffer *secondary);
+++void tu_darwin_trace_submit(struct tu_queue *queue, struct tu_cmd_buffer **commands,
+++                            uint32_t count, struct tu_u_trace_submission_data *data);
+++void tu_darwin_trace_retire(struct tu_device *device, struct tu_u_trace_submission_data *data);
+++void tu_darwin_trace_command_cost(struct tu_device *device, uint32_t generation,
+++                                 uint32_t timestamp_dwords, uint32_t copy_dwords,
+++                                 uint32_t wait_dwords);
+++int tu_darwin_trace_call(struct tu_device *device, uint32_t method,
+++                         const void *input, size_t input_size,
+++                         void *output, size_t output_size);
+++VkBool32 VKAPI_CALL tu_NativeAdrenoTraceEnabled(VkDevice device);
+++void VKAPI_CALL tu_NativeAdrenoTraceMetal(VkDevice device, VkCommandBuffer command,
+++                                         uint32_t type, uint32_t flags,
+++                                         const uint64_t *words, uint32_t count);
+++#else
+++static inline void tu_darwin_trace_init(struct tu_device *)
+++{
+++}
+++static inline void tu_darwin_trace_finish(struct tu_device *)
+++{
+++}
+++static inline void tu_darwin_trace_begin(struct tu_cmd_buffer *)
+++{
+++}
+++static inline void tu_darwin_trace_release(struct tu_cmd_buffer *)
+++{
+++}
+++static inline void tu_darwin_trace_execute(struct tu_cmd_buffer *, struct tu_cmd_buffer *)
+++{
+++}
+++static inline void tu_darwin_trace_submit(struct tu_queue *, struct tu_cmd_buffer **,
+++                                         uint32_t, struct tu_u_trace_submission_data *)
+++{
+++}
+++static inline void tu_darwin_trace_retire(struct tu_device *, struct tu_u_trace_submission_data *)
+++{
+++}
+++static inline void tu_darwin_trace_command_cost(struct tu_device *, uint32_t,
+++                                               uint32_t, uint32_t, uint32_t)
+++{
+++}
+++static inline VkBool32 VKAPI_CALL tu_NativeAdrenoTraceEnabled(VkDevice)
+++{
+++   return VK_FALSE;
+++}
+++static inline void VKAPI_CALL tu_NativeAdrenoTraceMetal(VkDevice, VkCommandBuffer,
+++                                                       uint32_t, uint32_t,
+++                                                       const uint64_t *, uint32_t)
+++{
+++}
+++#endif
+++
+++#endif
 diff --git a/patches/mesa/turnip-render-mode-for-attachment-memory.patch b/patches/mesa/turnip-render-mode-for-attachment-memory.patch
 new file mode 100644
 index 0000000..97b3035
@@ -8449,10 +9780,10 @@ index 4f311df..0c1a66a 100644
  pack_header = ''
  pack_sha = None
 diff --git a/scripts/data/adreno-compiler-inputs.json b/scripts/data/adreno-compiler-inputs.json
-index b170e8e..39b6345 100644
+index b170e8e..2dfdf3f 100644
 --- a/scripts/data/adreno-compiler-inputs.json
 +++ b/scripts/data/adreno-compiler-inputs.json
-@@ -53,7 +53,14 @@
+@@ -53,7 +53,15 @@
      "patches/mesa/turnip-graphics-cache-feedback.patch",
      "patches/mesa/turnip-empty-scissor.patch",
      "patches/mesa/turnip-builtin-shader-pack.patch",
@@ -8464,7 +9795,8 @@ index b170e8e..39b6345 100644
 +    "patches/mesa/turnip-darwin-cached-coherent-memory.patch",
 +    "patches/mesa/turnip-darwin-async-submit.patch",
 +    "patches/mesa/turnip-render-mode-for-attachment-memory.patch",
-+    "patches/mesa/turnip-darwin-metal-cache-stats.patch"
++    "patches/mesa/turnip-darwin-metal-cache-stats.patch",
++    "patches/mesa/turnip-darwin-perfetto-capture.patch"
    ],
    "integer_fma_reference": {
      "repository": "https://github.com/ucb-bar/berkeley-softfloat-3",

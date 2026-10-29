@@ -1,0 +1,2 @@
+perfetto==0.59.1
+protobuf==7.36.2

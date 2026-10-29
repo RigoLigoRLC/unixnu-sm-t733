@@ -68,13 +68,17 @@ def main():
     sdk = subprocess.check_output(
         ["xcrun", "--sdk", "iphoneos", "--show-sdk-path"], text=True).strip()
     binary = output / "t733-debug-network"
+    work = Path(os.environ["T733_RESOLVED_TREE"])
     run(["xcrun", "clang", "-target", "arm64-apple-ios17.0", "-isysroot", sdk,
          "-O2", "-g", "-Wall", "-Wextra", "-Werror", "-fstack-protector-strong",
-         DEVICE / "package/T733DebugNetwork.c", "-framework", "CoreFoundation",
+         "-I", work / "drivers/Adreno6xx",
+         DEVICE / "package/T733DebugNetwork.c", DEVICE / "package/T733GpuTrace.c",
+         "-framework", "CoreFoundation",
          "-o", binary])
     entitlements = output / "entitlements.plist"
     entitlements.write_bytes(plistlib.dumps({
         "com.apple.private.security.no-container": True,
+        "com.apple.security.iokit-user-client-class": ["AGXDeviceUserClient"],
         "com.apple.private.lockdown.finegrained-set": [
             "com.apple.mobile.wireless_lockdown/EnableWifiConnections",
         ],
@@ -104,7 +108,6 @@ def main():
     tools_app = tools_output / "T733Tools.app"
 
     gpu_output = output / "gpu"
-    work = Path(os.environ["T733_RESOLVED_TREE"])
     core = Path(os.environ["UNIXNU_BASE"])
     run([sys.executable, DEVICE / "tools/gpu/build-userspace.py",
          "--output", gpu_output, "--abi-directory", work / "drivers/Adreno6xx",

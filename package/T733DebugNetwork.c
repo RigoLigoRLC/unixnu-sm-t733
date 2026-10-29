@@ -25,6 +25,7 @@
 #include <unistd.h>
 
 extern char **environ;
+extern void t733_gpu_trace_start(void);
 
 static pid_t gpu_diagnostic_pid;
 static pid_t tools_pid;
@@ -649,6 +650,7 @@ int main(void)
         developer_mode, developer_error, isatty(STDIN_FILENO));
     start_gpu_diagnostic();
     start_tools();
+    t733_gpu_trace_start();
     enable_lockdown_connections();
     while (!stopping) {
         int listener = create_debug_listener();

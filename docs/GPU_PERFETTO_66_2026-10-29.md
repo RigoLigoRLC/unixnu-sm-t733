@@ -78,3 +78,22 @@ The host uses the official [Perfetto protobuf conversion
 API](https://perfetto.dev/docs/getting-started/converting) and
 [clock snapshots](https://perfetto.dev/docs/concepts/clock-sync). Source revisions,
 build results and device observations are recorded separately below when available.
+
+## Build attempts
+
+66 stopped while compiling Adreno6xx because the process ownership code needed
+`<sys/proc.h>`. 66a passed kernel and Turnip compilation; Metal source accounting
+rejected two paths because the new runtime patch lacked `diff --git` headers.
+The patch contents and the source accounting guard are retained, and all eight
+affected paths now have standard patch headers. The corrected input is fixed
+for 66b before rebuilding. Failed release directories and tags remain available.
+
+## 65c shutdown observation
+
+While preparing MSC, the user reported a shutdown stall on 65c. Userspace teardown
+finished in 3057 ms; kernel output stopped at `unmount(1) /private/var` while touch
+and battery output continued. The reboot thread was waiting in the kernel. UFS
+had 379839 submissions and completions, no active requests or errors; RamBlock
+also had no active or queued requests. The remaining lock or resource requires
+a kernel stack to identify. The saved evidence is in workspace
+`logs/shutdown-65c-20261029/`. No 66 package had been deployed at that point.

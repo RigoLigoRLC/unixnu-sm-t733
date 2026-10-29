@@ -20,7 +20,10 @@ The optimization branch uses metal2vulkan development 624bab39 with the upstream
 runtime patches and the SM7325 memory and synchronization policies. The user
 requested leaving Apple3 unchanged for this update. Source and build records
 are in `docs/GPU_UPSTREAM_M2V_65_2026-10-29.md`. The 65c package passed all nine
-build stages and has not been deployed; the device remains on 64a.
+build stages, was written through MSC with sync complete, and booted with GPU
+initialization successful. The user reports slightly smoother interaction;
+65c hardware timing has not been captured. Routine deployments skip backing up
+the previous FAT unless that package represents a major improvement.
 
 The current GPU investigation measures hardware execution, shader activity,
 cache waits and GMEM traffic. CPU timing analysis is deferred. The bounded

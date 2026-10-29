@@ -33,7 +33,7 @@ Turnip 保留本机异步提交、资源范围、BO 缓存及硬件一致性补�
 
 ## 65c 构建结果
 
-`system-gpu-upstream-65c` 的 configure、resolve、kernel、menu、turnip、metal、wallpaper、debug-tools、payload 九阶段均退出 0。启动 FAT 为 536870912 字节。源码在构建前提交并固定标签；后续文档提交不改变产物来源。实机仍运行 64a，本轮未部署。
+`system-gpu-upstream-65c` 的 configure、resolve、kernel、menu、turnip、metal、wallpaper、debug-tools、payload 九阶段均退出 0。启动 FAT 为 536870912 字节。源码在构建前提交并固定标签；后续文档提交不改变产物来源。65c 已完整刷入并启动，结果见下方实机记录。
 
 | 仓库 | 提交 |
 | --- | --- |
@@ -55,6 +55,14 @@ bash tools/build-t733-recovery.sh system-gpu-upstream-65c --system --payload-onl
 
 ## 编译修正记录
 
-65a 的前五阶段退出 0，Metal 阶段退出 1：本机 render pass 切分补丁仍直接比较新的 `Versioned<PassShape>` 包装。修正为比较解引用后的 `PassShape`，对应固定源码保存在 65b 的构建记录。65a 原始输出与标签保留。实机仍运行 64a；本轮未部署。
+65a 的前五阶段退出 0，Metal 阶段退出 1：本机 render pass 切分补丁仍直接比较新的 `Versioned<PassShape>` 包装。修正为比较解引用后的 `PassShape`，对应固定源码保存在 65b 的构建记录。65a 原始输出与标签保留；该失败产物未部署。
 
 65b 的 Rust 运行时与桥接 release 编译成功，Objective-C 编译发现新 `rotation` 实现旁保留了旧方法。删除旧声明后以 65c 固定新源码继续构建；65b 的 `logs/rust-bridge.log` 保存完整 Rust 编译结果。
+
+## 65c 部署与实机反馈
+
+MSC 服务重新枚举设备后完整写入 536870912 字节并 sync，返回 `write-fat completed`、退出 0。写入日志位于工作区 `logs/msc-system-gpu-upstream-65c/write-fat.jsonl`。本轮此前已备份旧 FAT；用户随后要求日常部署默认跳过备份，只有上一包属于重大改进版本时保留备份。
+
+被动 USB 接收在 2026-10-29 14:33:15 UTC 重连，原始日志为工作区 `logs/t733-usb-live/t733-20261029T143315.832477Z.raw`。SpringBoard、backboardd 已启动，Metal accelerator 已发布，GPU bootstrap 返回 `status=00000000`、`cp_fence=1/1`、`readback=6421cafe`。读取时显示完成统计为 `complete=2028 failed=0 missing=0 unmatched=0`；采集状态未报告 panic。
+
+用户反馈“感觉略微流畅了一点点”。本轮硬件计数窗口关闭，尚无 65c 的 GPU 操作期耗时对照；64a 平均 34.77 ms 继续作为旧包采样结果保存。

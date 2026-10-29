@@ -20,10 +20,11 @@ The optimization branch uses metal2vulkan development 624bab39 with the upstream
 runtime patches and the SM7325 memory and synchronization policies. The user
 requested leaving Apple3 unchanged for this update. Source and build records
 are in `docs/GPU_UPSTREAM_M2V_65_2026-10-29.md`. The current 66e package passed all
-nine build stages and completed FAT deployment with sync; reboot and capture
-remain pending. It repairs producer budget accounting, stop/drain behavior and
-unexecuted GMEM slots found in the incomplete 66c Perfetto capture. Commands,
-data and fixed revisions are in `docs/GPU_PERFETTO_66_2026-10-29.md`. Routine
+nine build stages and completed FAT deployment, boot and capture. Its 57 jobs
+and 56070 GPU stages have no invalid timestamps or unmatched endpoints, but
+event storage overflowed. Streaming and byte-budget fixes are implemented for
+67 in `docs/GPU_PERFETTO_STREAM_67_2026-10-30.md`; runtime validation is pending.
+Earlier data and revisions are in `docs/GPU_PERFETTO_66_2026-10-29.md`. Routine
 deployments skip backing up the previous FAT unless it represents a major improvement.
 
 The current GPU investigation measures hardware execution, shader activity,

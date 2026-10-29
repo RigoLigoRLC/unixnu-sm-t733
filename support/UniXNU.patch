@@ -4146,19 +4146,20 @@ index 0000000..a310b92
 +       darwin_wake_worker_locked(retire);
 diff --git a/patches/mesa/turnip-darwin-perfetto-capture.patch b/patches/mesa/turnip-darwin-perfetto-capture.patch
 new file mode 100644
-index 0000000..43b88ae
+index 0000000..5326613
 --- /dev/null
 +++ b/patches/mesa/turnip-darwin-perfetto-capture.patch
-@@ -0,0 +1,1370 @@
+@@ -0,0 +1,1473 @@
 +diff --git a/src/util/perf/u_trace.h b/src/util/perf/u_trace.h
 +--- a/src/util/perf/u_trace.h
 ++++ b/src/util/perf/u_trace.h
-+@@ -183,6 +183,13 @@
++@@ -183,6 +183,14 @@
 + typedef void (*u_trace_delete_flush_data)(struct u_trace_context *utctx,
 +                                           void *flush_data);
 + 
-++typedef bool (*u_trace_accept_event)(struct u_trace *ut, uint32_t count, uint32_t type);
-++typedef void (*u_trace_release_events)(struct u_trace *ut);
+++typedef bool (*u_trace_accept_event)(struct u_trace *ut, uint32_t count, uint32_t type,
+++                                     uint64_t allocation_bytes);
+++typedef void (*u_trace_release_allocations)(struct u_trace *ut);
 ++typedef void (*u_trace_consume_event)(struct u_trace_context *utctx,
 ++                                    uint32_t generation, uint64_t timestamp_ns,
 ++                                    const char *name, uint16_t point, uint32_t type, uint32_t flags,
@@ -4167,7 +4168,7 @@ index 0000000..43b88ae
 + enum u_trace_type {
 +    U_TRACE_TYPE_PRINT = 1u << 0,
 +    U_TRACE_TYPE_JSON = 1u << 1,
-+@@ -192,6 +199,7 @@
++@@ -192,6 +200,7 @@
 +    U_TRACE_TYPE_INDIRECTS = 1u << 5,
 +    U_TRACE_TYPE_CSV = 1u << 6,
 +    U_TRACE_TYPE_RANGES = 1u << 7,
@@ -4175,7 +4176,7 @@ index 0000000..43b88ae
 + 
 +    U_TRACE_TYPE_PRINT_CSV = U_TRACE_TYPE_PRINT | U_TRACE_TYPE_CSV,
 +    U_TRACE_TYPE_PRINT_JSON = U_TRACE_TYPE_PRINT | U_TRACE_TYPE_JSON,
-+@@ -201,12 +209,12 @@
++@@ -201,12 +210,12 @@
 +    /*
 +     * A mask of traces that require appending to the tracepoint chunk list.
 +     */
@@ -4190,28 +4191,39 @@ index 0000000..43b88ae
 + };
 + 
 + struct u_trace_tracepoint_range {
-+@@ -237,6 +245,9 @@
++@@ -237,6 +246,9 @@
 +    u_trace_record_ts record_timestamp;
 +    u_trace_read_ts read_timestamp;
 +    u_trace_delete_flush_data delete_flush_data;
 ++   u_trace_accept_event accept_external_event;
-++   u_trace_release_events release_external_events;
+++   u_trace_release_allocations release_external_allocations;
 ++   u_trace_consume_event consume_external_event;
 + 
 +    uint64_t timestamp_size_bytes;
 +    uint64_t max_indirect_size_bytes;
-+@@ -300,6 +311,11 @@
++@@ -300,6 +312,11 @@
 +  */
 + struct u_trace {
 +    struct u_trace_context *utctx;
 ++   uint32_t external_generation;
 ++   uint32_t external_flags;
-++   uint32_t external_reserved_events;
+++   uint64_t external_reserved_bytes;
 ++   uint32_t external_range_depth;
 ++   uint64_t external_rejected_ranges;
 + 
 +    linear_ctx *linear_alloc;
 +    struct util_dynarray events;
++@@ -334,6 +351,10 @@
++ void u_trace_move(struct u_trace *dst, struct u_trace *src);
++ void u_trace_fini(struct u_trace *ut);
++ 
+++/* The destination retains source buffers referenced by the same GPU submission.
+++ * Source events have already been cloned and their CPU payloads are discarded. */
+++void u_trace_transfer_buffer_ownership(struct u_trace *dst, struct u_trace *src);
+++
++ void u_trace_state_init(void);
++ bool u_trace_is_enabled(enum u_trace_type type);
++ 
 +diff --git a/src/util/perf/u_trace.c b/src/util/perf/u_trace.c
 +--- a/src/util/perf/u_trace.c
 ++++ b/src/util/perf/u_trace.c
@@ -4228,7 +4240,7 @@ index 0000000..43b88ae
 +    utctx->read_timestamp = read_timestamp;
 +    utctx->delete_flush_data = delete_flush_data;
 ++   utctx->accept_external_event = NULL;
-++   utctx->release_external_events = NULL;
+++   utctx->release_external_allocations = NULL;
 ++   utctx->consume_external_event = NULL;
 +    utctx->timestamp_size_bytes = timestamp_size_bytes;
 +    utctx->max_indirect_size_bytes = max_indirect_size_bytes;
@@ -4241,31 +4253,45 @@ index 0000000..43b88ae
 + 
 +       if (!utctx->first_time_ns)
 +          utctx->first_time_ns = timestamp;
-+@@ -754,6 +759,13 @@
++@@ -753,6 +758,13 @@
++ 
 +       if (utctx->out) {
 +          utctx->out_printer->event(utctx, event, timestamp, delta, indirect_data);
-+       }
+++      }
 ++      if (ut->external_generation && utctx->consume_external_event) {
 ++         utctx->consume_external_event(utctx, ut->external_generation,
 ++                                      external_timestamp_valid ? timestamp : 0,
 ++                                      event->tp->name, event->tp->tp_idx,
 ++                                      event->tp->type, event->external_flags, flush->flush_data,
 ++                                      event->payload);
-++      }
++       }
 + #ifdef HAVE_PERFETTO
 +       if (event->tp->perfetto &&
-+           (p_atomic_read_relaxed(&utctx->enabled_traces) &
-+@@ -857,6 +869,9 @@
++@@ -857,6 +869,23 @@
 +    ut->linear_alloc = NULL;
 +    ut->last_timestamp.buffer_index = UINT32_MAX;
 +    util_dynarray_fini(&ut->events);
-++   if (ut->external_reserved_events && ut->utctx->release_external_events) {
-++      ut->utctx->release_external_events(ut);
+++   if (ut->external_reserved_bytes && ut->utctx->release_external_allocations) {
+++      ut->utctx->release_external_allocations(ut);
 ++   }
+++}
+++
+++void
+++u_trace_transfer_buffer_ownership(struct u_trace *dst, struct u_trace *src)
+++{
+++   assert(dst->utctx == src->utctx);
+++   for (uint32_t i = 0; i < ARRAY_SIZE(src->buffers); i++) {
+++      util_dynarray_append_dynarray(&dst->buffers[i], &src->buffers[i]);
+++      util_dynarray_fini(&src->buffers[i]);
+++   }
+++   dst->external_reserved_bytes += src->external_reserved_bytes;
+++   linear_free_context(src->linear_alloc);
+++   util_dynarray_fini(&src->events);
+++   u_trace_init(src, dst->utctx);
 + }
 + 
 + bool
-+@@ -891,7 +906,7 @@
++@@ -891,7 +920,7 @@
 +       }
 +    }
 + 
@@ -4274,20 +4300,51 @@ index 0000000..43b88ae
 +    if (list_index == u_trace_buffer_list_timestamps)
 +       min_size *= ut->utctx->timestamp_size_bytes;
 +    else
-+@@ -935,6 +950,12 @@
++@@ -935,6 +964,43 @@
 +    if (u_trace_iterator_equal(begin_it, end_it))
 +       return;
 + 
-++   if (into->external_generation && into->utctx->accept_external_event &&
-++       !into->utctx->accept_external_event(into, end_it.event_idx - begin_it.event_idx,
-++                                          UINT32_MAX)) {
-++      return;
+++   if (into->external_generation && into->utctx->accept_external_event) {
+++      /* The initial reserve covers the linear allocator's partial CPU blocks. */
+++      uint64_t allocation_bytes = into->linear_alloc ? 0 : 4096;
+++      uint32_t source_indices[2] = {UINT32_MAX, UINT32_MAX};
+++      uint32_t remaining[2] = {0, 0};
+++      for (uint32_t list = 0; list < ARRAY_SIZE(remaining); list++) {
+++         if (util_dynarray_num_elements(&into->buffers[list], struct u_trace_buffer)) {
+++            struct u_trace_buffer *last = util_dynarray_last_ptr(&into->buffers[list], struct u_trace_buffer);
+++            remaining[list] = last->size - last->alloc_offset;
+++         }
+++      }
+++      for (uint32_t i = begin_it.event_idx; i < end_it.event_idx; i++) {
+++         struct u_trace_event *event = *util_dynarray_element(&from->events, struct u_trace_event *, i);
+++         allocation_bytes += sizeof(*event) + event->payload_size + sizeof(event) + 96;
+++         const uint32_t indices[2] = {event->timestamp.buffer_index, event->indirect.buffer_index};
+++         for (uint32_t list = 0; list < ARRAY_SIZE(indices); list++) {
+++            if (indices[list] == UINT32_MAX || source_indices[list] == indices[list]) {
+++               continue;
+++            }
+++            source_indices[list] = indices[list];
+++            struct u_trace_buffer *buffer =
+++               util_dynarray_element(&from->buffers[list], struct u_trace_buffer, indices[list]);
+++            if (remaining[list] < buffer->size) {
+++               const uint32_t minimum = 64 * (list == u_trace_buffer_list_timestamps ?
+++                  into->utctx->timestamp_size_bytes : into->utctx->max_indirect_size_bytes);
+++               remaining[list] = MAX2(buffer->size, minimum);
+++               allocation_bytes += remaining[list];
+++            }
+++            remaining[list] -= buffer->size;
+++         }
+++      }
+++      if (!into->utctx->accept_external_event(into, end_it.event_idx - begin_it.event_idx,
+++                                             UINT32_MAX, allocation_bytes)) {
+++         return;
+++      }
 ++   }
 ++
 +    linear_ctx *linear_alloc = u_trace_get_linear_alloc(into);
 + 
 +    struct u_trace_buffer_view src_timestamp = {0}, dst_timestamp = {0}, src_indirect = {0}, dst_indirect = {0};
-+@@ -967,6 +988,7 @@
++@@ -967,6 +1033,7 @@
 + 
 +       struct u_trace_event *dst_event = linear_alloc_child(linear_alloc, sizeof(struct u_trace_event) + src_event->payload_size);
 +       memcpy(dst_event, src_event, sizeof(struct u_trace_event) + src_event->payload_size);
@@ -4295,16 +4352,37 @@ index 0000000..43b88ae
 +       dst_event->timestamp.buffer_index = dst_timestamp.buffer_index;
 +       dst_event->timestamp.offset = dst_timestamp.offset + src_event->timestamp.offset;
 +       if (src_event->indirect.buffer_index != UINT32_MAX) {
-+@@ -1038,11 +1060,17 @@
-+ {
++@@ -1039,10 +1106,38 @@
 +    assert(tp->payload_sz == ALIGN_NPOT(tp->payload_sz, 8));
 + 
-++   if (ut->external_generation && ut->utctx->accept_external_event &&
-++       !ut->utctx->accept_external_event(ut, 1, tp->type)) {
-++      return NULL;
++    unsigned payload_sz = ALIGN_NPOT(tp->payload_sz + variable_sz, 8);
+++   if (ut->external_generation && ut->utctx->accept_external_event) {
+++      /* Record overhead reserves growing pointer/buffer arrays and alignment. */
+++      uint64_t allocation_bytes = sizeof(struct u_trace_event) + payload_sz + sizeof(void *) + 96;
+++      if (!ut->linear_alloc) {
+++         allocation_bytes += 4096;
+++      }
+++      for (uint32_t list = 0; list < ARRAY_SIZE(ut->buffers); list++) {
+++         if (list == u_trace_buffer_list_indirect &&
+++             (!(ut->utctx->enabled_traces & U_TRACE_TYPE_INDIRECTS) || !n_indirects)) {
+++            continue;
+++         }
+++         const uint32_t size = list == u_trace_buffer_list_timestamps ?
+++            ut->utctx->timestamp_size_bytes : ut->utctx->max_indirect_size_bytes;
+++         uint32_t remaining = 0;
+++         if (util_dynarray_num_elements(&ut->buffers[list], struct u_trace_buffer)) {
+++            struct u_trace_buffer *last = util_dynarray_last_ptr(&ut->buffers[list], struct u_trace_buffer);
+++            remaining = last->size - last->alloc_offset;
+++         }
+++         if (remaining < size) {
+++            allocation_bytes += 64 * size;
+++         }
+++      }
+++      if (!ut->utctx->accept_external_event(ut, 1, tp->type, allocation_bytes)) {
+++         return NULL;
+++      }
 ++   }
 ++
-+    unsigned payload_sz = ALIGN_NPOT(tp->payload_sz + variable_sz, 8);
 +    struct u_trace_event *event =
 +       linear_alloc_child(u_trace_get_linear_alloc(ut),
 +                          sizeof(struct u_trace_event) + payload_sz);
@@ -4721,7 +4799,7 @@ index 0000000..43b88ae
 +diff --git a/src/freedreno/vulkan/tu_darwin_trace.cc b/src/freedreno/vulkan/tu_darwin_trace.cc
 +--- /dev/null
 ++++ b/src/freedreno/vulkan/tu_darwin_trace.cc
-+@@ -0,0 +1,719 @@
++@@ -0,0 +1,744 @@
 ++/* SPDX-License-Identifier: MIT */
 ++#include "tu_darwin_trace.h"
 ++
@@ -4743,8 +4821,8 @@ index 0000000..43b88ae
 ++
 ++enum {
 ++   TRACE_LOCAL_EVENTS = 4096,
-++   TRACE_GPU_EVENTS = 8192,
-++   TRACE_PENDING_COMMANDS = 64,
+++   TRACE_MEMORY_BYTES = 16 * 1024 * 1024,
+++   TRACE_END_BYTES = 4096,
 ++};
 ++
 ++static uint64_t trace_next_command;
@@ -4770,7 +4848,8 @@ index 0000000..43b88ae
 ++   uint32_t append_dropped;
 ++   uint32_t unsubmitted_commands;
 ++   uint32_t unexecuted_gmem_points;
-++   uint32_t gpu_events;
+++   uint64_t reserved_bytes;
+++   uint64_t reserved_bytes_peak;
 ++   uint32_t pending_commands;
 ++   uint32_t pending_submissions;
 ++   bool end_records_written;
@@ -4845,27 +4924,34 @@ index 0000000..43b88ae
 ++}
 ++
 ++static bool
-++trace_accept(struct u_trace *trace, uint32_t count, uint32_t type)
+++trace_accept(struct u_trace *trace, uint32_t count, uint32_t type, uint64_t allocation_bytes)
 ++{
 ++   tu_darwin_trace_state *state = trace_state((tu_device *)trace->utctx->pctx);
 ++   pthread_mutex_lock(&state->mutex);
 ++
-++   /* Each accepted begin reserves its end before either timestamp is emitted. */
+++   /* Each begin reserves the enabled end payload and a new timestamp chunk. */
 ++   if (type == 1) {
 ++      bool accept = false;
 ++      if (trace->external_range_depth) {
 ++         const uint32_t depth = --trace->external_range_depth;
 ++         accept = depth < 64 && !(trace->external_rejected_ranges & (1ull << depth));
 ++      }
+++      if (accept) {
+++         state->reserved_bytes -= TRACE_END_BYTES;
+++         trace->external_reserved_bytes -= TRACE_END_BYTES;
+++         state->reserved_bytes += allocation_bytes;
+++         trace->external_reserved_bytes += allocation_bytes;
+++      }
 ++      pthread_mutex_unlock(&state->mutex);
 ++      return accept;
 ++   }
 ++
-++   const uint32_t reserved = type == 0 ? 2 : count;
+++   const uint64_t reserved = allocation_bytes + (type == 0 ? TRACE_END_BYTES : 0);
 ++   const bool active = trace->external_generation == p_atomic_read(&state->active_generation) &&
 ++                       trace->external_generation == state->producer.generation &&
 ++                       state->producer.producer_id;
-++   const bool accept = active && reserved <= TRACE_GPU_EVENTS - state->gpu_events &&
+++   const bool accept = active && state->reserved_bytes <= TRACE_MEMORY_BYTES &&
+++                       reserved <= TRACE_MEMORY_BYTES - state->reserved_bytes &&
 ++                       (type != 0 || trace->external_range_depth < 64);
 ++   if (type == 0) {
 ++      const uint32_t depth = trace->external_range_depth++;
@@ -4878,23 +4964,25 @@ index 0000000..43b88ae
 ++      }
 ++   }
 ++   if (accept) {
-++      state->gpu_events += reserved;
-++      trace->external_reserved_events += reserved;
+++      state->reserved_bytes += reserved;
+++      trace->external_reserved_bytes += reserved;
+++      state->reserved_bytes_peak = MAX2(state->reserved_bytes_peak, state->reserved_bytes);
 ++   } else if (active) {
-++      state->dropped += reserved;
-++      state->budget_dropped += reserved;
+++      const uint32_t dropped = type == 0 ? 2 : count;
+++      state->dropped += dropped;
+++      state->budget_dropped += dropped;
 ++   }
 ++   pthread_mutex_unlock(&state->mutex);
 ++   return accept;
 ++}
 ++
 ++static void
-++trace_release_events(struct u_trace *trace)
+++trace_release_allocations(struct u_trace *trace)
 ++{
 ++   tu_darwin_trace_state *state = trace_state((tu_device *)trace->utctx->pctx);
 ++   pthread_mutex_lock(&state->mutex);
-++   state->gpu_events -= trace->external_reserved_events;
-++   trace->external_reserved_events = 0;
+++   state->reserved_bytes -= trace->external_reserved_bytes;
+++   trace->external_reserved_bytes = 0;
 ++   trace->external_range_depth = 0;
 ++   trace->external_rejected_ranges = 0;
 ++   pthread_mutex_unlock(&state->mutex);
@@ -5097,6 +5185,8 @@ index 0000000..43b88ae
 ++                                                       "trace_excluded_records");
 ++      trace_argument(&excluded, NativeAdrenoTraceArgUnsubmittedCommands, state->unsubmitted_commands);
 ++      trace_argument(&excluded, NativeAdrenoTraceArgUnexecutedGmemPoints, state->unexecuted_gmem_points);
+++      trace_argument(&excluded, NativeAdrenoTraceArgReservedBytesHighWater, state->reserved_bytes_peak);
+++      trace_argument(&excluded, NativeAdrenoTraceArgBudgetBytes, TRACE_MEMORY_BYTES);
 ++      trace_append_locked(state, state->producer.generation, excluded);
 ++      state->end_records_written = true;
 ++   }
@@ -5142,6 +5232,7 @@ index 0000000..43b88ae
 ++            state->append_dropped = 0;
 ++            state->unsubmitted_commands = 0;
 ++            state->unexecuted_gmem_points = 0;
+++            state->reserved_bytes_peak = state->reserved_bytes;
 ++            state->timestamp_dwords = 0;
 ++            state->copy_dwords = 0;
 ++            state->wait_dwords = 0;
@@ -5208,7 +5299,7 @@ index 0000000..43b88ae
 ++   }
 ++   device->darwin_trace = state;
 ++   device->trace_context.accept_external_event = trace_accept;
-++   device->trace_context.release_external_events = trace_release_events;
+++   device->trace_context.release_external_allocations = trace_release_allocations;
 ++   device->trace_context.consume_external_event = trace_consume;
 ++   device->trace_context.enabled_traces = (u_trace_type)(device->trace_context.enabled_traces |
 ++                                                        U_TRACE_TYPE_EXTERNAL);
@@ -5221,7 +5312,7 @@ index 0000000..43b88ae
 ++   if (pthread_create(&state->worker, NULL, trace_worker, state)) {
 ++      device->darwin_trace = NULL;
 ++      device->trace_context.accept_external_event = NULL;
-++      device->trace_context.release_external_events = NULL;
+++      device->trace_context.release_external_allocations = NULL;
 ++      device->trace_context.consume_external_event = NULL;
 ++      device->trace_context.enabled_traces = (u_trace_type)(device->trace_context.enabled_traces &
 ++                                                           ~U_TRACE_TYPE_EXTERNAL);
@@ -5245,7 +5336,7 @@ index 0000000..43b88ae
 ++   pthread_join(state->worker, NULL);
 ++   util_queue_finish(&device->trace_context.queue);
 ++   device->trace_context.accept_external_event = NULL;
-++   device->trace_context.release_external_events = NULL;
+++   device->trace_context.release_external_allocations = NULL;
 ++   device->trace_context.consume_external_event = NULL;
 ++   device->darwin_trace = NULL;
 ++   pthread_mutex_destroy(&state->mutex);
@@ -5267,15 +5358,10 @@ index 0000000..43b88ae
 ++   if (cmd->darwin_trace_generation &&
 ++       cmd->vk.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY &&
 ++       (cmd->usage_flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)) {
-++      if (state->pending_commands < TRACE_PENDING_COMMANDS) {
-++         state->pending_commands++;
-++         cmd->darwin_trace_pending = true;
-++         cmd->trace.external_generation = cmd->darwin_trace_generation;
-++         cmd->rp_trace.external_generation = cmd->darwin_trace_generation;
-++      } else {
-++         state->dropped++;
-++         state->budget_dropped++;
-++      }
+++      state->pending_commands++;
+++      cmd->darwin_trace_pending = true;
+++      cmd->trace.external_generation = cmd->darwin_trace_generation;
+++      cmd->rp_trace.external_generation = cmd->darwin_trace_generation;
 ++   }
 ++   pthread_mutex_unlock(&state->mutex);
 ++}
@@ -5316,7 +5402,24 @@ index 0000000..43b88ae
 ++                       uint32_t count, struct tu_u_trace_submission_data *data)
 ++{
 ++   tu_darwin_trace_state *state = trace_state(queue->device);
-++   if (!state || !p_atomic_read(&state->active_generation)) {
+++   if (!state) {
+++      return;
+++   }
+++
+++   for (uint32_t i = 0; i < count; ++i) {
+++      tu_cmd_buffer *cmd = commands[i];
+++      if (!(cmd->usage_flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) ||
+++          !u_trace_has_points(&cmd->trace)) {
+++         continue;
+++      }
+++      if (cmd->rp_trace.external_reserved_bytes) {
+++         u_trace_transfer_buffer_ownership(&cmd->trace, &cmd->rp_trace);
+++      }
+++      if (cmd->pre_chain.rp_trace.external_reserved_bytes) {
+++         u_trace_transfer_buffer_ownership(&cmd->trace, &cmd->pre_chain.rp_trace);
+++      }
+++   }
+++   if (!p_atomic_read(&state->active_generation)) {
 ++      return;
 ++   }
 ++

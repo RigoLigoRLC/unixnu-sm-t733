@@ -3,8 +3,11 @@
 This capture connects Metal workload metadata, Turnip GPU timestamps and the
 Adreno6xx hardware counter window. `system-gpu-perfetto-66c` completed all nine
 build stages, was written through MSC and booted. Its first five-second capture
-contains hardware measurements and exposes producer accounting defects being
-corrected for 66d. The 66c capture is incomplete.
+contains hardware measurements and exposed producer accounting defects. The
+66c capture is incomplete. The corrected 66e package completed all nine build
+stages, FAT deployment and a second capture. Pairing and timestamp validity
+passed; the five-second event window overflowed. Streaming is implemented for
+[67](GPU_PERFETTO_STREAM_67_2026-10-30.md).
 
 ## Records and ownership
 
@@ -26,8 +29,9 @@ also stores enclosing CPU monotonic times to align GPU stages with Metal events.
 
 `NativeAdrenoTrace.h` defines a 176-byte event, eight-event append batches, 4096
 counter samples, 4096 jobs and 131072 user events. Each producer registers with the
-capture generation and ends only after its pending timestamps and metadata have
-been appended. Stopping ends recording; sealing requires hardware retirement,
+capture generation and ends only after submitted GPU work, its timestamps and
+metadata have drained. Stopping closes admission of new submissions; recorded
+commands not yet submitted are counted separately. Sealing requires hardware retirement,
 released OOB ownership and no remaining producers. Overflow and interrupted
 producers remain explicit in the saved status.
 
@@ -114,6 +118,50 @@ lack ends and 68 GMEM records have invalid timestamps. GPU stages cover only
 the first approximately 0.63 seconds. These records cannot explain the complete
 five-second GPU workload. The native binary sections are preserved for the
 producer fixes; `trace.summary.json` correctly reports `complete=false`.
+
+## 66e producer repairs and deployment
+
+The GPU timestamp budget now counts records still owned by `u_trace` and returns
+them at release. Each accepted stage begin reserves its matching end. The worker
+uses a bounded 4096-event queue and batches its transport writes; GPU trace
+callbacks wait for queue space instead of discarding completed timestamps.
+Stop and submission admission share the submission mutex. Producer completion
+waits for admitted submissions to retire, without a fixed three-second cutoff.
+Unsubmitted command buffers retain normal retirement and release behavior while
+their timestamps are excluded from the stopped capture. GMEM slots copied into
+binning or sysmem paths are counted as unexecuted; zero timestamps in an executed
+GMEM path remain invalid.
+
+Metal metadata retains every draw while emitting encoder and pipeline identities
+only when they change within a capture generation. Pass descriptions are emitted
+before the first recorded draw and again with final actions at encoder end.
+The event pool is 131072 records, and default capture duration is five seconds.
+Final producer records separate budget, queue and append losses from unsubmitted
+commands and unexecuted GMEM points. Existing copy payload formats and buffer-copy
+byte counts are exported; image-copy resource identities and extents are not yet
+recorded.
+
+66d stopped because sandboxed host `sysctl` calls could not provide XNU build
+parameters. 66d2 used the same source with build access and passed kernel and
+Turnip, then found a missing `traced_pass_generation` initializer in the render
+execution replay constructor. That initializer was added and recorded in the
+Metal runtime patch. 66e passed all nine stages, including Rust release compilation.
+
+The source tag is `build/system-gpu-perfetto-66e-source-1`: device `ea472086`,
+core `41b99918`, SM7325 `49f62160`, AdrenoMetal `166696a1`, Adreno6xx `6eab0141`.
+All commits and tags are published. The release directory preserves
+`source-revisions.json`, `xnu-patches.list`, `rust-bridge.log` and stage logs.
+Deployment wrote 536870912 bytes and completed sync without backing up the old
+FAT. Evidence is in workspace
+`logs/msc-20261030-000237-system-gpu-perfetto-66e/`.
+
+The 66e capture is in `logs/gpu-perfetto-66e-runtime-1/`. It has 226 hardware
+samples, 57 valid jobs, 56070 paired GPU stages and 18318 Metal events. Unmatched
+begins/ends, invalid events/jobs, incomplete producers and hardware access errors
+are all zero. The five-second operation filled the 131072-event pool: 17581
+kernel event losses and 11860 producer losses make this capture incomplete.
+These are retained in the status and Perfetto summary. The following streaming
+implementation addresses event storage and producer memory budgeting.
 
 Perfetto 59.1 imports 22815 slices/instant events and 6811 counter values, exactly
 matching the exporter output including clock uncertainty samples. Its default

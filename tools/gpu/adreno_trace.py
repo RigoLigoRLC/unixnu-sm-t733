@@ -19,9 +19,12 @@ PORT = 1235
 QUERY = 33
 CONTROL = 34
 READ = 35
+READ_STREAM = 39
+ACK_STREAM = 40
 START = 1
 STOP = 2
 SEAL = 3
+START_STREAM = 4
 IDLE = 0
 RUNNING = 2
 COMPLETE = 4
@@ -35,6 +38,9 @@ INVALID = 1
 HEADER = struct.Struct("<8I")
 STATUS = struct.Struct("<4I2Q24I")
 CHUNK = struct.Struct("<8I")
+STREAM_HEADER = struct.Struct("<4I6Q")
+STREAM_CHUNK_BYTES = 1472
+STREAM_BATCH_CHUNKS = 128
 DEFINITION = struct.Struct("<48s16s8I")
 SAMPLE = struct.Struct("<33Q2I")
 JOB = struct.Struct("<2Q8I")
@@ -48,7 +54,7 @@ STATUS_NAMES = (
     "pending_jobs", "hardware_owned", "gpu_clock_hz", "sample_interval_us",
     "sample_capacity", "job_capacity", "event_capacity", "event_bytes",
     "sample_bytes", "job_bytes", "definition_bytes", "producer_count",
-    "producer_failed", "reserved0", "reserved1", "reserved2",
+    "producer_failed", "streaming", "retained_events", "reserved",
 )
 STATE_NAMES = {0: "idle", 1: "requested", 2: "running", 3: "draining", 4: "complete", 5: "sealed"}
 SECTIONS = (
@@ -94,6 +100,7 @@ class TraceConnection:
 
     def __init__(self, host="192.168.73.2", port=PORT, timeout=10):
         self.socket = socket.create_connection((host, port), timeout=timeout)
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.request_id = 0
 
     def __enter__(self):
@@ -113,15 +120,16 @@ class TraceConnection:
 
         return bytes(result)
 
-    def request(self, method, payload=b""):
+    def request(self, method, payload=b"", batch_chunks=0):
         self.request_id += 1
-        header = HEADER.pack(MAGIC, VERSION, method, self.request_id, len(payload), 0, 0, 0)
+        header = HEADER.pack(MAGIC, VERSION, method, self.request_id, len(payload), 0, batch_chunks, 0)
         self.socket.sendall(header + payload)
         magic, version, reply_method, request_id, count, status, _, _ = HEADER.unpack(self.receive(HEADER.size))
         if (magic, version, reply_method, request_id) != (MAGIC, VERSION, method, self.request_id):
             raise ValueError("The tablet returned a mismatched trace response")
 
-        if count > 4096:
+        maximum = STREAM_CHUNK_BYTES * STREAM_BATCH_CHUNKS if method == READ_STREAM else 4096
+        if count > maximum:
             raise ValueError(f"Trace response exceeds the wire limit: {count}")
 
         reply = self.receive(count)
@@ -137,9 +145,59 @@ class TraceConnection:
         payload = struct.pack("<4I", VERSION, operation, generation, duration_ms)
         return decode_status(self.request(CONTROL, payload))
 
+    def stream_events(self, generation, sequence):
+        payload = struct.pack("<IIQ", VERSION, generation, sequence)
+        reply = self.request(READ_STREAM, payload, STREAM_BATCH_CHUNKS)
+        if not reply or len(reply) % STREAM_CHUNK_BYTES:
+            raise ValueError("Invalid event stream batch length")
+
+        chunks = []
+        for offset in range(0, len(reply), STREAM_CHUNK_BYTES):
+            fields = STREAM_HEADER.unpack_from(reply, offset)
+            version, returned_generation, count, flags, first, next_sequence, written, acknowledged, lost_begin, lost_end = fields
+            if version != VERSION or returned_generation != generation:
+                raise ValueError("The stream generation changed while reading")
+
+            if count > 8 or next_sequence != first + count or next_sequence > written or first < sequence:
+                raise ValueError("Invalid event stream sequence or count")
+
+            if lost_end < lost_begin or lost_end > first:
+                raise ValueError("Invalid event stream loss range")
+
+            data_offset = offset + STREAM_HEADER.size
+            chunks.append({"first": first, "next": next_sequence, "written": written,
+                           "acknowledged": acknowledged, "flags": flags,
+                           "lost_begin": lost_begin, "lost_end": lost_end,
+                           "data": reply[data_offset:data_offset + count * EVENT_BYTES]})
+            sequence = next_sequence
+
+        return chunks
+
+    def acknowledge_events(self, generation, sequence):
+        reply = self.request(ACK_STREAM, struct.pack("<IIQ", VERSION, generation, sequence))
+        if reply:
+            raise ValueError("Unexpected stream acknowledgement payload")
+
+    def read_section(self, generation, section, offset):
+        reply = self.request(READ, struct.pack("<4I", VERSION, generation, section, offset))
+        if len(reply) < CHUNK.size:
+            raise ValueError("Truncated trace chunk header")
+
+        version, returned_generation, returned_section, returned_offset, count, total, _, _ = CHUNK.unpack_from(reply)
+        if (version, returned_generation, returned_section, returned_offset) != (
+                VERSION, generation, section, offset):
+            raise ValueError("The trace section changed while reading")
+
+        if count > 1536 or offset + count > total or len(reply) < CHUNK.size + count:
+            raise ValueError("Invalid trace section chunk length")
+
+        return reply[CHUNK.size:CHUNK.size + count], total
+
     def download(self, output, status):
         if status["state"] != SEALED:
             raise ValueError("The capture must be sealed before downloading")
+        if status.get("streaming"):
+            raise ValueError("Streaming records are saved in their original host capture directory")
 
         output = Path(output)
         output.mkdir(parents=True, exist_ok=True)

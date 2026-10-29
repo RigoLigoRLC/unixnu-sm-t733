@@ -9,6 +9,7 @@
 #include <netinet/tcp.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -26,6 +27,10 @@ struct TraceIoKit {
     kern_return_t (*close)(mach_port_t);
     kern_return_t (*release)(mach_port_t);
     kern_return_t (*call)(mach_port_t, uint32_t, const void *, size_t, void *, size_t *);
+};
+
+enum {
+    TraceTcpBatchChunks = 128
 };
 
 static bool transfer_bytes(int socket, void *bytes, size_t count, bool send_bytes)
@@ -65,9 +70,38 @@ static bool load_iokit(struct TraceIoKit *api)
     return api->matching && api->service && api->open && api->close && api->release && api->call;
 }
 
+static kern_return_t read_stream_batch(const struct TraceIoKit *api,
+    mach_port_t connection, NativeAdrenoTraceStreamRead request, uint32_t limit,
+    NativeAdrenoTraceStreamChunk *chunks, size_t *output_bytes)
+{
+    *output_bytes = 0;
+    for (uint32_t index = 0; index < limit; index++) {
+        size_t chunk_bytes = sizeof(chunks[index]);
+        kern_return_t result = api->call(connection, NativeAdrenoMethodReadTraceStream,
+            &request, sizeof(request), &chunks[index], &chunk_bytes);
+        if (result) {
+            *output_bytes = 0;
+            return result;
+        }
+        if (chunk_bytes != sizeof(chunks[index])) {
+            *output_bytes = 0;
+            return (kern_return_t)0xe00002bc;
+        }
+
+        *output_bytes += chunk_bytes;
+        request.next_sequence = chunks[index].next_sequence;
+        if (!chunks[index].count || request.next_sequence == chunks[index].write_sequence) {
+            break;
+        }
+    }
+
+    return KERN_SUCCESS;
+}
+
 static void serve_trace(int socket, const struct TraceIoKit *api)
 {
     mach_port_t connection = MACH_PORT_NULL;
+    NativeAdrenoTraceStreamChunk *stream_chunks = NULL;
     mach_port_t service = api->service(MACH_PORT_NULL, api->matching("NativeAdrenoGpuPublished"));
     if (service) {
         kern_return_t status = api->open(service, mach_task_self(), 0x4148, &connection);
@@ -84,7 +118,8 @@ static void serve_trace(int socket, const struct TraceIoKit *api)
         }
         if (request.magic != NativeAdrenoTraceTcpMagic ||
             request.version != NativeAdrenoTraceVersion || request.status ||
-            request.reserved[0] || request.reserved[1]) {
+            request.reserved[1] || request.reserved[0] > TraceTcpBatchChunks ||
+            (request.reserved[0] && request.method != NativeAdrenoMethodReadTraceStream)) {
             break;
         }
 
@@ -102,6 +137,13 @@ static void serve_trace(int socket, const struct TraceIoKit *api)
                 input_bytes = sizeof(NativeAdrenoTraceRead);
                 output_bytes = sizeof(NativeAdrenoTraceChunk);
                 break;
+            case NativeAdrenoMethodReadTraceStream:
+                input_bytes = sizeof(NativeAdrenoTraceStreamRead);
+                output_bytes = sizeof(NativeAdrenoTraceStreamChunk);
+                break;
+            case NativeAdrenoMethodAckTraceStream:
+                input_bytes = sizeof(NativeAdrenoTraceStreamRead);
+                break;
             default:
                 goto finished;
         }
@@ -112,6 +154,7 @@ static void serve_trace(int socket, const struct TraceIoKit *api)
         union {
             NativeAdrenoTraceControl control;
             NativeAdrenoTraceRead read;
+            NativeAdrenoTraceStreamRead stream;
         } input = {0};
         union {
             NativeAdrenoTraceStatus status;
@@ -121,9 +164,24 @@ static void serve_trace(int socket, const struct TraceIoKit *api)
             break;
         }
 
-        kern_return_t result = connection ?
-            api->call(connection, request.method, input_bytes ? &input : NULL,
-                input_bytes, &output, &output_bytes) : (kern_return_t)0xe00002d8;
+        void *output_data = &output;
+        kern_return_t result = (kern_return_t)0xe00002d8;
+        if (connection && request.method == NativeAdrenoMethodReadTraceStream) {
+            if (!stream_chunks) {
+                stream_chunks = calloc(TraceTcpBatchChunks, sizeof(*stream_chunks));
+            }
+            if (stream_chunks) {
+                uint32_t limit = request.reserved[0] ? request.reserved[0] : 1;
+                result = read_stream_batch(api, connection, input.stream,
+                    limit, stream_chunks, &output_bytes);
+                output_data = stream_chunks;
+            } else {
+                result = (kern_return_t)0xe00002bd;
+            }
+        } else if (connection) {
+            result = api->call(connection, request.method, input_bytes ? &input : NULL,
+                input_bytes, output_bytes ? &output : NULL, &output_bytes);
+        }
         if (result && request.method == NativeAdrenoMethodControlTrace && connection) {
             output_bytes = sizeof(output.status);
             if (api->call(connection, NativeAdrenoMethodQueryTrace, NULL, 0,
@@ -142,12 +200,13 @@ static void serve_trace(int socket, const struct TraceIoKit *api)
         reply.payload_bytes = (uint32_t)output_bytes;
         reply.status = (uint32_t)result;
         if (!transfer_bytes(socket, &reply, sizeof(reply), true) ||
-            !transfer_bytes(socket, &output, output_bytes, true)) {
+            !transfer_bytes(socket, output_data, output_bytes, true)) {
             break;
         }
     }
 
 finished:
+    free(stream_chunks);
     if (connection) {
         api->close(connection);
     }

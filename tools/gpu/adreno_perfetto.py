@@ -38,6 +38,7 @@ TURNIP_ARGUMENTS = {
     24: "budget_dropped", 25: "queue_dropped", 26: "append_dropped",
     27: "unsubmitted_commands", 28: "unexecuted_gmem_points",
     29: "source_format", 30: "destination_format", 31: "bytes",
+    32: "reserved_bytes_high_water", 33: "budget_bytes",
 }
 COUNTER_NAMES = {
     "core": "GPU core cycles", "sp_busy": "Shader processor busy cycles",
@@ -532,17 +533,25 @@ class PerfettoCapture:
             self.builder.write_packet(packet)
 
         lost = sum(self.capture.status[field] for field in (
-            "sample_dropped", "job_dropped", "event_dropped", "producer_dropped"))
+            "sample_dropped", "job_dropped", "producer_dropped"))
+        missing_events = self.capture.status.get("host_missing_events", 0)
+        if self.capture.status.get("streaming"):
+            lost += missing_events
+            self.summary["events_overwritten_before_ack"] = self.capture.status["event_dropped"]
+        else:
+            lost += self.capture.status["event_dropped"]
         activity = self.summary["counter_activity"]
         self.summary["hardware_counters_populated"] = self.summary["counter_values"] > 0 and any(activity.values())
         self.summary["shader_activity_populated"] = any(activity.get(name, 0) > 0 for name in (
             "vs_alu", "fs_alu", "fs_tex", "vs_tex"))
         self.summary["dropped_records"] = lost
         self.summary["incomplete_producers"] = self.capture.status["producer_failed"]
+        self.summary["host_missing_events"] = missing_events
         self.summary["complete"] = bool(
             self.summary["gpu_jobs"] and self.summary["gpu_stages"] and self.summary["metal_events_linked"] and
             self.summary["hardware_counters_populated"] and self.summary["shader_activity_populated"] and
-            not lost and not self.summary["incomplete_producers"] and not self.capture.status["access_error"] and
+            not lost and not self.summary["incomplete_producers"] and not self.summary["host_missing_events"] and
+            not self.capture.status["access_error"] and
             not self.summary["unmatched_begin"] and not self.summary["unmatched_end"] and
             not self.summary["invalid_events"] and not self.summary["invalid_jobs"])
         return self.summary

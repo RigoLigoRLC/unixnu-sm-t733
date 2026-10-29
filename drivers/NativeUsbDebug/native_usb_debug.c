@@ -77,6 +77,10 @@ extern void native_usb_net_dump_stats(void) __attribute__((weak_import));
 #define T_STATUS3 (4u << 4)
 #define T_DATA (5u << 4)
 #define HWO 1u
+#define TRB_LAST (1u << 1)
+#define TRB_CONTINUE_SHORT (1u << 2)
+#define TRB_CHAIN (1u << 3)
+#define TRB_COMPLETION_EVENT (1u << 11)
 #define TRB_FLAGS (HWO | 2u | (1u << 10) | (1u << 11))
 #define EVENTS 0
 #define EVENT_SIZE 4096
@@ -88,13 +92,17 @@ extern void native_usb_net_dump_stats(void) __attribute__((weak_import));
 #define TX 0x2000
 #define RX_SIZE 512
 #define TX_SIZE 2048
-#define DMA_SIZE 0x4000
-#define NET_RX 0x2800
-#define NET_TX 0x3000
+#define DMA_SIZE VUSB_DMA_SIZE
 #define NET_NOTIFY 0x3800
+#define NET_RX_TRBS 0x4000
+#define NET_TX_TRBS 0x4400
+#define NET_RX 0x8000
+#define NET_TX 0x10000
 #define NET_BUFFER_SIZE 2048
 #define NET_FRAME_SIZE 1514
-#define NET_QUEUE_SIZE 32
+#define NET_RX_BATCH_SIZE 16
+#define NET_TX_BATCH_SIZE 32
+#define NET_QUEUE_SIZE 128
 #define ENDPOINTS 10
 static const unsigned trb_off[ENDPOINTS] = {
     0x1000, 0x1040, 0x1080, 0x10c0, 0x1100, 0x1140, 0x1180, 0x11c0, 0x1200, 0x1240
@@ -140,7 +148,8 @@ static struct {
     unsigned resource[ENDPOINTS], requested[ENDPOINTS];
     bool busy[ENDPOINTS], failed, configured, dtr, notify, reconnect;
     unsigned net_alt, net_filter, net_notice;
-    bool net_reconfigure, net_discard, net_zlp, net_active;
+    bool net_reconfigure, net_discard;
+    unsigned net_rx_completed, net_tx_count, net_tx_trbs;
     uint64_t net_tx_frames, net_rx_frames, net_dropped;
     enum { SETUP_PHASE, DATA_PHASE, WAIT2, WAIT3, STATUS_PHASE } phase;
     bool data_in, set_line;
@@ -318,7 +327,8 @@ static void network_alt(unsigned alt)
     wr(DALEPENA, rd(DALEPENA) & ~((1u << 6) | (1u << 7)));
     u.net_alt = alt;
     u.net_filter = alt ? 0x0e : 0;
-    u.net_active = u.net_zlp = u.net_discard = false;
+    u.net_discard = false;
+    u.net_rx_completed = u.net_tx_count = u.net_tx_trbs = 0;
     u.net_notice = 1;
 }
 
@@ -326,7 +336,8 @@ static void stop_transfers(void)
 {
     network_link(false);
     u.net_alt = u.net_notice = 0;
-    u.net_reconfigure = u.net_active = u.net_zlp = u.net_discard = false;
+    u.net_reconfigure = u.net_discard = false;
+    u.net_rx_completed = u.net_tx_count = u.net_tx_trbs = 0;
     if (u.busy[3]) {
         u.cursor = u.tx_start;
     }
@@ -353,7 +364,8 @@ static void configure(void)
         epcmd(5, SET_CONFIG, (3u << 1) | (16u << 3) | (2u << 17),
               (1u << 8) | (8u << 16) | (5u << 25), 0) ||
         epcmd(5, SET_RESOURCE, 1, 0, 0) ||
-        epcmd(6, SET_CONFIG, (2u << 1) | (u.mps << 3), (1u << 8) | (6u << 25), 0) ||
+        epcmd(6, SET_CONFIG, (2u << 1) | (u.mps << 3),
+              (1u << 8) | (1u << 9) | (6u << 25), 0) ||
         epcmd(6, SET_RESOURCE, 1, 0, 0) ||
         epcmd(7, SET_CONFIG, (2u << 1) | (u.mps << 3) | (3u << 17),
               (1u << 8) | (7u << 25), 0) ||
@@ -655,22 +667,160 @@ static bool network_accept(const uint8_t *frame)
     return (u.net_filter & 4) && !memcmp(frame, host, 6);
 }
 
-static void network_receive(unsigned length)
+static void network_receive(unsigned offset, unsigned length)
 {
-    sync_dma(NET_RX, NET_BUFFER_SIZE);
+    sync_dma(offset, NET_BUFFER_SIZE);
     /* A short packet, including a ZLP, terminates exactly one ECM frame.
      * Oversized transfers are discarded through their terminating packet. */
     if (length == NET_BUFFER_SIZE) {
         u.net_discard = true;
     } else {
         if (!u.net_discard && length >= 14 && length <= NET_FRAME_SIZE && native_usb_net_receive) {
-            native_usb_net_receive((const void *)(u.dma + NET_RX), length);
+            native_usb_net_receive((const void *)(u.dma + offset), length);
             ++u.net_rx_frames;
         } else if (length || u.net_discard) {
             ++u.net_dropped;
         }
         u.net_discard = false;
     }
+}
+
+static void network_prepare_trb(unsigned offset, unsigned buffer, unsigned length,
+                               unsigned flags)
+{
+    uint64_t address = u.pa + buffer;
+    volatile uint32_t *trb = (volatile uint32_t *)(u.dma + offset);
+    trb[0] = (uint32_t)address;
+    trb[1] = (uint32_t)(address >> 32);
+    trb[2] = length;
+    trb[3] = T_NORMAL | HWO | flags;
+}
+
+static void network_start_batch(unsigned ep, unsigned offset, unsigned count)
+{
+    sync_dma(offset, count * 16);
+    uint64_t address = u.pa + offset;
+    u.busy[ep] = true;
+    (void)epcmd(ep, START, (uint32_t)(address >> 32), (uint32_t)address, 0);
+}
+
+static void network_receive_batch(void)
+{
+    u.net_rx_completed = 0;
+    for (unsigned index = 0; index < NET_RX_BATCH_SIZE; ++index) {
+        unsigned flags = TRB_CONTINUE_SHORT | TRB_COMPLETION_EVENT;
+        if (index + 1 == NET_RX_BATCH_SIZE) {
+            flags |= TRB_LAST;
+        }
+        network_prepare_trb(NET_RX_TRBS + index * 16,
+                            NET_RX + index * NET_BUFFER_SIZE, NET_BUFFER_SIZE, flags);
+    }
+
+    sync_dma(NET_RX, NET_RX_BATCH_SIZE * NET_BUFFER_SIZE);
+    network_start_batch(6, NET_RX_TRBS, NET_RX_BATCH_SIZE);
+}
+
+static void network_transmit_batch(void)
+{
+    if (!os_atomic_cmpxchg(&net_queue.lock, 0, 1, acquire)) {
+        return;
+    }
+
+    u.net_tx_count = u.net_tx_trbs = 0;
+    while (net_queue.count && u.net_tx_count < NET_TX_BATCH_SIZE) {
+        unsigned slot = net_queue.head;
+        net_queue.head = (slot + 1) % NET_QUEUE_SIZE;
+        --net_queue.count;
+        if (net_queue.entries[slot].generation != os_atomic_load(&net_queue.generation, relaxed) ||
+            !network_accept(net_queue.entries[slot].frame)) {
+            ++u.net_dropped;
+            continue;
+        }
+
+        unsigned length = net_queue.entries[slot].length;
+        unsigned buffer = NET_TX + u.net_tx_count * NET_BUFFER_SIZE;
+        bool needs_zlp = length % u.mps == 0;
+        memcpy((void *)(u.dma + buffer), net_queue.entries[slot].frame, length);
+        network_prepare_trb(NET_TX_TRBS + u.net_tx_trbs * 16, buffer, length,
+                            needs_zlp ? TRB_CHAIN : 0);
+        ++u.net_tx_trbs;
+        if (needs_zlp) {
+            network_prepare_trb(NET_TX_TRBS + u.net_tx_trbs * 16, buffer, 0, 0);
+            ++u.net_tx_trbs;
+        }
+        ++u.net_tx_count;
+    }
+    os_atomic_store(&net_queue.lock, 0, release);
+
+    if (!u.net_tx_count) {
+        return;
+    }
+
+    /* Each unchained TRB ends one Ethernet frame, including its explicit ZLP.
+     * Only the final frame ends the hardware transfer and returns the batch. */
+    volatile uint32_t *last = (volatile uint32_t *)(u.dma + NET_TX_TRBS +
+                                                   (u.net_tx_trbs - 1) * 16);
+    last[3] |= TRB_LAST | TRB_COMPLETION_EVENT;
+    sync_dma(NET_TX, u.net_tx_count * NET_BUFFER_SIZE);
+    network_start_batch(7, NET_TX_TRBS, u.net_tx_trbs);
+}
+
+static void network_complete_batch(unsigned ep, unsigned type, unsigned status)
+{
+    if (!u.busy[ep] || u.net_reconfigure) {
+        return;
+    }
+    if (status & 1) {
+        fail("ECM transfer bus error");
+        return;
+    }
+
+    if (ep == 6) {
+        /* The controller can finish later slots while earlier events wait in
+         * the event ring. CPU reads do not rewrite any active TRB cache line. */
+        sync_dma(NET_RX_TRBS, NET_RX_BATCH_SIZE * 16);
+        while (u.net_rx_completed < NET_RX_BATCH_SIZE) {
+            unsigned index = u.net_rx_completed;
+            volatile uint32_t *trb = (volatile uint32_t *)(u.dma + NET_RX_TRBS + index * 16);
+            if (trb[3] & HWO) {
+                break;
+            }
+            unsigned left = trb[2] & 0xffffff;
+            if ((trb[2] >> 28) || left > NET_BUFFER_SIZE) {
+                fail("ECM invalid receive completion");
+                return;
+            }
+
+            if (!panicking) {
+                network_receive(NET_RX + index * NET_BUFFER_SIZE, NET_BUFFER_SIZE - left);
+            }
+            ++u.net_rx_completed;
+        }
+
+        if (type != 1) {
+            return;
+        }
+        if (u.net_rx_completed != NET_RX_BATCH_SIZE) {
+            fail("ECM incomplete receive batch");
+            return;
+        }
+    } else {
+        if (type != 1) {
+            return;
+        }
+        sync_dma(NET_TX_TRBS, u.net_tx_trbs * 16);
+        for (unsigned index = 0; index < u.net_tx_trbs; ++index) {
+            volatile uint32_t *trb = (volatile uint32_t *)(u.dma + NET_TX_TRBS + index * 16);
+            if ((trb[3] & HWO) || (trb[2] >> 28) || (trb[2] & 0xffffff)) {
+                fail("ECM incomplete transmit batch");
+                return;
+            }
+        }
+        u.net_tx_frames += u.net_tx_count;
+    }
+
+    u.busy[ep] = false;
+    u.resource[ep] = 0;
 }
 
 static void network_poll(void)
@@ -686,7 +836,7 @@ static void network_poll(void)
         u.net_reconfigure = false;
         if (u.net_alt) {
             if (epcmd(6, SET_CONFIG, (2u << 1) | (u.mps << 3),
-                      (1u << 8) | (6u << 25), 0) ||
+                      (1u << 8) | (1u << 9) | (6u << 25), 0) ||
                 epcmd(7, SET_CONFIG, (2u << 1) | (u.mps << 3) | (3u << 17),
                       (1u << 8) | (7u << 25), 0)) {
                 return;
@@ -718,42 +868,10 @@ static void network_poll(void)
         return;
     }
     if (!u.busy[6]) {
-        transfer(6, NET_RX, NET_BUFFER_SIZE, T_NORMAL);
+        network_receive_batch();
     }
-    if (u.busy[7]) {
-        return;
-    }
-    if (u.net_active) {
-        if (u.net_zlp) {
-            u.net_zlp = false;
-            transfer(7, NET_TX, 0, T_NORMAL);
-            return;
-        }
-        ++u.net_tx_frames;
-        u.net_active = false;
-    }
-    if (!os_atomic_cmpxchg(&net_queue.lock, 0, 1, acquire)) {
-        return;
-    }
-    unsigned length = 0;
-    while (net_queue.count) {
-        unsigned slot = net_queue.head;
-        net_queue.head = (slot + 1) % NET_QUEUE_SIZE;
-        --net_queue.count;
-        if (net_queue.entries[slot].generation != os_atomic_load(&net_queue.generation, relaxed) ||
-            !network_accept(net_queue.entries[slot].frame)) {
-            ++u.net_dropped;
-            continue;
-        }
-        length = net_queue.entries[slot].length;
-        memcpy((void *)(u.dma + NET_TX), net_queue.entries[slot].frame, length);
-        break;
-    }
-    os_atomic_store(&net_queue.lock, 0, release);
-    if (length) {
-        u.net_active = true;
-        u.net_zlp = (length % u.mps) == 0;
-        transfer(7, NET_TX, length, T_NORMAL);
+    if (!u.failed && !u.busy[7]) {
+        network_transmit_batch();
     }
 }
 
@@ -791,6 +909,10 @@ static void event(uint32_t e)
         return;
     }
     unsigned ep = (e >> 1) & 31, type = (e >> 6) & 15, status = (e >> 12) & 15;
+    if ((ep == 6 || ep == 7) && (type == 1 || type == 2)) {
+        network_complete_batch(ep, type, status);
+        return;
+    }
     if (type == 1) {
         if (ep >= ENDPOINTS || !u.busy[ep] ||
             (u.net_reconfigure && (ep == 6 || ep == 7)))
@@ -805,19 +927,9 @@ static void event(uint32_t e)
             fail("USB transfer bus error");
             return;
         }
-        if (ep == 7 && (unsigned)n != u.requested[ep]) {
-            fail("ECM incomplete transmit");
-            return;
-        }
         if (ep == 2) {
             if (!panicking)
                 receive_done((unsigned)n);
-            return;
-        }
-        if (ep == 6) {
-            if (!panicking) {
-                network_receive((unsigned)n);
-            }
             return;
         }
         if (ep > 1)

@@ -37,9 +37,11 @@ static const uint8_t vusb_config[154] = {
     7, 5, 0x83, 2, 0, 2, 0
 };
 static const uint8_t vusb_qualifier[10] = {10, 6, 0, 2, 0xef, 2, 1, 64, 1, 0};
+#define VUSB_DMA_SIZE 0x20000u
 static inline int vusb_dma_allowed(uint64_t pa, unsigned size, unsigned bits)
 {
-    if (size != 0x4000 || (pa & 0x3fff) || !pa || bits < 32 || bits > 64 || pa > UINT64_MAX - size)
+    if (size != VUSB_DMA_SIZE || (pa & (VUSB_DMA_SIZE - 1)) || !pa ||
+        bits < 32 || bits > 64 || pa > UINT64_MAX - size)
         return 0;
     return bits == 64 || pa + size - 1 < (1ULL << bits);
 }

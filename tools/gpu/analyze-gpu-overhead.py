@@ -166,16 +166,20 @@ def analyze(directory):
     windows = PerformanceWindows(capture)
     pass_work = RenderPassWork(capture.events)
     stages, coverage = pair_stages(capture)
-    durations = {"all": defaultdict(list), "acknowledged_550": defaultdict(list), "fixed_550": defaultdict(list)}
+    selections = ("all", "acknowledged_550", "fixed_550", "acknowledged_550_operation", "fixed_550_operation")
+    durations = {selection: defaultdict(list) for selection in selections}
+    time_bins = defaultdict(list)
     signatures = {}
     stage_rows = []
     pass_rows = defaultdict(dict)
     wfi_causes = defaultdict(command_totals)
+    wfi_operation_causes = defaultdict(command_totals)
     wfi_passes = defaultdict(command_totals)
     event_writes = defaultdict(command_totals)
     split_pairs = []
     metadata_dropped = 0
     metal_batches = []
+    metal_passes = []
 
     for event in capture.events:
         if event.flags & INVALID:
@@ -188,6 +192,8 @@ def analyze(directory):
                 cause = (event.name, arguments["command_source_line"], arguments["command_stream_description"],
                          arguments["command_execution_is_conditional"])
                 add_commands(wfi_causes[cause], arguments)
+                if event.timestamp_ns - capture.status["started_ns"] >= 5_000_000_000:
+                    add_commands(wfi_operation_causes[cause], arguments)
                 add_commands(wfi_passes[key], arguments)
             elif arguments["command_opcode"] == 0x46:
                 add_commands(event_writes[arguments["command_event_name"]], arguments)
@@ -205,6 +211,8 @@ def analyze(directory):
             metadata_dropped += arguments.get("metadata_dropped", 0)
         elif event.source == 1 and event.point == 17:
             metal_batches.append({"timestamp_ns": event.timestamp_ns, **arguments})
+        elif event.source == 1 and event.point == 15:
+            metal_passes.append({"timestamp_ns": event.timestamp_ns, **arguments})
 
     for start, end, arguments in stages:
         arguments.update(pass_work.describe(start, arguments))
@@ -213,14 +221,20 @@ def analyze(directory):
         group = tuple(sorted(description.items()))
         signatures[group] = description
         duration = end.timestamp_ns - start.timestamp_ns
+        elapsed_ns = selected["cpu_begin_ns"] - capture.status["started_ns"]
+        operation_period = elapsed_ns >= 5_000_000_000
         durations["all"][group].append(duration)
         for selection in ("acknowledged_550", "fixed_550"):
             if selected[selection]:
                 durations[selection][group].append(duration)
+                time_bins[(selection, elapsed_ns // 5_000_000_000, group)].append(duration)
+                if operation_period:
+                    durations[selection + "_operation"][group].append(duration)
 
         row = {**pass_identity(pass_key(start, arguments)), "completion_id": start.completion_id,
                "stage": start.name, "gpu_begin_ns": start.timestamp_ns, "gpu_end_ns": end.timestamp_ns,
-               "duration_ns": duration, **selected, "description": description}
+               "duration_ns": duration, "elapsed_ns": elapsed_ns, "operation_period": operation_period,
+               **selected, "description": description}
         stage_rows.append(row)
         if start.point == 1 and arguments.get("pass_id"):
             pass_rows[pass_key(start, arguments)].update(row)
@@ -263,6 +277,7 @@ def analyze(directory):
         "directory": str(directory.resolve()), "generation": capture.status["generation"],
         "requested_frequency_hz": capture.status.get("capture_frequency_hz", 0),
         "capture_flags": capture.status.get("capture_flags", 0),
+        "started_ns": capture.status["started_ns"], "startup_seconds": 5,
         "losses": {name: capture.status.get(name, 0) for name in (
             "sample_dropped", "job_dropped", "event_dropped", "producer_dropped", "producer_failed", "host_missing_events")},
         "metadata_dropped": metadata_dropped, "stage_endpoint_coverage": coverage,
@@ -274,20 +289,27 @@ def analyze(directory):
         "stage_durations": {selection: [{"description": signatures[group], **duration_statistics(values)}
                                         for group, values in groups.items()]
                             for selection, groups in durations.items()},
+        "stage_time_bins": [{"selection": selection, "begin_seconds": time_bin * 5,
+                             "end_seconds": (time_bin + 1) * 5, "description": signatures[group],
+                             **duration_statistics(values)}
+                            for (selection, time_bin, group), values in time_bins.items()],
         "wait_for_idle_by_source": [{"function": cause[0], "line": cause[1], "stream": cause[2],
                                      "conditional": cause[3], **counts} for cause, counts in wfi_causes.items()],
+        "wait_for_idle_by_source_operation": [{"function": cause[0], "line": cause[1], "stream": cause[2],
+                                               "conditional": cause[3], **counts}
+                                              for cause, counts in wfi_operation_causes.items()],
         "wait_for_idle_by_pass": [{**pass_identity(key), **counts} for key, counts in wfi_passes.items()],
         "event_write_counts": [{"event": name, **counts} for name, counts in sorted(event_writes.items())],
         "passes": list(pass_rows.values()), "adjacent_passes_in_same_encoder": split_pairs,
-        "metal_copy_batches": metal_batches, "gpu_stages": stage_rows,
+        "metal_copy_batches": metal_batches, "metal_internal_passes": metal_passes, "gpu_stages": stage_rows,
     }
 
 
 def compare(current, baseline):
     prior = {tuple(sorted(row["description"].items())): row
-             for row in baseline["stage_durations"]["acknowledged_550"]}
+             for row in baseline["stage_durations"]["acknowledged_550_operation"]}
     comparisons = []
-    for row in current["stage_durations"]["fixed_550"]:
+    for row in current["stage_durations"]["fixed_550_operation"]:
         before = prior.get(tuple(sorted(row["description"].items())))
         if before is None:
             continue
@@ -296,8 +318,8 @@ def compare(current, baseline):
                             "mean_change_percent": 100 * (row["mean_ms"] / before["mean_ms"] - 1)
                             if before["mean_ms"] else None})
 
-    return {"current_selection": "fixed 550 MHz and DDR 9",
-            "baseline_selection": "acknowledged 550 MHz and DDR 9; governor samples are included",
+    return {"current_selection": "fixed 550 MHz and DDR 9, after the first 5 seconds",
+            "baseline_selection": "acknowledged 550 MHz and DDR 9 after the first 5 seconds; governor samples are included",
             "matched_stage_groups": comparisons}
 
 

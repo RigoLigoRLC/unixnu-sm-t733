@@ -10,9 +10,6 @@ from collections import defaultdict
 import json
 import math
 
-from perfetto.protos.perfetto.trace.perfetto_trace_pb2 import TrackEvent
-from perfetto.trace_builder.proto_builder import StreamingTraceProtoBuilder
-
 from adreno_trace import BEGIN, END, INSTANT, GPU_CLOCK, CPU_CLOCK, INVALID, write_json
 
 
@@ -204,7 +201,7 @@ def event_arguments(event):
                 "attachment_will_be_resolved": bool(attachment_flags & 8),
                 "attachment_load_stencil": bool(attachment_flags & 16),
                 "attachment_store_stencil": bool(attachment_flags & 32),
-                "attachment_uses_gmem": bool(attachment_flags & 64),
+                "attachment_in_gmem_layout": bool(attachment_flags & 64),
             })
         else:
             arguments.update({
@@ -559,7 +556,7 @@ class RenderPassWork:
                              "gmem_attachment_index", "vulkan_format", "attachment_flags", "attachment_conditional",
                              "attachment_force_load", "attachment_fast_path", "attachment_unaligned",
                              "attachment_load", "attachment_store", "attachment_clear", "attachment_will_be_resolved",
-                             "attachment_load_stencil", "attachment_store_stencil", "attachment_uses_gmem"):
+                             "attachment_load_stencil", "attachment_store_stencil", "attachment_in_gmem_layout"):
                     if name in values:
                         result[prefix + name] = values[name]
                 attachment_count += 1
@@ -654,6 +651,8 @@ class PerfettoCapture:
     """
 
     def __init__(self, capture, stream):
+        from perfetto.trace_builder.proto_builder import StreamingTraceProtoBuilder
+
         self.capture = capture
         self.clock = ClockAlignment(capture)
         self.work = MetalWork(capture.events)

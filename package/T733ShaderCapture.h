@@ -14,12 +14,13 @@ enum {
     T733ShaderListFiles = 2,
     T733ShaderReadFile = 3,
     T733ShaderListSessions = 4,
+    T733ShaderTriggerPM4 = 5,
     T733ShaderNameBytes = 128,
     T733ShaderMaxProcesses = 256,
     T733ShaderMaxSessions = 256,
     T733ShaderMaxFiles = 4100,
     T733ShaderMaxFileBytes = 16 * 1024 * 1024,
-    T733ShaderMaxSessionBytes = 144 * 1024 * 1024,
+    T733ShaderMaxSessionBytes = 145 * 1024 * 1024,
     T733ShaderChunkBytes = 64 * 1024,
 };
 
@@ -49,6 +50,14 @@ typedef struct T733ShaderSession {
     uint32_t reserved;
     uint64_t session;
 } T733ShaderSession;
+
+/* T733ShaderPM4Request selects one submission from the named process capture session. */
+typedef struct T733ShaderPM4Request {
+    uint32_t process_id;
+    uint32_t reserved;
+    uint64_t session;
+    uint64_t target_submit; /* Zero selects the next nonempty submission after arming. */
+} T733ShaderPM4Request;
 
 /* T733ShaderRead names the exact file version previously returned by the directory listing. */
 typedef struct T733ShaderRead {

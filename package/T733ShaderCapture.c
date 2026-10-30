@@ -4,6 +4,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <netinet/tcp.h>
 #include <pthread.h>
@@ -367,6 +368,77 @@ static bool read_file(int connection, int root, const T733ShaderHeader *request,
     return sent && send_reply(connection, request, unchanged ? 0 : EAGAIN, NULL, 0);
 }
 
+static bool trigger_pm4(int connection, int root, const T733ShaderHeader *request,
+    const T733ShaderPM4Request *selection)
+{
+    if (selection->reserved || !selection->session) {
+        return send_reply(connection, request, EINVAL, NULL, 0);
+    }
+
+    int directory = open_process(root, selection->process_id);
+    if (directory < 0) {
+        return send_reply(connection, request, (uint32_t)errno, NULL, 0);
+    }
+
+    char status_name[T733ShaderNameBytes];
+    char request_name[T733ShaderNameBytes];
+    char temporary_name[T733ShaderNameBytes];
+    snprintf(status_name, sizeof(status_name), "s%" PRIu64 "_pm4_status.json", selection->session);
+    snprintf(request_name, sizeof(request_name), "s%" PRIu64 "_pm4_request.txt", selection->session);
+    snprintf(temporary_name, sizeof(temporary_name), "s%" PRIu64 "_pm4_request.part", selection->session);
+
+    int status_file = openat(directory, status_name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    struct stat status;
+    T733ShaderFile descriptor = {0};
+    bool available = status_file >= 0 && fstat(status_file, &status) == 0 &&
+        describe_file(&status, &descriptor) && descriptor.bytes;
+    if (status_file >= 0) {
+        close(status_file);
+    }
+    if (!available) {
+        close(directory);
+        return send_reply(connection, request, ENOENT, NULL, 0);
+    }
+
+    int file = openat(directory, temporary_name,
+        O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0644);
+    if (file < 0) {
+        int error = errno;
+        close(directory);
+        return send_reply(connection, request, (uint32_t)error, NULL, 0);
+    }
+
+    char contents[80];
+    int length = snprintf(contents, sizeof(contents), "1 %" PRIu64 " %" PRIu64 "\n",
+        selection->session, selection->target_submit);
+    int error = fchmod(file, 0644) < 0 ? errno : 0;
+    size_t written = 0;
+    while (!error && written < (size_t)length) {
+        ssize_t result = write(file, contents + written, (size_t)length - written);
+        if (result < 0 && errno == EINTR) {
+            continue;
+        }
+        if (result <= 0) {
+            error = result < 0 ? errno : EIO;
+            break;
+        }
+
+        written += (size_t)result;
+    }
+    if (close(file) < 0 && !error) {
+        error = errno;
+    }
+
+    /* linkat publishes all request bytes and refuses to replace a prior request. */
+    if (!error && linkat(directory, temporary_name, directory, request_name, 0) < 0) {
+        error = errno;
+    }
+    unlinkat(directory, temporary_name, 0);
+    close(directory);
+
+    return send_reply(connection, request, (uint32_t)error, NULL, 0);
+}
+
 static void serve_capture(int connection, int root)
 {
     for (;;) {
@@ -398,6 +470,12 @@ static void serve_capture(int connection, int root)
                 return;
             }
             sent = read_file(connection, root, &request, &read_request);
+        } else if (request.operation == T733ShaderTriggerPM4 && request.payload_bytes == sizeof(T733ShaderPM4Request)) {
+            T733ShaderPM4Request selection;
+            if (!transfer_bytes(connection, &selection, sizeof(selection), false)) {
+                return;
+            }
+            sent = trigger_pm4(connection, root, &request, &selection);
         } else {
             return;
         }

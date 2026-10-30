@@ -20,11 +20,12 @@ LIST_PROCESSES = 1
 LIST_FILES = 2
 READ_FILE = 3
 LIST_SESSIONS = 4
+TRIGGER_PM4 = 5
 MAX_PROCESSES = 256
 MAX_SESSIONS = 256
 MAX_FILES = 4100
 MAX_FILE_BYTES = 16 * 1024 * 1024
-MAX_SESSION_BYTES = 144 * 1024 * 1024
+MAX_SESSION_BYTES = 145 * 1024 * 1024
 CHUNK_BYTES = 64 * 1024
 CAPTURE_ROOT = "/private/var/mobile/Library/Caches/NativeAdrenoShaderCapture"
 NAME = re.compile(r"s([1-9][0-9]*)_[a-z0-9_-]+\.(json|txt|metallib|air|spv|rd)")
@@ -150,6 +151,10 @@ class CaptureClient:
             partial.unlink(missing_ok=True)
             raise
 
+    def trigger_pm4(self, pid, session, target):
+        self.send(TRIGGER_PM4, struct.pack("<IIQQ", pid, 0, session, target))
+        self.reply(TRIGGER_PM4, 0)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -158,14 +163,37 @@ def main():
     parser.add_argument("--pid", type=int, action="append", help="Select a process; repeat as needed")
     parser.add_argument("--session", type=int, help="Select one decimal capture session")
     parser.add_argument("--list", action="store_true", help="Print file descriptors without downloading")
+    parser.add_argument("--trigger-pm4", type=int, metavar="SUBMISSION",
+                        help="Request one PM4 submission; 0 selects the next nonempty submission")
     parser.add_argument("--output", type=Path, help="New directory for original files and download metadata")
     args = parser.parse_args()
-    if not args.list and args.output is None:
+    if not args.list and args.trigger_pm4 is None and args.output is None:
         parser.error("--output is required for downloading")
     if args.pid and any(pid < 1 or pid > 0x7fffffff for pid in args.pid):
         parser.error("--pid must be between 1 and 2147483647")
     if args.session is not None and not 1 <= args.session <= 0xffffffffffffffff:
         parser.error("--session must be between 1 and 18446744073709551615")
+    if args.trigger_pm4 is not None:
+        if args.pid is None or len(args.pid) != 1 or args.session is None:
+            parser.error("--trigger-pm4 requires exactly one --pid and one --session")
+        if args.list or args.output is not None:
+            parser.error("--trigger-pm4 is a separate operation from listing or downloading")
+        if not 0 <= args.trigger_pm4 <= 0xffffffffffffffff:
+            parser.error("--trigger-pm4 must be between 0 and 18446744073709551615")
+
+        with socket.create_connection((args.host, args.port), timeout=15) as connection:
+            CaptureClient(connection).trigger_pm4(args.pid[0], args.session, args.trigger_pm4)
+        print(json.dumps({
+            "request_published": True,
+            "pid": args.pid[0],
+            "session": str(args.session),
+            "target_submit": args.trigger_pm4,
+            "selection": "next_nonempty_after_arming" if args.trigger_pm4 == 0 else "process_pm4_serial",
+            "request": f"s{args.session}_pm4_request.txt",
+            "status": f"s{args.session}_pm4_status.json",
+            "requested_utc": datetime.now(timezone.utc).isoformat(),
+        }, indent=2))
+        return
 
     manifest = {
         "protocol_version": VERSION,

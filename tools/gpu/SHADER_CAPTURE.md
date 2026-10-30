@@ -33,8 +33,9 @@ path. Interrupted downloads retain a manifest with `complete: false`; a file
 becomes visible under its final local name only after the server's final status.
 
 The server limits each file to 16 MiB and transfers it in 64 KiB chunks. Each
-session listing permits 4100 files and 144 MiB, including the shader producer's
-128 MiB/4096-file budget and one PM4 export. Directory enumeration returns at most
+session listing permits 4100 files and 145 MiB, including the shader producer's
+128 MiB/4096-file budget, one 16 MiB PM4 export and 1 MiB for request/status metadata.
+Directory enumeration returns at most
 256 processes and 256 sessions per process. Old sessions remain readable.
 
 The wire protocol uses little-endian integers. Each request and reply starts with
@@ -47,6 +48,7 @@ POSIX error status, payload bytes, zero, zero. Requests have status zero.
 | 2: list files | PID `uint32_t`, zero `uint32_t`, session `uint64_t` | Array of file descriptors |
 | 3: read file | PID `uint32_t`, zero `uint32_t`, file descriptor | Same descriptor, then exactly its file bytes, then a final header with no payload |
 | 4: list sessions | PID `uint32_t` | Array of `uint64_t` sessions |
+| 5: request one PM4 submission | PID `uint32_t`, zero `uint32_t`, session `uint64_t`, submission `uint64_t` | Empty |
 
 A file descriptor is size `uint64_t`, modification time in nanoseconds
 `uint64_t`, and a NUL-terminated, zero-padded 128-byte ASCII filename. The read
@@ -57,3 +59,29 @@ after streaming. Its final status is `EAGAIN` if the open file changed.
 The transport performs filesystem work in its own helper thread. Shader
 compilation owns file production; command recording and GPU submission continue
 independently of downloads.
+
+## One PM4 submission
+
+The PM4 producer publishes `s<session>_pm4_status.json` with its current state and
+`last_submit`. The submission number is a process-wide PM4 serial. The result
+metadata separately names the Mesa submission, native completion and command
+recording IDs.
+
+```sh
+python3 tools/gpu/shader-capture.py --pid 56 --session SESSION --trigger-pm4 0
+```
+
+Zero requests the next nonempty submission after the producer arms the capture.
+A nonzero value selects a future process-wide PM4 serial. The helper requires an
+existing status file for the same PID/session and atomically publishes exactly:
+
+```text
+1 <session> <target_submit>
+```
+
+The only writable request name is `s<session>_pm4_request.txt`. A temporary file
+is linked into that name after all bytes are written; an existing request causes
+`EEXIST`. The producer retains the request and accepts only its own current
+session. The server's success reply confirms request publication. Download the
+status and the resulting `s<session>_pm4-<serial>.rd` and `.json` files through the
+same file download operation after capture completes.

@@ -485,6 +485,8 @@ class PerfettoCapture:
                         "gpu_stages": 0, "metal_events": 0, "metal_events_linked": 0, "counter_values": 0,
                         "unmatched_begin": 0, "unmatched_end": 0, "invalid_events": 0,
                         "invalid_jobs": 0, "counter_resets": 0, "counter_activity": {},
+                        "performance_samples": len(capture.performance), "busy_samples": 0,
+                        "frequency_changes": 0, "frequency_vote_failures": 0,
                         "clock_samples": len(self.clock.pairs),
                         "clock_uncertainty_max_ns": max(pair[2] for pair in self.clock.pairs)}
 
@@ -612,6 +614,56 @@ class PerfettoCapture:
         for cpu, _, uncertainty in self.clock.pairs:
             self.emit(clock_track, cpu, CPU_CLOCK, 4, counter=uncertainty)
 
+    def performance(self):
+        if not self.capture.performance:
+            return
+
+        parent = self.track("A642L GPU frequency and load")
+        fields = (
+            ("acknowledged_hz", "GMU acknowledged GPU frequency", "MHz", 1_000_000),
+            ("requested_hz", "GPU frequency requested after thermal cap", "MHz", 1_000_000),
+            ("thermal_cap_hz", "GPU frequency allowed by thermal sensors", "MHz", 1_000_000),
+            ("bandwidth_index", "GMU requested DDR bandwidth level", "index", 1),
+        )
+        frequencies = set()
+        for record in self.capture.performance:
+            timestamp = record["timestamp_ns"]
+            flags = record["flags"]
+            arguments = {
+                **record,
+                "busy_valid": bool(flags & 1),
+                "activity_boost": bool(flags & 2),
+                "fixed_frequency": bool(flags & 4),
+                "pending_gpu_work": bool(flags & 8),
+                "frequency_vote_changed": bool(flags & 16),
+                "thermal_limited": bool(flags & 32),
+            }
+            for field, name, unit, divisor in fields:
+                track = self.track(name, parent, unit)
+                self.emit(track, timestamp, CPU_CLOCK, 4, arguments=arguments,
+                          counter=record[field] / divisor)
+
+            frequencies.add(record["acknowledged_hz"])
+            self.summary["frequency_changes"] += bool(flags & 16)
+            self.summary["frequency_vote_failures"] += bool(record["vote_status"])
+            if flags & 1:
+                track = self.track("GPU busy from GMU XO counter", parent, "percent")
+                self.emit(track, timestamp, CPU_CLOCK, 4, arguments=arguments,
+                          counter=record["busy_permille"] / 10)
+                self.summary["busy_samples"] += 1
+
+            if record["thermal_valid_mask"]:
+                track = self.track("GPU thermal sensor maximum", parent, "C")
+                self.emit(track, timestamp, CPU_CLOCK, 4, arguments=arguments,
+                          counter=record["temperature_millic"] / 1000)
+
+            for flag, name in ((2, "GPU activity boost"), (32, "GPU thermal frequency limit")):
+                track = self.track(name, parent, "active")
+                self.emit(track, timestamp, CPU_CLOCK, 4, arguments=arguments,
+                          counter=int(bool(flags & flag)))
+
+        self.summary["acknowledged_frequencies_hz"] = sorted(frequencies)
+
     def user_events(self):
         stacks = defaultdict(list)
         events = sorted(enumerate(self.capture.events), key=lambda pair: (
@@ -692,6 +744,7 @@ class PerfettoCapture:
     def write(self):
         self.clocks()
         self.hardware()
+        self.performance()
         self.user_events()
         status_track = self.track("Capture status")
         self.emit(status_track, self.capture.status["started_ns"], CPU_CLOCK, INSTANT,

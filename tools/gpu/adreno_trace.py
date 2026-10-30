@@ -43,6 +43,7 @@ STREAM_CHUNK_BYTES = 1472
 STREAM_BATCH_CHUNKS = 128
 DEFINITION = struct.Struct("<48s16s8I")
 SAMPLE = struct.Struct("<33Q2I")
+PERFORMANCE = struct.Struct("<3Q4Ii5I")
 JOB = struct.Struct("<2Q8I")
 EVENT_HEADER = struct.Struct("<4I4Q4I")
 ARGUMENT = struct.Struct("<IIQ")
@@ -54,7 +55,12 @@ STATUS_NAMES = (
     "pending_jobs", "hardware_owned", "gpu_clock_hz", "sample_interval_us",
     "sample_capacity", "job_capacity", "event_capacity", "event_bytes",
     "sample_bytes", "job_bytes", "definition_bytes", "producer_count",
-    "producer_failed", "streaming", "retained_events", "reserved",
+    "producer_failed", "streaming", "retained_events", "performance_count",
+)
+PERFORMANCE_NAMES = (
+    "timestamp_ns", "busy_ticks", "interval_ns", "acknowledged_hz", "requested_hz",
+    "bandwidth_index", "thermal_cap_hz", "temperature_millic", "thermal_valid_mask",
+    "thermal_flags", "busy_permille", "flags", "vote_status",
 )
 STATE_NAMES = {0: "idle", 1: "requested", 2: "running", 3: "draining", 4: "complete", 5: "sealed"}
 SECTIONS = (
@@ -62,6 +68,7 @@ SECTIONS = (
     (2, "counters.bin", "sample_count", "sample_bytes"),
     (3, "jobs.bin", "job_count", "job_bytes"),
     (4, "events.bin", "event_count", "event_bytes"),
+    (5, "performance.bin", "performance_count", "performance_bytes"),
 )
 
 
@@ -78,6 +85,7 @@ def decode_status(payload):
         raise ValueError(f"Unsupported trace ABI {status['version']}")
 
     status["state_name"] = STATE_NAMES.get(status["state"], "unknown")
+    status["performance_bytes"] = PERFORMANCE.size
     return status
 
 
@@ -312,6 +320,12 @@ class Capture:
             names = ("completion", "retired_ns", "fence", "queue", "issue_ticks", "cp_ticks",
                      "rb_ticks", "valid_flags", "generation", "reserved")
             self.jobs.append(dict(zip(names, JOB.unpack(raw))))
+
+        self.performance = []
+        count = self.status.get("performance_count", 0)
+        if count:
+            for raw in read_records(directory, "performance.bin", PERFORMANCE.size, count):
+                self.performance.append(dict(zip(PERFORMANCE_NAMES, PERFORMANCE.unpack(raw))))
 
         self.events = []
         for raw in read_records(directory, "events.bin", EVENT_BYTES, self.status["event_count"]):

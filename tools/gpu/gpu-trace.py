@@ -55,7 +55,7 @@ def await_complete(connection, generation, output, timeout):
 def collect_stream(connection, status, args):
     """The host writes each event batch before acknowledging its ring sequence.
 
-    Counter and job sections append to their files while recording continues.
+    Counter, job and DVFS sections append to their files while recording continues.
     Once GPU work and producers finish, sealing fixes the final section lengths;
     the remaining stream records are drained before the files receive final names.
     """
@@ -118,7 +118,10 @@ def collect_stream(connection, status, args):
 
                     write_json(args.output / "last-status.json", status)
                     last_poll = now
-                    for section, _, count_field, size_field in SECTIONS[:3]:
+                    for section, _, count_field, size_field in SECTIONS:
+                        if section == 4:
+                            continue
+
                         expected = status[count_field] * status[size_field]
                         while offsets[section] < expected:
                             data, available = connection.read_section(generation, section, offsets[section])

@@ -111,6 +111,14 @@ def event_arguments(event):
         if not arguments["wait_for_idle_words_measured"]:
             arguments.pop("additional_wait_for_idle_dwords", None)
 
+    if event.source == 2 and event.point == 11 and event.phase == END:
+        copy_paths = event.flags >> 16
+        if copy_paths:
+            arguments["copy_path_mask"] = copy_paths
+            arguments["copy_uses_fallback"] = bool(copy_paths & 1)
+            arguments["copy_uses_row_multi_blit"] = bool(copy_paths & 2)
+            arguments["copy_uses_texel_buffer_fetch"] = bool(copy_paths & 4)
+
     if "extent" in arguments:
         extent = arguments["extent"]
         arguments["width"] = extent & 0xffffffff

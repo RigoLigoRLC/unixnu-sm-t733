@@ -64,7 +64,7 @@ PASS_SPLIT_REASONS = {
 COMMAND_OPCODES = {0x13: "CP_WAIT_FOR_ME", 0x26: "CP_WAIT_FOR_IDLE", 0x46: "CP_EVENT_WRITE"}
 COMMAND_STREAMS = {
     0: "main command stream", 1: "draw commands replayed for tiles and binning",
-    2: "tile store commands replayed per tile", 3: "draw epilogue replayed per tile",
+    2: "tile store commands replayed per tile", 3: "draw epilogue executed once at pass end",
     4: "suballocated state commands",
 }
 EVENT_WRITE_NAMES = {
@@ -191,17 +191,30 @@ def event_arguments(event):
         operation = details & 0xff
         attachment_flags = (details >> 24) & 0xff
         arguments.update({
-            "attachment_operation": {1: "load", 2: "store", 3: "resolve", 4: "clear"}.get(operation, "unknown"),
+            "attachment_operation": {0: "descriptor", 1: "load", 2: "store", 3: "resolve", 4: "clear"}.get(operation, "unknown"),
             "attachment_index": (details >> 8) & 0xff,
             "gmem_attachment_index": (details >> 16) & 0xff,
             "attachment_flags": attachment_flags, "vulkan_format": details >> 32,
-            "attachment_common_or_depth": bool(attachment_flags & 1),
-            "attachment_stencil": bool(attachment_flags & 2),
-            "attachment_conditional": bool(attachment_flags & 4),
-            "attachment_force_load": bool(attachment_flags & 8),
-            "attachment_fast_path": bool(attachment_flags & 16),
-            "attachment_unaligned": bool(attachment_flags & 32),
         })
+        if operation == 0:
+            arguments.update({
+                "attachment_load": bool(attachment_flags & 1),
+                "attachment_store": bool(attachment_flags & 2),
+                "attachment_clear": bool(attachment_flags & 4),
+                "attachment_will_be_resolved": bool(attachment_flags & 8),
+                "attachment_load_stencil": bool(attachment_flags & 16),
+                "attachment_store_stencil": bool(attachment_flags & 32),
+                "attachment_uses_gmem": bool(attachment_flags & 64),
+            })
+        else:
+            arguments.update({
+                "attachment_common_or_depth": bool(attachment_flags & 1),
+                "attachment_stencil": bool(attachment_flags & 2),
+                "attachment_conditional": bool(attachment_flags & 4),
+                "attachment_force_load": bool(attachment_flags & 8),
+                "attachment_fast_path": bool(attachment_flags & 16),
+                "attachment_unaligned": bool(attachment_flags & 32),
+            })
 
     if "split_reason_bits" in arguments:
         reasons = arguments["split_reason_bits"]
@@ -531,6 +544,7 @@ class RenderPassWork:
 
         result = {}
         attachment_count = 0
+        attachment_operations = 0
         command_counts = defaultdict(int)
         for record, values in self.records.get(self.key(event, arguments), ()):
             if record.point == 65541:
@@ -543,16 +557,21 @@ class RenderPassWork:
                 prefix = f"attachment_operation_{attachment_count}_"
                 for name in ("vulkan_image", "resource_address", "attachment_operation", "attachment_index",
                              "gmem_attachment_index", "vulkan_format", "attachment_flags", "attachment_conditional",
-                             "attachment_force_load", "attachment_fast_path", "attachment_unaligned"):
-                    result[prefix + name] = values[name]
+                             "attachment_force_load", "attachment_fast_path", "attachment_unaligned",
+                             "attachment_load", "attachment_store", "attachment_clear", "attachment_will_be_resolved",
+                             "attachment_load_stencil", "attachment_store_stencil", "attachment_uses_gmem"):
+                    if name in values:
+                        result[prefix + name] = values[name]
                 attachment_count += 1
+                attachment_operations += values["attachment_operation"] != "descriptor"
             elif record.point == 65540:
                 name = values.get("command_event_name", values["command_name"])
                 command_counts[name] += values.get("emitted_count", 0)
 
         if result:
             result["pass_metadata_recorded"] = True
-            result["recorded_attachment_operations"] = attachment_count
+            result["recorded_attachment_records"] = attachment_count
+            result["recorded_attachment_operations"] = attachment_operations
             for name, count in command_counts.items():
                 result["recorded_packets_" + name] = count
 

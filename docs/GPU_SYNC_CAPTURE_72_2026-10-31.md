@@ -50,4 +50,14 @@ Turnip 从 `tu_cs_emit_pkt7` 及事件参数记录 WFI 和 EVENT_WRITE，用固�
 | AdrenoMetal | `b9469e6` |
 | Adreno6xx | `14d4900` |
 
-本轮尚无实机性能结论。71 的基线和源码调查保存在工作区 `logs/gpu-perfetto-71-runtime-1/`。Apple3 和 CPU 性能分析继续延后。
+72b 九阶段构建全部成功，完整 FAT 已写入并 sync，部署日志在工作区 `logs/msc-20261031-022507-system-gpu-sync-72b/`。固定 tag 为 `build/system-gpu-sync-72b-source-1`，设备 `5e5422c`、SM7325 `be109f1`、Adreno6xx `86e0f1b`；core 和 Metal 与上表相同。源码及 tag 已推送，等待启动与实机采集。
+
+72b 已正常启动并完成两轮各60秒的550 MHz/DDR9采集，调档错误0，原29路计数及SYS_WFI均有有效样本，采集结束后OOB已释放。数据分别在工作区 `logs/gpu-perfetto-72b-auto-550/` 和 `logs/gpu-perfetto-72b-sysmem-550/`，更正附件GMEM布局标签的导出为 `trace-decoded.pftrace`。前者766 jobs/2707硬件样本，后者358 jobs/2776样本；producer分别丢18016/15104条，元数据表分别丢4017/1867条，主机序号、job、硬件样本和已导出阶段端点无缺失。
+
+auto操作期保存的WFI中77.82%来自既有tile完成等待。GPU关联的320对相邻pass中319对为memoryless写入分段，316对夹有复制。类型17为0，实际桌面走inline/core复制路径；本轮没有证明0026的PassSteps复制合批带来收益。详细结果在auto目录 `auto-vs71-findings.txt`。
+
+两轮在相同尺寸、样本数、draw数和附件动作下，全屏8draw的GMEM/sysmem均值为5.143/7.794 ms，33draw为3.802/1.816 ms，34draw为1.622/2.712 ms。shader和texture内容没有受控重放，结果支持继续按pass选择模式。匹配样本和损失记录在sysmem目录 `render-mode-comparison.json`。
+
+72c进一步采用既有secondary记录路径处理带memoryless颜色附件的encoder，等绘制命令收集完再开始实际pass，避免提前inline开始后第一次写memoryless附件时被迫拆分。真实附件读写和feedback依赖继续由既有planner处理。该修改在AdrenoMetal `944699d`，等待构建和实机对照。
+
+71 的基线和源码调查保存在工作区 `logs/gpu-perfetto-71-runtime-1/`。Apple3 和 CPU 性能分析继续延后。

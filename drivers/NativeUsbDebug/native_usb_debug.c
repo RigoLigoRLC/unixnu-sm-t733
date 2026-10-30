@@ -78,8 +78,8 @@ extern void native_usb_net_dump_stats(void) __attribute__((weak_import));
 #define T_DATA (5u << 4)
 #define HWO 1u
 #define TRB_LAST (1u << 1)
-#define TRB_CONTINUE_SHORT (1u << 2)
-#define TRB_CHAIN (1u << 3)
+#define TRB_CONTINUE_SHORT (1u << 3)
+#define TRB_CHAIN (1u << 2)
 #define TRB_COMPLETION_EVENT (1u << 11)
 #define TRB_FLAGS (HWO | 2u | (1u << 10) | (1u << 11))
 #define EVENTS 0

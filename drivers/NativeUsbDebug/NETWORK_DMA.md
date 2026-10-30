@@ -37,8 +37,11 @@ controller recovery completes halt/reset before rewriting DMA. Serial logging
 uses its existing endpoint and buffers. Polling retains its one-millisecond
 sleep and does not spin for network completion.
 
-The DWC3 field definitions, per-request CHN handling and explicit zero-length
-TRBs follow the hardware procedures documented by Linux's
+The SM7325 vendor kernel's `drivers/usb/dwc3/core.h` defines CHN as bit 2,
+CSP as bit 3, LST as bit 1 and IOC as bit 11. Its `gadget.c` sets CSP for OUT
+endpoints and CHN for an additional TRB belonging to the same request. The
+workspace reference is `references/android_kernel_samsung_sm7325/`.
+The per-request handling and explicit zero-length TRBs also appear in Linux's
 [gadget implementation](https://codebrowser.dev/linux/linux/drivers/usb/dwc3/gadget.c.html)
 and [endpoint configuration definitions](https://codebrowser.dev/linux/linux/drivers/usb/dwc3/gadget.h.html).
 The finite batches are implemented directly in NativeUsbDebug. The existing

@@ -54,7 +54,9 @@ A file descriptor is size `uint64_t`, modification time in nanoseconds
 `uint64_t`, and a NUL-terminated, zero-padded 128-byte ASCII filename. The read
 request names the exact version from the directory listing. The helper checks
 size and modification time before reading, then checks them and inode identity
-after streaming. Its final status is `EAGAIN` if the open file changed.
+after streaming. Its final status is `EAGAIN` if the open file changed. The host
+refreshes that file's descriptor and retries at most three times, allowing an
+active PM4 status file to be downloaded while the worker publishes its state.
 
 The transport performs filesystem work in its own helper thread. Shader
 compilation owns file production; command recording and GPU submission continue
@@ -66,6 +68,11 @@ The PM4 producer publishes `s<session>_pm4_status.json` with its current state a
 `last_submit`. The submission number is a process-wide PM4 serial. The result
 metadata separately names the Mesa submission, native completion and command
 recording IDs.
+
+After startup, wait for shader export creation to settle. Begin a 60-second trace
+for the same process, publish the PM4 request during that trace window, and
+download shader and PM4 files after the window finishes. The PM4 result's native
+completion and command recording IDs then refer to records in that saved trace.
 
 ```sh
 python3 tools/gpu/shader-capture.py --pid 56 --session SESSION --trigger-pm4 0

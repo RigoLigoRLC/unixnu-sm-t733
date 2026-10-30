@@ -3,6 +3,7 @@
 
 import argparse
 from datetime import datetime, timezone
+import errno
 import json
 import os
 from pathlib import Path
@@ -155,6 +156,21 @@ class CaptureClient:
         self.send(TRIGGER_PM4, struct.pack("<IIQQ", pid, 0, session, target))
         self.reply(TRIGGER_PM4, 0)
 
+    def download_latest(self, pid, file, destination):
+        for attempt in range(3):
+            try:
+                self.download(pid, file, destination)
+                return file
+            except OSError as error:
+                if error.errno != errno.EAGAIN or attempt == 2:
+                    raise
+
+                current = self.files(pid, int(file["session"]))
+                replacement = next((entry for entry in current if entry["name"] == file["name"]), None)
+                if replacement is None:
+                    raise FileNotFoundError(file["name"]) from error
+                file = replacement
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -222,7 +238,8 @@ def main():
                         entry = {"pid": pid, **file}
                         if not args.list:
                             relative = Path(str(pid)) / file["name"]
-                            client.download(pid, file, args.output / relative)
+                            file = client.download_latest(pid, file, args.output / relative)
+                            entry.update(file)
                             entry["path"] = relative.as_posix()
                             print(f"{pid}/{file['name']}: {file['bytes']} bytes", flush=True)
                         manifest["files"].append(entry)

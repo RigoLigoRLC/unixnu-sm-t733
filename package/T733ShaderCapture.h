@@ -20,7 +20,7 @@ enum {
     T733ShaderMaxSessions = 256,
     T733ShaderMaxFiles = 4100,
     T733ShaderMaxFileBytes = 16 * 1024 * 1024,
-    T733ShaderMaxSessionBytes = 145 * 1024 * 1024,
+    T733ShaderMaxSessionBytes = 146 * 1024 * 1024,
     T733ShaderChunkBytes = 64 * 1024,
 };
 

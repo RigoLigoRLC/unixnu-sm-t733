@@ -33,8 +33,8 @@ path. Interrupted downloads retain a manifest with `complete: false`; a file
 becomes visible under its final local name only after the server's final status.
 
 The server limits each file to 16 MiB and transfers it in 64 KiB chunks. Each
-session listing permits 4100 files and 145 MiB, including the shader producer's
-128 MiB/4096-file budget, one 16 MiB PM4 export and 1 MiB for request/status metadata.
+session listing permits 4100 files and 146 MiB, including the shader producer's
+128 MiB/4096-file budget, one 16 MiB PM4 export and 2 MiB for manifest/request/status metadata.
 Directory enumeration returns at most
 256 processes and 256 sessions per process. Old sessions remain readable.
 

@@ -21,6 +21,8 @@ CONTROL = 34
 READ = 35
 READ_STREAM = 39
 ACK_STREAM = 40
+CONTROL_CAPTURE = 41
+QUERY_CAPTURE_OPTIONS = 42
 START = 1
 STOP = 2
 SEAL = 3
@@ -43,6 +45,8 @@ STREAM_CHUNK_BYTES = 1472
 STREAM_BATCH_CHUNKS = 128
 DEFINITION = struct.Struct("<48s16s8I")
 SAMPLE = struct.Struct("<33Q2I")
+ADDITIONAL_SAMPLE = struct.Struct("<Q2I")
+CAPTURE_OPTIONS = struct.Struct("<8I")
 PERFORMANCE = struct.Struct("<3Q4Ii5I")
 JOB = struct.Struct("<2Q8I")
 EVENT_HEADER = struct.Struct("<4I4Q4I")
@@ -62,6 +66,10 @@ PERFORMANCE_NAMES = (
     "bandwidth_index", "thermal_cap_hz", "temperature_millic", "thermal_valid_mask",
     "thermal_flags", "busy_permille", "flags", "vote_status",
 )
+CAPTURE_OPTION_NAMES = (
+    "version", "generation", "frequency_hz", "flags", "additional_counter_count",
+    "additional_definition_bytes", "additional_sample_bytes", "reserved",
+)
 STATE_NAMES = {0: "idle", 1: "requested", 2: "running", 3: "draining", 4: "complete", 5: "sealed"}
 SECTIONS = (
     (1, "definitions.bin", "counter_count", "definition_bytes"),
@@ -69,6 +77,8 @@ SECTIONS = (
     (3, "jobs.bin", "job_count", "job_bytes"),
     (4, "events.bin", "event_count", "event_bytes"),
     (5, "performance.bin", "performance_count", "performance_bytes"),
+    (6, "additional-definitions.bin", "additional_counter_count", "additional_definition_bytes"),
+    (7, "additional-counters.bin", "additional_sample_count", "additional_sample_bytes"),
 )
 
 
@@ -110,6 +120,8 @@ class TraceConnection:
         self.socket = socket.create_connection((host, port), timeout=timeout)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.request_id = 0
+        self.capture_settings = None
+        self.capture_settings_supported = True
 
     def __enter__(self):
         return self
@@ -147,11 +159,53 @@ class TraceConnection:
         return reply
 
     def status(self):
-        return decode_status(self.request(QUERY))
+        return self.status_options(decode_status(self.request(QUERY)))
+
+    def status_options(self, status):
+        if self.capture_settings_supported and (
+                self.capture_settings is None or self.capture_settings["generation"] != status["generation"]):
+            try:
+                payload = self.request(QUERY_CAPTURE_OPTIONS)
+            except DeviceError as error:
+                if error.status != 0xe00002c7:
+                    raise
+
+                self.capture_settings_supported = False
+            else:
+                if len(payload) != CAPTURE_OPTIONS.size:
+                    raise ValueError("Capture options have an unsupported size")
+
+                self.capture_settings = dict(zip(CAPTURE_OPTION_NAMES, CAPTURE_OPTIONS.unpack(payload)))
+                if (self.capture_settings["version"] != VERSION or
+                        self.capture_settings["generation"] != status["generation"]):
+                    raise ValueError("Capture options do not match the current generation")
+
+        options = self.capture_settings or {}
+        count = options.get("additional_counter_count", 0)
+        status.update({
+            "capture_options_supported": self.capture_settings_supported,
+            "capture_frequency_hz": options.get("frequency_hz", 0),
+            "capture_flags": options.get("flags", 0),
+            "additional_counter_count": count,
+            "additional_definition_bytes": options.get("additional_definition_bytes", 0),
+            "additional_sample_bytes": options.get("additional_sample_bytes", 0),
+            "additional_sample_count": status["sample_count"] if count else 0,
+        })
+        return status
 
     def control(self, operation, generation=0, duration_ms=0):
         payload = struct.pack("<4I", VERSION, operation, generation, duration_ms)
-        return decode_status(self.request(CONTROL, payload))
+        return self.status_options(decode_status(self.request(CONTROL, payload)))
+
+    def start_capture(self, operation, duration_ms, frequency_hz=0, flags=0):
+        if not self.capture_settings_supported:
+            if frequency_hz or flags:
+                raise ValueError("The device does not support bounded frequency and render options")
+
+            return self.control(operation, duration_ms=duration_ms)
+
+        payload = struct.pack("<8I", VERSION, operation, 0, duration_ms, frequency_hz, flags, 0, 0)
+        return self.status_options(decode_status(self.request(CONTROL_CAPTURE, payload)))
 
     def stream_events(self, generation, sequence):
         payload = struct.pack("<IIQ", VERSION, generation, sequence)
@@ -314,6 +368,29 @@ class Capture:
         for raw in read_records(directory, "counters.bin", SAMPLE.size, self.status["sample_count"]):
             values = SAMPLE.unpack(raw)
             self.samples.append(CounterSample(*values[:4], values[4:33], values[33]))
+
+        additional_count = self.status.get("additional_counter_count", 0)
+        if additional_count:
+            if (additional_count != 1 or
+                    self.status["additional_definition_bytes"] != DEFINITION.size or
+                    self.status["additional_sample_bytes"] != ADDITIONAL_SAMPLE.size or
+                    self.status["additional_sample_count"] != len(self.samples)):
+                raise ValueError("Unsupported additional hardware counter layout")
+
+            for raw in read_records(directory, "additional-definitions.bin", DEFINITION.size, additional_count):
+                name, unit, index, selector, event, low_register, load_bit, *_ = DEFINITION.unpack(raw)
+                if index != len(self.definitions):
+                    raise ValueError("Additional counter indexes must follow the original definitions")
+
+                self.definitions.append({"name": c_string(name), "unit": c_string(unit), "index": index,
+                                         "selector": selector, "event": event, "low_register": low_register,
+                                         "load_bit": load_bit})
+
+            for sample, raw in zip(self.samples, read_records(
+                    directory, "additional-counters.bin", ADDITIONAL_SAMPLE.size, len(self.samples))):
+                value, valid, _ = ADDITIONAL_SAMPLE.unpack(raw)
+                sample.valid_mask |= valid << len(sample.values)
+                sample.values += (value,)
 
         self.jobs = []
         for raw in read_records(directory, "jobs.bin", JOB.size, self.status["job_count"]):

@@ -187,38 +187,49 @@ def collect(args):
                 raise ValueError("Capture duration must be between 0.1 and 60 seconds")
 
             operation = START if args.buffered else START_STREAM
-            status = connection.control(operation, duration_ms=duration_ms)
+            frequency_hz = 0 if args.frequency == "governor" else int(args.frequency) * 1_000_000
+            flags = {"auto": 0, "gmem": 1, "sysmem": 2}[args.render_mode]
+            if args.detailed_tiles:
+                flags |= 4
+
+            write_json(args.output / "requested-options.json", {
+                "duration_ms": duration_ms, "frequency_hz": frequency_hz,
+                "render_mode": args.render_mode, "detailed_tiles": args.detailed_tiles,
+            })
+            status = connection.start_capture(operation, duration_ms, frequency_hz, flags)
             write_json(args.output / "start-status.json", status)
+            write_json(args.output / "capture-options.json", connection.capture_settings or {})
             print(f"GPU capture {status['generation']} requested for {duration_ms} ms", flush=True)
 
         generation = status["generation"]
-        if status.get("streaming"):
-            if args.command != "capture":
-                raise ValueError("Streaming data is saved in the directory used by its capture command")
-
-            collect_stream(connection, status, args)
-            if args.raw_only:
-                return 0
-
-            return export(args.output, args.output / "trace.pftrace")
-
         try:
-            status = await_complete(connection, generation, args.output, args.timeout)
-        except KeyboardInterrupt:
-            print("Stopping capture and waiting for GPU and trace producers", flush=True)
-            connection.control(STOP, generation)
-            status = await_complete(connection, generation, args.output, args.timeout)
-        except TimeoutError:
+            if status.get("streaming"):
+                if args.command != "capture":
+                    raise ValueError("Streaming data is saved in the directory used by its capture command")
+
+                collect_stream(connection, status, args)
+                if args.raw_only:
+                    return 0
+
+                return export(args.output, args.output / "trace.pftrace")
+
+            try:
+                status = await_complete(connection, generation, args.output, args.timeout)
+            except KeyboardInterrupt:
+                print("Stopping capture and waiting for GPU and trace producers", flush=True)
+                connection.control(STOP, generation)
+                status = await_complete(connection, generation, args.output, args.timeout)
+
+            connection.download(args.output, status)
+            print(f"Saved generation {generation} binary capture to {args.output}", flush=True)
+        except BaseException:
             if args.command == "capture":
                 try:
                     connection.control(STOP, generation)
                 except Exception as error:
-                    print(f"Capture stop failed: {error}", file=sys.stderr)
+                    print(f"Capture stop failed: {error}; the device capture deadline remains active", file=sys.stderr)
 
             raise
-
-        connection.download(args.output, status)
-        print(f"Saved generation {generation} binary capture to {args.output}", flush=True)
 
     if args.raw_only:
         return 0
@@ -241,6 +252,12 @@ def main():
         if name == "capture":
             command.add_argument("--seconds", type=float, default=5)
             command.add_argument("--buffered", action="store_true", help="Use the older stop-then-download protocol")
+            command.add_argument("--frequency", choices=("governor", "315", "450", "550"), default="governor",
+                                 help="GPU MHz with the paired DDR vote, limited by the current thermal cap")
+            command.add_argument("--render-mode", choices=("auto", "gmem", "sysmem"), default="auto",
+                                 help="Turnip render selection for newly recorded passes in this capture")
+            command.add_argument("--detailed-tiles", action="store_true",
+                                 help="Enable per-tile/load/store/cache timestamps in addition to pass summaries")
 
     command = commands.add_parser("export", help="Create Perfetto tracks from an already saved binary capture")
     command.add_argument("directory", type=Path)

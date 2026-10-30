@@ -7,6 +7,7 @@ submission receipts identify the commands that produced each stage.
 
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
+import json
 import math
 
 from perfetto.protos.perfetto.trace.perfetto_trace_pb2 import TrackEvent
@@ -34,6 +35,8 @@ METAL_ARGUMENTS = {
     12: ("texture_id", "vulkan_image", "vulkan_buffer", "in_place_refusal"),
     13: ("vulkan_image", "metal_row_pitch", "vulkan_row_pitch", "image_required_bytes"),
     14: ("vulkan_image", "reason_byte_range", "reason_bytes_low", "reason_bytes_high"),
+    15: ("encoder_id", "internal_pass_index", "split_reason_bits", "copy_barrier_counts"),
+    17: ("encoder_id", "internal_pass_index", "copy_barrier_counts", "row_dispatch_count"),
 }
 TURNIP_ARGUMENTS = {
     1: "width", 2: "height", 3: "bin_count", 4: "samples", 5: "draw_count",
@@ -48,6 +51,31 @@ TURNIP_ARGUMENTS = {
     32: "reserved_bytes_high_water", 33: "budget_bytes",
     34: "source_buffer", 35: "destination_image", 36: "copy_operation_id",
     37: "copy_rows", 38: "copy_batched_draws",
+    39: "pass_id", 40: "command_class", 41: "emitted_count", 42: "estimated_executions",
+    43: "encoder_id", 44: "internal_pass_index", 45: "pass_details",
+    46: "vulkan_image", 47: "attachment_details", 48: "resource_address",
+    49: "metadata_dropped",
+}
+PASS_SPLIT_REASONS = {
+    0: "resource barrier", 1: "tile dispatch", 2: "tile memory", 3: "attached texture read",
+    4: "attachment feedback", 5: "memoryless attachment write", 6: "pending pipeline",
+    7: "execution mode", 8: "visibility query", 9: "render shape", 10: "resolve only",
+}
+COMMAND_OPCODES = {0x13: "CP_WAIT_FOR_ME", 0x26: "CP_WAIT_FOR_IDLE", 0x46: "CP_EVENT_WRITE"}
+COMMAND_STREAMS = {
+    0: "main command stream", 1: "draw commands replayed for tiles and binning",
+    2: "tile store commands replayed per tile", 3: "draw epilogue replayed per tile",
+    4: "suballocated state commands",
+}
+EVENT_WRITE_NAMES = {
+    0x04: "CACHE_FLUSH_TS", 0x05: "CONTEXT_DONE", 0x09: "WRITE_PRIMITIVE_COUNTS",
+    0x0b: "START_PRIMITIVE_CTRS", 0x0c: "STOP_PRIMITIVE_CTRS",
+    0x15: "ZPASS_DONE", 0x16: "RB_DONE_TS",
+    0x18: "PC_CCU_INVALIDATE_DEPTH", 0x19: "PC_CCU_INVALIDATE_COLOR",
+    0x1a: "PC_CCU_RESOLVE_TS", 0x1c: "PC_CCU_FLUSH_DEPTH_TS",
+    0x1d: "PC_CCU_FLUSH_COLOR_TS", 0x1e: "CCU_RESOLVE",
+    0x25: "LRZ_CLEAR", 0x26: "LRZ_FLUSH_INVALIDATE", 0x27: "BLIT_OP_FILL_2D",
+    0x28: "BLIT_OP_COPY_2D", 0x2a: "BLIT_OP_SCALE_2D", 0x31: "CACHE_INVALIDATE",
 }
 COPY_ORIGINS = {
     1: "synchronize buffer contents to a shadow image",
@@ -83,6 +111,7 @@ COUNTER_NAMES = {
     "ccu_gmem_read": "CCU reads from GMEM", "ccu_gmem_write": "CCU writes to GMEM",
     "cp_busy": "Command processor busy cycles", "cp_wfi_stall": "Command processor cycles waiting for idle",
     "cp_sync_stall": "Command processor synchronization wait cycles",
+    "cp_sys_wfi_stall": "Command processor system wait-for-idle stall cycles",
     "fs_stage_duration": "Fragment shader stage cycles", "vs_stage_duration": "Vertex shader stage cycles",
 }
 
@@ -118,6 +147,84 @@ def event_arguments(event):
             arguments["copy_uses_fallback"] = bool(copy_paths & 1)
             arguments["copy_uses_row_multi_blit"] = bool(copy_paths & 2)
             arguments["copy_uses_texel_buffer_fetch"] = bool(copy_paths & 4)
+
+    if event.source == 2 and event.point == 65540:
+        classification = arguments.get("command_class", 0)
+        opcode = classification & 0xff
+        event_code = (classification >> 8) & 0xff
+        stream = (classification >> 16) & 0xff
+        modes = (classification >> 24) & 7
+        conditional = bool(classification & (1 << 27))
+        arguments.update({
+            "command_opcode": opcode, "command_name": COMMAND_OPCODES.get(opcode, f"opcode_{opcode}"),
+            "command_event": event_code, "command_stream": stream,
+            "command_stream_description": COMMAND_STREAMS.get(stream, "unrecognized stream"),
+            "command_source_function": event.name, "command_source_line": classification >> 32,
+            "command_executes_in_binning": bool(modes & 1),
+            "command_executes_in_gmem": bool(modes & 2),
+            "command_executes_in_sysmem": bool(modes & 4),
+            "command_execution_is_conditional": conditional,
+        })
+        if opcode == 0x46:
+            arguments["command_event_name"] = EVENT_WRITE_NAMES.get(event_code, f"event_{event_code}")
+
+        estimate = arguments.get("estimated_executions", (1 << 64) - 1)
+        arguments["execution_estimate_available"] = estimate != (1 << 64) - 1
+        arguments["execution_estimate_is_upper_bound"] = conditional and arguments["execution_estimate_available"]
+        if not arguments["execution_estimate_available"]:
+            arguments.pop("estimated_executions", None)
+
+    if event.source == 2 and event.point == 65541:
+        details = arguments.get("pass_details", 0)
+        if event.name == "render_pass_identity":
+            arguments["split_reason_bits"] = details
+        elif event.name == "render_pass_execution":
+            arguments.update({
+                "pass_rendered": bool(details & 1), "pass_uses_sysmem": bool(details & 2),
+                "pass_uses_binning": bool(details & 4), "capture_render_flags": (details >> 8) & 0xff,
+                "lrz_valid": bool(details & 8), "samples": (details >> 16) & 0xff,
+                "actual_render_mode": ("sysmem" if details & 2 else "gmem") if details & 1 else "not rendered",
+            })
+
+    if event.source == 2 and event.point == 65542:
+        details = arguments.get("attachment_details", 0)
+        operation = details & 0xff
+        attachment_flags = (details >> 24) & 0xff
+        arguments.update({
+            "attachment_operation": {1: "load", 2: "store", 3: "resolve", 4: "clear"}.get(operation, "unknown"),
+            "attachment_index": (details >> 8) & 0xff,
+            "gmem_attachment_index": (details >> 16) & 0xff,
+            "attachment_flags": attachment_flags, "vulkan_format": details >> 32,
+            "attachment_common_or_depth": bool(attachment_flags & 1),
+            "attachment_stencil": bool(attachment_flags & 2),
+            "attachment_conditional": bool(attachment_flags & 4),
+            "attachment_force_load": bool(attachment_flags & 8),
+            "attachment_fast_path": bool(attachment_flags & 16),
+            "attachment_unaligned": bool(attachment_flags & 32),
+        })
+
+    if "split_reason_bits" in arguments:
+        reasons = arguments["split_reason_bits"]
+        arguments["split_reasons"] = ", ".join(
+            description for bit, description in PASS_SPLIT_REASONS.items() if reasons & (1 << bit)
+        ) or "initial pass"
+
+    if event.source == 1 and event.point in (15, 17):
+        counts = arguments.get("copy_barrier_counts", 0)
+        copy_count = counts & 0xffffffff
+        barrier_count = counts >> 32
+        arguments["copy_count_recorded"] = copy_count != 0xffffffff
+        arguments["barrier_count_recorded"] = barrier_count != 0xffffffff
+        if copy_count != 0xffffffff:
+            arguments["copy_count"] = copy_count
+        if barrier_count != 0xffffffff:
+            arguments["dependency_barrier_count"] = barrier_count
+        if event.point == 17:
+            arguments["copy_batch_location"] = (
+                "before tile dispatch after the named render instance" if event.flags >> 16 else
+                "before the named render instance"
+            )
+            arguments["dependency_barrier_count_includes_final_export"] = True
 
     if "extent" in arguments:
         extent = arguments["extent"]
@@ -396,6 +503,62 @@ class MetalWork:
         }
 
 
+class RenderPassWork:
+    """RenderPassWork connects each submitted pass to its saved operations.
+
+    Turnip records its pass ID in GPU timestamps and in command and attachment
+    summaries. The process, command buffer, submission and pass IDs select the
+    same execution when a command buffer is reused. Metal encoder and internal
+    pass IDs then identify the matching split-reason and copy-batch records.
+    """
+
+    def __init__(self, events):
+        self.records = defaultdict(list)
+        for event in events:
+            if event.source != 2 or event.point not in (65540, 65541, 65542) or event.flags & INVALID:
+                continue
+
+            arguments = event_arguments(event)
+            self.records[self.key(event, arguments)].append((event, arguments))
+
+    @staticmethod
+    def key(event, arguments):
+        return (event.process_id, event.command_buffer_id, event.submission_id, arguments.get("pass_id", 0))
+
+    def describe(self, event, arguments):
+        if not arguments.get("pass_id"):
+            return {}
+
+        result = {}
+        attachment_count = 0
+        command_counts = defaultdict(int)
+        for record, values in self.records.get(self.key(event, arguments), ()):
+            if record.point == 65541:
+                for name in ("encoder_id", "internal_pass_index", "split_reason_bits", "split_reasons",
+                             "pass_rendered", "pass_uses_sysmem", "pass_uses_binning", "capture_render_flags",
+                             "actual_render_mode", "bin_count", "draw_count", "samples", "lrz_valid"):
+                    if name in values:
+                        result[name] = values[name]
+            elif record.point == 65542:
+                prefix = f"attachment_operation_{attachment_count}_"
+                for name in ("vulkan_image", "resource_address", "attachment_operation", "attachment_index",
+                             "gmem_attachment_index", "vulkan_format", "attachment_flags", "attachment_conditional",
+                             "attachment_force_load", "attachment_fast_path", "attachment_unaligned"):
+                    result[prefix + name] = values[name]
+                attachment_count += 1
+            elif record.point == 65540:
+                name = values.get("command_event_name", values["command_name"])
+                command_counts[name] += values.get("emitted_count", 0)
+
+        if result:
+            result["pass_metadata_recorded"] = True
+            result["recorded_attachment_operations"] = attachment_count
+            for name, count in command_counts.items():
+                result["recorded_packets_" + name] = count
+
+        return result
+
+
 class ClockAlignment:
     """ClockAlignment pairs GPU readings with their enclosing CPU readings.
 
@@ -476,6 +639,7 @@ class PerfettoCapture:
         self.clock = ClockAlignment(capture)
         self.work = MetalWork(capture.events)
         self.copy_work = CopyWork(capture.events)
+        self.pass_work = RenderPassWork(capture.events)
         self.builder = StreamingTraceProtoBuilder(stream)
         self.tracks = {}
         self.pending = []
@@ -485,10 +649,17 @@ class PerfettoCapture:
                         "gpu_stages": 0, "metal_events": 0, "metal_events_linked": 0, "counter_values": 0,
                         "unmatched_begin": 0, "unmatched_end": 0, "invalid_events": 0,
                         "invalid_jobs": 0, "counter_resets": 0, "counter_activity": {},
+                        "counter_sample_intervals": {}, "metadata_dropped": 0,
+                        "command_emission_counts": {}, "command_execution_estimates": {},
+                        "command_execution_upper_bounds": {}, "render_modes": {}, "gpu_pass_metadata_linked": 0,
                         "performance_samples": len(capture.performance), "busy_samples": 0,
                         "frequency_changes": 0, "frequency_vote_failures": 0,
                         "clock_samples": len(self.clock.pairs),
                         "clock_uncertainty_max_ns": max(pair[2] for pair in self.clock.pairs)}
+        self.summary["capture_configuration"] = {
+            "frequency_hz": capture.status.get("capture_frequency_hz", 0),
+            "flags": capture.status.get("capture_flags", 0),
+        }
 
     def track(self, name, parent=None, unit=None):
         key = (name, parent, unit)
@@ -607,6 +778,8 @@ class PerfettoCapture:
                                   counter=difference * 1_000_000 / duration)
                         self.summary["counter_values"] += 1
                         self.summary["counter_activity"][name] = self.summary["counter_activity"].get(name, 0) + difference
+                        intervals = self.summary["counter_sample_intervals"]
+                        intervals[name] = intervals.get(name, 0) + 1
 
             previous = (sample, timestamp)
 
@@ -626,6 +799,7 @@ class PerfettoCapture:
             ("bandwidth_index", "GMU requested DDR bandwidth level", "index", 1),
         )
         frequencies = set()
+        gpu_ddr_pairs = set()
         for record in self.capture.performance:
             timestamp = record["timestamp_ns"]
             flags = record["flags"]
@@ -644,6 +818,7 @@ class PerfettoCapture:
                           counter=record[field] / divisor)
 
             frequencies.add(record["acknowledged_hz"])
+            gpu_ddr_pairs.add((record["acknowledged_hz"], record["bandwidth_index"]))
             self.summary["frequency_changes"] += bool(flags & 16)
             self.summary["frequency_vote_failures"] += bool(record["vote_status"])
             if flags & 1:
@@ -663,6 +838,10 @@ class PerfettoCapture:
                           counter=int(bool(flags & flag)))
 
         self.summary["acknowledged_frequencies_hz"] = sorted(frequencies)
+        self.summary["acknowledged_gpu_ddr_pairs"] = [
+            {"frequency_hz": frequency, "bandwidth_index": bandwidth}
+            for frequency, bandwidth in sorted(gpu_ddr_pairs)
+        ]
 
     def user_events(self):
         stacks = defaultdict(list)
@@ -678,6 +857,22 @@ class PerfettoCapture:
             key = (event.source, event.process_id, event.queue_id, event.point,
                    event.submission_id, event.command_buffer_id, event.name)
             arguments = event_arguments(event)
+            if event.source == 2 and event.point == 65540:
+                name = arguments.get("command_event_name", arguments["command_name"])
+                totals = self.summary["command_emission_counts"]
+                totals[name] = totals.get(name, 0) + arguments.get("emitted_count", 0)
+                if arguments["execution_estimate_available"]:
+                    field = "command_execution_upper_bounds" if arguments["execution_estimate_is_upper_bound"] else \
+                        "command_execution_estimates"
+                    estimates = self.summary[field]
+                    estimates[name] = estimates.get(name, 0) + arguments["estimated_executions"]
+            elif event.source == 2 and event.point == 65541 and event.name == "render_pass_execution":
+                mode = arguments["actual_render_mode"]
+                modes = self.summary["render_modes"]
+                modes[mode] = modes.get(mode, 0) + 1
+            elif event.source == 2 and event.point == 65543:
+                self.summary["metadata_dropped"] += arguments.get("metadata_dropped", 0)
+
             if event.source == 1:
                 parent = self.track(f"Metal process {event.process_id}")
                 track = self.track("Recorded Metal work", parent)
@@ -705,6 +900,10 @@ class PerfettoCapture:
                     self.summary["unmatched_end"] += 1
             else:
                 parent = self.track(f"Turnip process {event.process_id} queue {event.queue_id}")
+                if event.point == 65540:
+                    parent = self.track("Recorded GPU commands", parent)
+                elif event.point in (65541, 65542, 65543):
+                    parent = self.track("Render pass operations", parent)
                 self.emit(parent, event.timestamp_ns, event.clock_domain, INSTANT, event.name,
                           arguments, flow=event.completion_id or None)
 
@@ -716,6 +915,10 @@ class PerfettoCapture:
                 continue
 
             arguments.update(self.work.describe(start.process_id, start.command_buffer_id))
+            pass_arguments = self.pass_work.describe(start, arguments)
+            arguments.update(pass_arguments)
+            if pass_arguments:
+                self.summary["gpu_pass_metadata_linked"] += 1
             if start.name == "copy_buffer_to_image":
                 arguments.update(self.copy_work.describe(start, arguments))
             self.slice(parent, start.name, start.timestamp_ns, end.timestamp_ns, arguments,
@@ -783,13 +986,20 @@ class PerfettoCapture:
         self.summary["hardware_counters_populated"] = self.summary["counter_values"] > 0 and any(activity.values())
         self.summary["shader_activity_populated"] = any(activity.get(name, 0) > 0 for name in (
             "vs_alu", "fs_alu", "fs_tex", "vs_tex"))
+        additional_names = [definition["name"] for definition in
+                            self.capture.definitions[self.capture.status["counter_count"]:]]
+        self.summary["additional_counter_measurements_populated"] = bool(additional_names) and all(
+            self.summary["counter_sample_intervals"].get(name, 0) > 0 for name in additional_names
+        )
         self.summary["dropped_records"] = lost
         self.summary["incomplete_producers"] = self.capture.status["producer_failed"]
         self.summary["host_missing_events"] = missing_events
         self.summary["complete"] = bool(
             self.summary["gpu_jobs"] and self.summary["gpu_stages"] and self.summary["metal_events_linked"] and
             self.summary["hardware_counters_populated"] and self.summary["shader_activity_populated"] and
-            not lost and not self.summary["incomplete_producers"] and not self.summary["host_missing_events"] and
+            (not additional_names or self.summary["additional_counter_measurements_populated"]) and
+            not lost and not self.summary["metadata_dropped"] and
+            not self.summary["incomplete_producers"] and not self.summary["host_missing_events"] and
             not self.capture.status["access_error"] and
             not self.summary["unmatched_begin"] and not self.summary["unmatched_end"] and
             not self.summary["invalid_events"] and not self.summary["invalid_jobs"])
@@ -801,4 +1011,13 @@ def export_capture(capture, output):
         result = PerfettoCapture(capture, stream).write()
 
     write_json(output.with_suffix(".summary.json"), result)
+    with output.with_suffix(".metadata.jsonl").open("x") as stream:
+        for event in capture.events:
+            if ((event.source == 1 and event.point in (15, 17)) or
+                    (event.source == 2 and event.point in (65540, 65541, 65542, 65543))):
+                stream.write(json.dumps({
+                    "name": event.name, "timestamp_ns": event.timestamp_ns,
+                    "clock_domain": event.clock_domain, **event_arguments(event),
+                }, ensure_ascii=True) + "\n")
+
     return result

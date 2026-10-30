@@ -212,6 +212,8 @@ def main():
     parser.add_argument("--output", required=True, type=Path, help="Persistent capture directory")
     parser.add_argument("--command", choices=("host-status", "stop", "status", "replay", "ping", "help", "tasks", "cpus", "ufs", "gpio", "dvfs", "network", "display", "gpu"))
     parser.add_argument("--process", help="Exact process name to sample with --command tasks")
+    parser.add_argument("--after-thread", type=int,
+                        help="Continue the selected task after the preceding TASK_PAGE next thread ID")
     parser.add_argument("--echo", action="store_true", help="Also write raw received bytes to stdout")
     parser.add_argument("--replay-on-connect", action="store_true", help="Replay retained RAM after every connection")
     args = parser.parse_args()
@@ -220,6 +222,13 @@ def main():
             parser.error("--process requires --command tasks and a printable ASCII name of 1-56 characters.")
 
         args.command = "tasks " + args.process
+
+    if args.after_thread is not None:
+        if args.process is None or not 0 <= args.after_thread < (1 << 64):
+            parser.error("--after-thread requires --process and an unsigned 64-bit thread ID.")
+        args.command += f" after={args.after_thread}"
+        if not is_device_command(args.command):
+            parser.error("The process name and pagination cursor must fit in 56 characters.")
 
     output = args.output.expanduser().resolve()
     control = output / "control.sock"

@@ -7,6 +7,7 @@
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/proc_internal.h>
+#include <sys/user.h>
 
 #include "native_usb_log.h"
 #include "native_usb_tasks.h"
@@ -41,7 +42,8 @@ static const char *const stack_names[] = {
     "Setup"};
 static const char *const stack_stops[] = {
     "not-requested", "not-offcpu-waiting", "complete", "frame-limit", "deadline",
-    "invalid-frame", "pmap-busy", "page-busy", "not-resident", "mapping-changed", "unsupported"};
+    "invalid-frame", "pmap-busy", "page-busy", "not-resident", "mapping-changed", "unsupported",
+    "no-attached-stack", "continuation"};
 
 static void tasks_emit(const char *format, ...) __printflike(1, 2);
 
@@ -57,12 +59,69 @@ static void tasks_emit(const char *format, ...)
     }
 }
 
-void native_usb_tasks_snapshot(const char *process_name)
+void native_usb_copy_wait_fields(void *bsd_thread, struct UsbThreadRow *copy)
 {
+    const struct uthread *thread = bsd_thread;
+    if (!thread) {
+        return;
+    }
+
+    copy->bsd_wait_channel = (uintptr_t)thread->uu_wchan;
+    copy->wait_fields_valid = 1;
+    const char *message = thread->uu_wmesg;
+    if (!message) {
+        return;
+    }
+
+    for (unsigned index = 0; index < sizeof(copy->wait_message) - 1; ++index) {
+        unsigned char character = message[index];
+        if (!character) {
+            break;
+        }
+        copy->wait_message[index] = character >= 32 && character < 127 ? character : '?';
+    }
+}
+
+static bool tasks_parse_target(const char *argument, char *name, size_t capacity,
+                               uint64_t *after_thread)
+{
+    strlcpy(name, argument ? argument : "", capacity);
+    char *cursor = strstr(name, " after=");
+    if (!cursor) {
+        return true;
+    }
+    *cursor = '\0';
+    cursor += sizeof(" after=") - 1;
+    if (!name[0] || !cursor[0]) {
+        return false;
+    }
+
+    while (*cursor) {
+        if (*cursor < '0' || *cursor > '9') {
+            return false;
+        }
+        unsigned digit = *cursor++ - '0';
+        if (*after_thread > (UINT64_MAX - digit) / 10) {
+            return false;
+        }
+        *after_thread = *after_thread * 10 + digit;
+    }
+    return true;
+}
+
+void native_usb_tasks_snapshot(const char *argument)
+{
+    char process_name[64];
+    uint64_t after_thread = 0;
+    if (!tasks_parse_target(argument, process_name, sizeof(process_name), &after_thread)) {
+        tasks_emit("T733 TASKS: invalid target; use tasks process-name after=thread-id\n");
+        return;
+    }
+
     unsigned sample = ++sample_number;
     unsigned examined = 0, skipped = 0, thread_rows = 0;
     bool truncated = false, timed_out = false;
-    bool targeted = process_name && process_name[0];
+    bool targeted = process_name[0];
     bool target_seen = false;
     bool seen[sizeof(focus_names) / sizeof(focus_names[0])] = {false};
     uint64_t deadline;
@@ -120,7 +179,8 @@ void native_usb_tasks_snapshot(const char *process_name)
             }
             row->first_thread = thread_rows;
             native_usb_copy_thread_rows(proc_task(process), &thread_snapshots[thread_rows],
-                                       capacity, row->focused, row->stacks, deadline, summary);
+                                       capacity, row->focused, row->stacks,
+                                       row->focused ? after_thread : 0, deadline, summary);
             row->thread_count = summary->thread_count;
             row->copied_threads = summary->copied_threads;
             row->task_busy = summary->busy;
@@ -143,6 +203,9 @@ void native_usb_tasks_snapshot(const char *process_name)
                    row->task_busy, row->name_busy, row->truncated);
         if (row->stacks) {
             const struct UsbTaskSummary *info = &row->task_info;
+            tasks_emit("T733 TASK_PAGE: sample=%u pid=%d after=%llu next=%llu more=%u cursor_found=%u\n",
+                       sample, row->pid, (unsigned long long)after_thread,
+                       (unsigned long long)info->next_thread, info->truncated, info->cursor_found);
             tasks_emit("T733 STACK_CACHE: sample=%u pid=%d name=%s valid=%u slide=0x%llx "
                        "base=0x%llx main_load=0x%llx\n",
                        sample, row->pid, row->name, info->cache_valid,
@@ -169,6 +232,26 @@ void native_usb_tasks_snapshot(const char *process_name)
                            (unsigned long long)copy->user_pc, (unsigned long long)copy->user_lr);
             }
             if (row->stacks) {
+                tasks_emit("T733 WAIT: sample=%u pid=%d tid=%llu valid=%u hint=%u channel=0x%llx message=%s\n",
+                           sample, row->pid, (unsigned long long)copy->id,
+                           copy->wait_fields_valid, copy->block_hint,
+                           (unsigned long long)copy->bsd_wait_channel, copy->wait_message);
+                tasks_emit("T733 KSTACK_REGS: sample=%u pid=%d tid=%llu sp=0x%llx fp=0x%llx lr=0x%llx\n",
+                           sample, row->pid, (unsigned long long)copy->id,
+                           (unsigned long long)copy->kernel_sp,
+                           (unsigned long long)copy->kernel_fp,
+                           (unsigned long long)copy->kernel_lr);
+                for (unsigned frame = 0; frame < copy->kernel_frame_count; ++frame) {
+                    tasks_emit("T733 KSTACK: sample=%u pid=%d tid=%llu frame=%u pc=0x%llx\n",
+                               sample, row->pid, (unsigned long long)copy->id, frame,
+                               (unsigned long long)copy->kernel_frames[frame]);
+                }
+                const char *kernel_stop = copy->kernel_stop < sizeof(stack_stops) / sizeof(stack_stops[0])
+                    ? stack_stops[copy->kernel_stop] : "unknown";
+                tasks_emit("T733 KSTACK_END: sample=%u pid=%d tid=%llu frames=%u stop=%s\n",
+                           sample, row->pid, (unsigned long long)copy->id,
+                           copy->kernel_frame_count, kernel_stop);
+
                 unsigned frame = 0;
                 if (copy->user_state_valid) {
                     tasks_emit("T733 STACK: sample=%u pid=%d tid=%llu name=%s frame=%u "

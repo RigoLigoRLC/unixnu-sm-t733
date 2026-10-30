@@ -10,10 +10,15 @@ static constexpr uint64_t kStaleMs = 1000;
 static constexpr uint16_t kSensorMasks[3] = {0x001e, 0x1f80, 0x6000};
 static constexpr int32_t kTripMilliC[3] = {110000, 108000, 108000};
 static constexpr int32_t kReleaseMilliC = 100000;
+static constexpr uint16_t kGpuSensorMask = 0x0006;
+static constexpr int32_t kGpuTripMilliC = 95000;
+static constexpr int32_t kGpuReleaseMilliC = 90000;
+static constexpr uint32_t kGpuMinimumHz = 315000000;
+static constexpr uint32_t kGpuMaximumHz = 550000000;
 
-// ThermalGroup represents the stock CPU sensor group and its hysteresis state.
+// ThermalGroup represents a CPU or GPU sensor group and its hysteresis state.
 // A complete sample permits release. Missing sensors retain an active limit;
-// one second without complete coverage also requests the minimum CPU row.
+// one second without complete coverage also requests the minimum frequency.
 struct ThermalGroup {
     int32_t maximumMilliC;
     uint64_t lastCompleteMs;
@@ -29,6 +34,7 @@ struct ThermalGroup {
 struct ThermalStatistics {
     QcomTsensSample controller[2];
     ThermalGroup group[3];
+    ThermalGroup gpu; // Controller 1 sensors 1 and 2 cover the GPU.
     uint64_t samples;
     uint64_t sampledMs;
     uint64_t mappingFailures[2];
@@ -51,9 +57,9 @@ static uint64_t monotonicMs()
 }
 
 static void updateGroup(ThermalGroup &group, const QcomTsensSample &sample,
-                        unsigned index, uint64_t now)
+                        uint16_t wanted, int32_t tripMilliC,
+                        int32_t releaseMilliC, uint64_t now)
 {
-    uint16_t wanted = kSensorMasks[index];
     group.complete = (sample.validMask & wanted) == wanted;
     int32_t maximum = -2147483647;
     bool any = false;
@@ -67,14 +73,14 @@ static void updateGroup(ThermalGroup &group, const QcomTsensSample &sample,
         }
     }
 
-    if (any && maximum >= kTripMilliC[index]) {
+    if (any && maximum >= tripMilliC) {
         group.hot = true;
     }
     if (group.complete) {
         group.maximumMilliC = maximum;
         group.lastCompleteMs = now;
         group.haveComplete = true;
-        if (maximum <= kReleaseMilliC) {
+        if (maximum <= releaseMilliC) {
             group.hot = false;
         }
     } else {
@@ -83,7 +89,7 @@ static void updateGroup(ThermalGroup &group, const QcomTsensSample &sample,
 
     group.stale = !group.haveComplete || now - group.lastCompleteMs >= kStaleMs;
     bool capped = group.hot || group.stale;
-    if (group.capped && (!group.complete || maximum > kReleaseMilliC)) {
+    if (group.capped && (!group.complete || maximum > releaseMilliC)) {
         capped = true;
     }
     if (capped != group.capped) {
@@ -101,15 +107,19 @@ static void thermalWorker(void *, wait_result_t)
     const uint16_t masks[2] = {0x7fff, 0x0fff};
     bool mapped[2] = {};
     uint32_t previousCaps[3] = {};
+    bool previousGpuCapped = true;
     for (unsigned group = 0; group < 3; ++group) {
         next.group[group].capped = true;
     }
+    next.gpu.capped = true;
 
     // selected-stock.dts CPU step trips supply these thresholds. The minimum
     // ordinary EPSS row is this port's response to a trip. The stock shared
     // apc1 voltage cooling device couples sensors 7..12 to CPU4 and CPU7.
     printf("T733 thermal: TSENS v2 poll=%u ms trips_mC=110000,108000,108000 release_mC=100000 stale_ms=1000 cap=lowest-ordinary-row\n",
            kIntervalMs);
+    printf("T733 thermal: GPU controller=1 sensors=1,2 trip_mC=%d release_mC=%d stale_ms=%llu cap_hz=%u\n",
+           kGpuTripMilliC, kGpuReleaseMilliC, kStaleMs, kGpuMinimumHz);
 
     for (;;) {
         for (unsigned controller = 0; controller < 2; ++controller) {
@@ -133,9 +143,17 @@ static void thermalWorker(void *, wait_result_t)
         next.sampledMs = monotonicMs();
         ++next.samples;
         for (unsigned group = 0; group < 3; ++group) {
-            updateGroup(next.group[group], next.controller[0], group,
-                        next.sampledMs);
+            updateGroup(next.group[group], next.controller[0], kSensorMasks[group],
+                        kTripMilliC[group], kReleaseMilliC, next.sampledMs);
         }
+
+        // A worker delay also requires a complete cool GPU sample to release.
+        if (next.gpu.haveComplete &&
+            next.sampledMs - next.gpu.lastCompleteMs >= kStaleMs) {
+            next.gpu.capped = true;
+        }
+        updateGroup(next.gpu, next.controller[1], kGpuSensorMask,
+                    kGpuTripMilliC, kGpuReleaseMilliC, next.sampledMs);
 
         uint32_t requested[3] = {
             next.group[0].capped ? 0u : UINT32_MAX,
@@ -162,6 +180,14 @@ static void thermalWorker(void *, wait_result_t)
         for (unsigned domain = 0; domain < 3; ++domain) {
             previousCaps[domain] = requested[domain];
         }
+        if (next.samples == 1 || next.gpu.capped != previousGpuCapped) {
+            printf("T733 thermal: GPU sample=%llu valid=%04x max_mC=%d complete=%u hot=%u stale=%u cap_hz=%u\n",
+                   next.samples, next.controller[1].validMask & kGpuSensorMask,
+                   next.gpu.maximumMilliC, next.gpu.complete, next.gpu.hot,
+                   next.gpu.stale, next.gpu.capped ? kGpuMinimumHz : kGpuMaximumHz);
+        }
+        previousGpuCapped = next.gpu.capped;
+
         IOSleep(kIntervalMs);
     }
 }
@@ -173,7 +199,7 @@ extern "C" void t733_thermal_start(void)
     }
     statsLock = IOLockAlloc();
     if (!statsLock) {
-        printf("T733 thermal: lock allocation failed; minimum CPU rows retained\n");
+        printf("T733 thermal: lock allocation failed; minimum CPU and GPU frequencies retained\n");
         __atomic_store_n(&started, 0u, __ATOMIC_RELEASE);
         return;
     }
@@ -184,7 +210,7 @@ extern "C" void t733_thermal_start(void)
         IOLockFree(statsLock);
         statsLock = nullptr;
         __atomic_store_n(&started, 0u, __ATOMIC_RELEASE);
-        printf("T733 thermal: worker start failed=%d; minimum CPU rows retained\n", result);
+        printf("T733 thermal: worker start failed=%d; minimum CPU and GPU frequencies retained\n", result);
         return;
     }
     thread_deallocate(thread);
@@ -197,6 +223,65 @@ extern "C" uint32_t t733_thermal_cap_khz(unsigned domain)
         return UINT32_MAX;
     }
     return __atomic_load_n(&caps[domain], __ATOMIC_ACQUIRE);
+}
+
+extern "C" uint32_t native_adreno_thermal_cap_hz(int32_t *temperatureMilliC,
+                                               uint32_t *validMask,
+                                               uint32_t *flags)
+{
+    ThermalGroup gpu = {};
+    uint64_t sampledMs = 0;
+    uint32_t valid = 0;
+    int32_t temperature = 0;
+    if (__atomic_load_n(&statsReady, __ATOMIC_ACQUIRE)) {
+        IOLockLock(statsLock);
+        gpu = statistics.gpu;
+        sampledMs = statistics.sampledMs;
+        valid = statistics.controller[1].validMask & kGpuSensorMask;
+        temperature = gpu.maximumMilliC;
+        if (valid) {
+            temperature = -2147483647;
+            for (unsigned sensor = 1; sensor <= 2; ++sensor) {
+                if ((valid & (1u << sensor)) &&
+                    statistics.controller[1].milliC[sensor] > temperature) {
+                    temperature = statistics.controller[1].milliC[sensor];
+                }
+            }
+        }
+        IOLockUnlock(statsLock);
+    }
+
+    // Both ages use the worker's CNTVCT clock, sampled after copying its data.
+    const uint64_t now = monotonicMs();
+    const bool stale = !gpu.haveComplete || now - gpu.lastCompleteMs >= kStaleMs;
+    const bool sampleStale = now - sampledMs >= kStaleMs;
+    if (sampleStale) {
+        valid = 0;
+        temperature = gpu.maximumMilliC;
+    }
+
+    uint32_t resultFlags = 0;
+    if (gpu.hot) {
+        resultFlags |= T733GpuThermalHot;
+    }
+    if (stale) {
+        resultFlags |= T733GpuThermalStale;
+    }
+    if (gpu.complete && !sampleStale) {
+        resultFlags |= T733GpuThermalComplete;
+    }
+
+    if (temperatureMilliC) {
+        *temperatureMilliC = temperature;
+    }
+    if (validMask) {
+        *validMask = valid;
+    }
+    if (flags) {
+        *flags = resultFlags;
+    }
+
+    return gpu.capped || stale ? kGpuMinimumHz : kGpuMaximumHz;
 }
 
 extern "C" void t733_thermal_dump_stats(void)

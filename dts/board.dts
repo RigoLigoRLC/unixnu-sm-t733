@@ -22,6 +22,8 @@
 
 &gpu {
     status = "okay";
+    // The stock runtime /memory/ddr_device_type selects the DDR7 bandwidth table.
+    native-adreno-ddr-type = <7>;
     native-adreno-lpac-bank = <2>;
     native-adreno-lpac-asid = <3>;
     native-adreno-lpac-slot = <4>;

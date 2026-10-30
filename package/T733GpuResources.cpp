@@ -166,6 +166,7 @@ extern "C" int native_adreno_a6xx_resources(NativeAdrenoA6xxResources *resources
         {"native-adreno-chip-id", &result.chipId},
         {"native-adreno-gmem-bytes", &result.gmemBytes},
         {"native-adreno-frequency-hz", &result.frequencyHz},
+        {"native-adreno-ddr-type", &result.ddrType},
         {"native-adreno-highest-bank-bit", &result.highestBankBit},
         {"native-adreno-gpu-bank", &result.gpuBank},
         {"native-adreno-gpu-asid", &result.gpuAsid},

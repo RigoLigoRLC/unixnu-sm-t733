@@ -1,0 +1,99 @@
+--- a/osfmk/kern/zalloc.c
++++ b/osfmk/kern/zalloc.c
+@@ -4973,4 +4973,96 @@
+ }
+ 
++/* NativeZoneSnapshot records the requested zone and zones with allocation
++ * waiters. Zone locks protect the names and the expansion owners' stack records;
++ * only copied scalars and names reach the output calls.
++ */
++void native_zone_dump_expanders(unsigned focused_zone);
++
++void
++native_zone_dump_expanders(unsigned focused_zone)
++{
++	struct NativeZoneSnapshot {
++		uint64_t event, owner[2];
++		uint32_t id, element_size, free, available, reserve, wired, maximum;
++		bool busy, exhausted, expanding, page_wait[2], vm_priv[2];
++		char name[64];
++	} rows[16] = {};
++	unsigned count = 0, examined = 0, busy = 0, omitted = 0;
++
++	zone_foreach(z) {
++		unsigned id = zone_index(z);
++		examined++;
++		if (!hw_lck_ticket_lock_try(&z->z_lock, &zone_locks_grp)) {
++			busy++;
++			if (count < sizeof(rows) / sizeof(rows[0])) {
++				rows[count].id = id;
++				rows[count].busy = true;
++				rows[count].event = (uintptr_t)&z->z_expander;
++				count++;
++			} else {
++				omitted++;
++			}
++			continue;
++		}
++		if (id != focused_zone && !z->z_expander &&
++		    !z->z_expanding_wait && !z->z_exhausted_wait) {
++			hw_lck_ticket_unlock(&z->z_lock);
++			continue;
++		}
++		if (count == sizeof(rows) / sizeof(rows[0])) {
++			omitted++;
++			hw_lck_ticket_unlock(&z->z_lock);
++			continue;
++		}
++
++		struct NativeZoneSnapshot *row = &rows[count++];
++		row->id = id;
++		row->event = (uintptr_t)&z->z_expander;
++		strlcpy(row->name, z->z_name ? z->z_name : "uninitialized",
++		    sizeof(row->name));
++		row->element_size = z->z_elem_size;
++		row->free = z->z_elems_free;
++		row->available = z->z_elems_avail;
++		row->reserve = z->z_elems_rsv;
++		row->wired = z->z_wired_cur;
++		row->maximum = z->z_wired_max;
++		row->exhausted = z->z_exhausted_wait;
++		row->expanding = z->z_expanding_wait;
++		struct zone_expand *expander = z->z_expander;
++		for (unsigned owner = 0; expander && owner < 2; owner++) {
++			row->owner[owner] = thread_tid(expander->ze_thread);
++			row->page_wait[owner] = expander->ze_pg_wait;
++			row->vm_priv[owner] = expander->ze_vm_priv;
++			expander = expander->ze_next;
++		}
++		hw_lck_ticket_unlock(&z->z_lock);
++	}
++
++	printf("NativeZone: examined=%u recorded=%u lock-busy=%u omitted=%u focus=%u\n",
++	    examined, count, busy, omitted, focused_zone);
++	for (unsigned index = 0; index < count; index++) {
++		const struct NativeZoneSnapshot *row = &rows[index];
++		if (row->busy) {
++			printf("NativeZone: id=%u lock-busy=1 event=%llx\n",
++			    row->id, (unsigned long long)row->event);
++			continue;
++		}
++		printf("NativeZone: id=%u name=%s size=%u free=%u available=%u reserve=%u\n",
++		    row->id, row->name, row->element_size, row->free,
++		    row->available, row->reserve);
++		printf("NativeZone: id=%u wired=%u maximum=%u exhausted-wait=%u "
++		    "expanding-wait=%u event=%llx\n", row->id, row->wired,
++		    row->maximum, row->exhausted, row->expanding,
++		    (unsigned long long)row->event);
++		for (unsigned owner = 0; owner < 2; owner++) {
++			if (row->owner[owner]) {
++				printf("NativeZone: id=%u owner=%llu page-wait=%u vm-priv=%u\n",
++				    row->id, (unsigned long long)row->owner[owner],
++				    row->page_wait[owner], row->vm_priv[owner]);
++			}
++		}
++	}
++}
++
+ static void
+ zone_expand_async(__unused thread_call_param_t p0, __unused thread_call_param_t p1)

@@ -1,3 +1,4 @@
 diagnostics/native-process-diagnostics.patch
 diagnostics/native-smp-entry-state.patch
 diagnostics/native-t733-page-diagnostics.patch
+diagnostics/native-zone-expander-snapshot.patch

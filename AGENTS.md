@@ -16,7 +16,11 @@ Evidence and revisions are in `docs/GPU_ASYNC_WAIT_63C_2026-10-28.md`.
 Branch boundaries are in `docs/GPU_BRANCHES_63_2026-10-28.md`.
 GPU DVFS uses the SM7325 315/450/550 MHz table with matched DDR7 votes and
 the Data A Live load policy. Implementation and capture format are in
-`docs/GPU_DVFS_71_2026-10-31.md`; device results remain pending.
+`docs/GPU_DVFS_71_2026-10-31.md`. Package 71 booted normally and completed a
+60-second capture: all three levels acknowledged with zero vote errors;
+hardware core cycles match the acknowledged average frequency. Matched GPU
+stages show 13.80% less large-copy time and 30.62%/33.77% less time in two
+full-screen render configurations. Producer losses exclude incomplete jobs.
 Full Apple4 tile/imageblock/ROG support remains deferred.
 
 The optimization branch uses metal2vulkan development 624bab39 with the upstream

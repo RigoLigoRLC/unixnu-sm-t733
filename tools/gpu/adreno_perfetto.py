@@ -47,6 +47,7 @@ TURNIP_ARGUMENTS = {
     29: "source_format", 30: "destination_format", 31: "bytes",
     32: "reserved_bytes_high_water", 33: "budget_bytes",
     34: "source_buffer", 35: "destination_image", 36: "copy_operation_id",
+    37: "copy_rows", 38: "copy_batched_draws",
 }
 COPY_ORIGINS = {
     1: "synchronize buffer contents to a shadow image",

@@ -58,6 +58,12 @@ auto操作期保存的WFI中77.82%来自既有tile完成等待。GPU关联的320
 
 两轮在相同尺寸、样本数、draw数和附件动作下，全屏8draw的GMEM/sysmem均值为5.143/7.794 ms，33draw为3.802/1.816 ms，34draw为1.622/2.712 ms。shader和texture内容没有受控重放，结果支持继续按pass选择模式。匹配样本和损失记录在sysmem目录 `render-mode-comparison.json`。
 
-72c进一步采用既有secondary记录路径处理带memoryless颜色附件的encoder，等绘制命令收集完再开始实际pass，避免提前inline开始后第一次写memoryless附件时被迫拆分。真实附件读写和feedback依赖继续由既有planner处理。该修改在AdrenoMetal `944699d`，等待构建和实机对照。
+72c采用既有secondary记录路径处理带memoryless颜色附件的encoder，等绘制命令收集完再开始实际pass，避免提前inline开始后第一次写memoryless附件时被迫拆分。真实附件读写和feedback依赖继续由既有planner处理。AdrenoMetal `944699d`、core `ffaf89d`、SM7325 `33dd07c`、设备 `3692458` 由固定tag `build/system-gpu-sync-72c-source-1` 记录。九阶段构建成功并刷入sync，部署记录为工作区 `logs/msc-20261031-024145-system-gpu-sync-72c/`。
+
+72c启动后完成60秒auto/550 MHz/DDR9采集，数据在工作区 `logs/gpu-perfetto-72c-auto-550/`。885jobs、2730硬件样本，30项计数各有2729个有效区间，shader ALU/TEX有效，OOB已释放。producer丢14110条、metadata丢2345条，host/job/sample丢0；没有无效阶段或缺失端点。
+
+保存的已提交encoder中，72b的memoryless分段为436/2753组，72c为0/2722组。匹配已记录的41条draw顺序、几何、实例数、pipeline复用及纹理描述，旧3组8+33与新21组41的encoder GPU跨度均值为12.5407/7.6793 ms，减少38.77%；render pass累加为10.7837/7.6793 ms，减少28.79%。所需slot1 clear仍执行，第二个pass的slot0/slot1 load/store消失。source1记录的slot1 load因记录时机不同而不同，完整报告保留该差异及实际Turnip附件事件。
+
+旧pass之间的6次复制移动到了新pass之前。整个job的复制累加均值为3.8616/4.1325 ms，额外clear为1.5983/0 ms。job还包含其他encoder，其余工作不同，且未采集shader二进制与纹理像素；小样本结果没有测量全局帧率提升。均值、中位数、P95、实际附件操作和全部样本在工作区 `logs/gpu72c-analysis-work/72c-vs72b-findings.txt`、同名JSON和encoder数据中。
 
 71 的基线和源码调查保存在工作区 `logs/gpu-perfetto-71-runtime-1/`。Apple3 和 CPU 性能分析继续延后。

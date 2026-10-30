@@ -14,7 +14,10 @@ written through MSC with sync complete. Runtime GPU composition is restored:
 records still show long completion waits and pauses before submission.
 Evidence and revisions are in `docs/GPU_ASYNC_WAIT_63C_2026-10-28.md`.
 Branch boundaries are in `docs/GPU_BRANCHES_63_2026-10-28.md`.
-DVFS and full Apple4 tile/imageblock/ROG support remain deferred.
+GPU DVFS uses the SM7325 315/450/550 MHz table with matched DDR7 votes and
+the Data A Live load policy. Implementation and capture format are in
+`docs/GPU_DVFS_71_2026-10-31.md`; device results remain pending.
+Full Apple4 tile/imageblock/ROG support remains deferred.
 
 The optimization branch uses metal2vulkan development 624bab39 with the upstream
 runtime patches and the SM7325 memory and synchronization policies. The user

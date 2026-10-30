@@ -86,7 +86,7 @@ static bool tasks_parse_target(const char *argument, char *name, size_t capacity
                                uint64_t *after_thread)
 {
     strlcpy(name, argument ? argument : "", capacity);
-    char *cursor = strstr(name, " after=");
+    char *cursor = strnstr(name, " after=", capacity);
     if (!cursor) {
         return true;
     }

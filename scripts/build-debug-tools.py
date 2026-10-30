@@ -73,6 +73,7 @@ def main():
          "-O2", "-g", "-Wall", "-Wextra", "-Werror", "-fstack-protector-strong",
          "-I", work / "drivers/Adreno6xx",
          DEVICE / "package/T733DebugNetwork.c", DEVICE / "package/T733GpuTrace.c",
+         DEVICE / "package/T733ShaderCapture.c",
          "-framework", "CoreFoundation",
          "-o", binary])
     entitlements = output / "entitlements.plist"
@@ -168,6 +169,7 @@ def main():
         ("preferences/backboardd-brightness.plist", 0o644,
          (DEVICE / "package/backboardd-brightness.plist").read_bytes()),
         ("addons/NativeAdrenoMetal.publish", 0o644, b"1\n"),
+        ("addons/NativeAdrenoMetal.shadercapture", 0o644, b"1\n"),
         ("addons/NativeAdrenoMetal.display-policy", 0o644, b"21H461-srgb-bgra8-1\n"),
         ("addons/NativeAdrenoMetal.clients", 0o644,
          b"backboardd\niconservicesagent\nKaleidoscopePoster\nAegirPoster\n"),

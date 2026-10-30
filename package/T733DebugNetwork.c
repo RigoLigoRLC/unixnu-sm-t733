@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
+#include "T733ShaderCapture.h"
 #include <arpa/inet.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <dlfcn.h>
@@ -651,6 +652,7 @@ int main(void)
     start_gpu_diagnostic();
     start_tools();
     t733_gpu_trace_start();
+    t733_shader_capture_start();
     enable_lockdown_connections();
     while (!stopping) {
         int listener = create_debug_listener();

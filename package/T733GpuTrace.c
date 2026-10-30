@@ -133,6 +133,13 @@ static void serve_trace(int socket, const struct TraceIoKit *api)
                 input_bytes = sizeof(NativeAdrenoTraceControl);
                 output_bytes = sizeof(NativeAdrenoTraceStatus);
                 break;
+            case NativeAdrenoMethodControlCapture:
+                input_bytes = sizeof(NativeAdrenoTraceCaptureControl);
+                output_bytes = sizeof(NativeAdrenoTraceStatus);
+                break;
+            case NativeAdrenoMethodQueryCaptureOptions:
+                output_bytes = sizeof(NativeAdrenoTraceCaptureOptions);
+                break;
             case NativeAdrenoMethodReadTrace:
                 input_bytes = sizeof(NativeAdrenoTraceRead);
                 output_bytes = sizeof(NativeAdrenoTraceChunk);
@@ -153,11 +160,13 @@ static void serve_trace(int socket, const struct TraceIoKit *api)
 
         union {
             NativeAdrenoTraceControl control;
+            NativeAdrenoTraceCaptureControl capture;
             NativeAdrenoTraceRead read;
             NativeAdrenoTraceStreamRead stream;
         } input = {0};
         union {
             NativeAdrenoTraceStatus status;
+            NativeAdrenoTraceCaptureOptions options;
             NativeAdrenoTraceChunk chunk;
         } output = {0};
         if (!transfer_bytes(socket, &input, input_bytes, false)) {
@@ -182,7 +191,9 @@ static void serve_trace(int socket, const struct TraceIoKit *api)
             result = api->call(connection, request.method, input_bytes ? &input : NULL,
                 input_bytes, output_bytes ? &output : NULL, &output_bytes);
         }
-        if (result && request.method == NativeAdrenoMethodControlTrace && connection) {
+        bool control_request = request.method == NativeAdrenoMethodControlTrace ||
+            request.method == NativeAdrenoMethodControlCapture;
+        if (result && control_request && connection) {
             output_bytes = sizeof(output.status);
             if (api->call(connection, NativeAdrenoMethodQueryTrace, NULL, 0,
                 &output.status, &output_bytes)) {

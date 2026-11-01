@@ -80,6 +80,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core", type=Path, required=True)
     parser.add_argument("--abi-directory", type=Path, required=True)
+    parser.add_argument("--system-root", type=Path, required=True,
+                        help="Mounted target OS image whose Metal libraries seed background compilation")
     args = parser.parse_args()
     core = args.core.resolve()
     cache = core / ".cache"
@@ -97,6 +99,20 @@ def main():
         environment.get("PATH", ""),
     ])
     prepare_translator(source, pin, environment, core)
+
+    system_root = args.system_root.expanduser().resolve()
+    if not system_root.is_dir():
+        raise SystemExit(f"Missing target OS image: {system_root}")
+
+    libraries = sorted("/" + path.relative_to(system_root).as_posix()
+                       for path in system_root.rglob("*.metallib") if path.is_file())
+    if not libraries:
+        raise SystemExit(f"No Metal libraries in target OS image: {system_root}")
+
+    prime_list = core / "build/prime-list.txt"
+    prime_list.parent.mkdir(parents=True, exist_ok=True)
+    prime_list.write_text("\n".join(libraries) + "\n")
+    print(f"Metal library list: {len(libraries)} entries from {system_root}", flush=True)
 
     run([rustup, "set", "auto-self-update", "disable"], environment, core)
     if not ios_toolchain_installed(rustup, environment, core):

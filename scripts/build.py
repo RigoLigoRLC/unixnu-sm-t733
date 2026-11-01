@@ -167,7 +167,8 @@ def main():
         run("turnip", [sys.executable, DEVICE / "tools/gpu/bootstrap-turnip.py",
                        "--core", base, "--build", "--abi-directory", work / "tree/drivers/Adreno6xx"])
         run("metal", [sys.executable, DEVICE / "tools/gpu/bootstrap-metal.py",
-                      "--core", base, "--abi-directory", work / "tree/drivers/Adreno6xx"])
+                      "--core", base, "--abi-directory", work / "tree/drivers/Adreno6xx",
+                      "--system-root", args.system_root.expanduser().resolve()])
         run("wallpaper", [sys.executable, base / "scripts/make-wallpaper-overlay.py",
                           args.system_root.expanduser().resolve(), wallpaper])
         run("debug-tools", [sys.executable, DEVICE / "scripts/build-debug-tools.py",

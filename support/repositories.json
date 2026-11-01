@@ -1,7 +1,7 @@
 {
   "owner": "RigoLigoRLC",
   "created_on": "2026-10-24",
-  "updated_on": "2026-10-30",
+  "updated_on": "2026-11-01",
   "visibility": "public",
   "repositories": [
     {
@@ -20,11 +20,11 @@
       "url": "https://github.com/RigoLigoRLC/unixnu-core",
       "kind": "fork",
       "upstream": "UniXNU/UniXNU",
-      "branch": "unixnu-sm-t733",
+      "branch": "rebase/unixnu-sm-t733-20261101",
       "default_branch": "unixnu-sm-t733",
-      "branch_base": "066c8d8315f83749d28bcae2faf3595718646be5",
+      "branch_base": "f0e7d5279ee7da86a3511e4c28d7eb8f27332d36",
       "description": "UniXNU core build and boot-menu adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "cd2dd1bd0d79a441424f2bd014144bd719ba56f7",
+      "adaptation_commit": "799255e680d65e265a5643d3c81a8a0744f62b34",
       "device_changes_pushed": true
     },
     {
@@ -204,7 +204,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": null,
       "description": "Qualcomm SM7325 shared SoC configuration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
-      "adaptation_commit": "f679bfb98764c76d335b96aa5c6c292b4a1b1806",
+      "adaptation_commit": "8e4b57fd366a2575d1e21fcad7ffcbc691621a1e",
       "device_changes_pushed": true
     },
     {
@@ -212,11 +212,11 @@
       "url": "https://github.com/RigoLigoRLC/unixnu-adreno6xx",
       "kind": "fork",
       "upstream": "UniXNU/Adreno740",
-      "branch": "unixnu-sm-t733",
+      "branch": "rebase/unixnu-sm-t733-20261101",
       "default_branch": "unixnu-sm-t733",
-      "branch_base": "4e0314df8ad29d52f6fa3f9383a540adcd618b87",
+      "branch_base": "a9a2cbb43b89d672e2921e19721a6438b738b17f",
       "description": "A642L GPU backend for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "4c2061757b1494fb63f58dbcfda2b11b4622dbb0",
+      "adaptation_commit": "00c65582c5248c3e1ffd0a1ff5f7986875d8e84a",
       "device_changes_pushed": true
     },
     {
@@ -224,11 +224,11 @@
       "url": "https://github.com/RigoLigoRLC/unixnu-arm-smmu4k",
       "kind": "fork",
       "upstream": "UniXNU/ArmSmmu4K",
-      "branch": "unixnu-sm-t733",
+      "branch": "rebase/unixnu-sm-t733-20261101",
       "default_branch": "unixnu-sm-t733",
-      "branch_base": "3ba92451bd44bb742d11758fbfcd3a446ecad685",
+      "branch_base": "83969cd874503e65997ff7639f7dcf3d0a92cd17",
       "description": "ARM SMMU BO mapping and page-table support for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
-      "adaptation_commit": "599ba82f96f3e10b0afbd784c040127d38e2683a",
+      "adaptation_commit": "b49b0ea8cebc0ce416ae225e124da95bb88dcb87",
       "device_changes_pushed": true
     },
     {
@@ -236,11 +236,11 @@
       "url": "https://github.com/RigoLigoRLC/unixnu-adrenometal",
       "kind": "fork",
       "upstream": "UniXNU/AdrenoMetal",
-      "branch": "unixnu-sm-t733",
+      "branch": "rebase/unixnu-sm-t733-20261101",
       "default_branch": "unixnu-sm-t733",
-      "branch_base": null,
+      "branch_base": "831a9dcbd6ac7de89a11bdaf031e07b9aadfa3c8",
       "description": "Metal frontend, memory allocation and Turnip integration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
-      "adaptation_commit": "baad47ca22b181bf0ef0d08412d3ed1f96945e16",
+      "adaptation_commit": "ac86d45f1d1d1d412f28ba3a68c31d33ba4e4021",
       "device_changes_pushed": true
     },
     {

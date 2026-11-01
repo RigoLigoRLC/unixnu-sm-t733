@@ -19,8 +19,9 @@ The user reports broader red/blue channel errors in the 74e wallpaper and icons,
 with little improvement in stutter. Core 12729b7 preserves A6xx linear-image
 swaps during GMEM transfers and is pinned for system-gpu-color-75. Details are
 in docs/GPU_COLOR_75_2026-11-01.md. All nine 75 build stages passed, and its six
-source tags are published. Deployment awaits the tablet entering MSC; the
-daemon is reachable but reports no device.
+source tags are published. The full 512 MiB FAT write and sync completed on
+2026-11-01 at 20:15. Passive USB capture is running; boot and visible color
+results await this run and the user's observation.
 
 The deployed 63b package failed Metal device creation because its userspace
 tunnel rejected the 2080-byte asynchronous wait request. Both core branches

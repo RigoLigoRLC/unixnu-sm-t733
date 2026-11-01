@@ -75,6 +75,7 @@ bash tools/build-t733-recovery.sh TAG --system --payload-only \
 | `system-gpu-upstream-74b` | 改用 OS17 任务策略接口；其内部 C 头文件中的 `template` 参数名被 C++ 编译器拒绝。74c 将读取操作移入独立 C 文件，配方使用 XNU 的 C 编译记录。 |
 | `system-gpu-upstream-74c` | 内核、预链接、菜单与 Turnip 编译成功；OS 镜像未挂载，Metal 预热列表生成停止。 |
 | `system-gpu-upstream-74d` | 只读恢复已有 OS 镜像后使用相同源码，九阶段全部返回 0；166 个 Metal 库路径嵌入插件，完整 FAT 写入及 sync 成功。 |
+| `system-gpu-upstream-74e` | 修正 lazy transient image 资源登记后，九阶段全部返回 0；完整 FAT 写入及 sync 成功。 |
 
 每轮固定 tag 为 `build/TAG-source-1`，原 tag 保留。工作区
 `logs/gpu-upstream-74d-source-revisions.json` 与交付目录 `source-revisions.json`
@@ -106,10 +107,17 @@ DPU 正在读取的前帧页。DPU 等待新帧完成后才释放前帧，两者
 tasks backboardd 现场，快照保存在 `logs/gpu-upstream-74d-boot-failure/`。
 被动采集继续运行。
 
-## 74e 修复输入
+## 74e 修复与交付
 
 core `7961ae25c296ec6048d350a9741cf7dc4ce220f5` 修正 Turnip 的三个登记入口。
 `tu_cmd_use_image` 和 descriptor resource 收集跳过尚无 BO 的 transient image；
 `tu_allocate_transient_attachments` 在 GMEM/SYSMEM 决策和实际 BO 分配后，
 登记所需读写范围，包含其他录制路径已分配的 lazy BO。实际未知地址继续使用
 原有回退，GPU 与 DPU 的读取保护保持启用。其余组件沿用 74d 的固定提交。
+
+设备输入为 `fd08c9a1b2ae6da2a66439b55700f0a55d2d9b07`，六仓固定 tag 为
+`build/system-gpu-upstream-74e-source-1`，均已发布。统一完整构建九阶段返回 0；
+2026-11-01 14:12 经 MSC 写入 536870912 字节 FAT 并完成 sync。部署记录位于工作区
+`logs/msc-20261101-141207-system-gpu-upstream-74e/`，源码清单为
+`logs/gpu-upstream-74e-source-revisions.json` 和交付目录 `source-revisions.json`。
+被动 USB 采集继续运行，已通知用户完整重启固件并选择 Boot UniXNU。

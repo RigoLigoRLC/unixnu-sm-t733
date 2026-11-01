@@ -6,15 +6,13 @@ optimizations with the system BGRA8 sRGB format policy. The
 and AdrenoMetal use the same two branch names and pin matching component
 revisions. GPU and display driver revisions are shared.
 
-The current upstream GPU migration is system-gpu-upstream-74d. All nine build
+The current upstream GPU migration is system-gpu-upstream-74e. All nine build
 stages completed, followed by the full 512 MiB FAT write and sync. The source
-tag is build/system-gpu-upstream-74d-source-1; implementation, source revisions,
-earlier build failures and deployment evidence are in
-docs/GPU_UPSTREAM_REBASE_74_2026-11-01.md. The first boot reached backboardd and
-SpringBoard but remained at the Apple logo. Issued GPU jobs completed; later
-desktop jobs remain queued with display-reader dependencies. Investigation is
-using the passive USB log recorded on 2026-11-01 at 06:01 UTC. Core 7961ae2
-registers lazy transient image ranges after BO allocation and is pinned for 74e.
+tag is build/system-gpu-upstream-74e-source-1. Core 7961ae2 registers lazy
+transient image ranges after BO allocation, fixing the all-buffer dependency
+that stopped 74d at the Apple logo. Implementation, source revisions, earlier
+failures and deployment evidence are in docs/GPU_UPSTREAM_REBASE_74_2026-11-01.md.
+Passive USB capture is running for the first 74e boot.
 
 The deployed 63b package failed Metal device creation because its userspace
 tunnel rejected the 2080-byte asynchronous wait request. Both core branches

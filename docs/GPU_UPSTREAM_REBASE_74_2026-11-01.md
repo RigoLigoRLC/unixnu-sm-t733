@@ -90,4 +90,26 @@ bash tools/build-t733-recovery.sh TAG --system --payload-only \
   日志为工作区 `logs/msc-20261101-135901-system-gpu-upstream-74d/`。
 - 被动 USB：工作区 `logs/t733-usb-live/`，采集进程 25918 已启动。
 
-设备启动和 GPU 运行结果仍待本次启动日志。构建与刷入结果分别以上述记录为准。
+首次启动已进入 launchd、backboardd 和 SpringBoard，用户观察到停在苹果标。
+GPU CP scratch 成功，已发出的 17 个任务全部完成，faults 和 timeouts 均为 0。
+backboardd 的 completion 5 已接受但尚未发出，记录包含一个等待信号和一个 DPU
+读取者；后续桌面任务的 GPU 依赖逐渐累积。显示帧的 producer_ready 为 0，
+CPU transfer 返回 `e00002d6`。首帧 fence 8 已完成并执行一次 DPU 切换；后续任务因
+DeviceAddress 回退请求 SubmitAllMapped，将连接内全部映射标为读写，因而等待
+DPU 正在读取的前帧页。DPU 等待新帧完成后才释放前帧，两者形成相互等待。
+触发入口是内存懒分配的 transient image：它先保留 IOVA，使用 GMEM 时尚无 BO；
+原有资源登记无条件提交完整地址范围，找不到 BO 后进入 DeviceAddress 回退。
+修复将资源登记接到 GMEM/SYSMEM 选择及实际 BO 分配之后。帧记录中的
+`gpu_status=e00002c7` 是尚未执行元数据查询时的初始值。
+本次 USB 原始日志为工作区
+`logs/t733-usb-live/t733-20261101T060100.741857Z.raw`，包含 gpu、display 和
+tasks backboardd 现场，快照保存在 `logs/gpu-upstream-74d-boot-failure/`。
+被动采集继续运行。
+
+## 74e 修复输入
+
+core `7961ae25c296ec6048d350a9741cf7dc4ce220f5` 修正 Turnip 的三个登记入口。
+`tu_cmd_use_image` 和 descriptor resource 收集跳过尚无 BO 的 transient image；
+`tu_allocate_transient_attachments` 在 GMEM/SYSMEM 决策和实际 BO 分配后，
+登记所需读写范围，包含其他录制路径已分配的 lazy BO。实际未知地址继续使用
+原有回退，GPU 与 DPU 的读取保护保持启用。其余组件沿用 74d 的固定提交。

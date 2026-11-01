@@ -6,6 +6,12 @@ optimizations with the system BGRA8 sRGB format policy. The
 and AdrenoMetal use the same two branch names and pin matching component
 revisions. GPU and display driver revisions are shared.
 
+The current upstream GPU migration is system-gpu-upstream-74d. All nine build
+stages completed, followed by the full 512 MiB FAT write and sync. The source
+tag is build/system-gpu-upstream-74d-source-1; implementation, source revisions,
+earlier build failures and deployment evidence are in
+docs/GPU_UPSTREAM_REBASE_74_2026-11-01.md. Boot results await the passive USB log.
+
 The deployed 63b package failed Metal device creation because its userspace
 tunnel rejected the 2080-byte asynchronous wait request. Both core branches
 contain the fix. `system-gpu-opt-63c2` completed all nine build stages and was

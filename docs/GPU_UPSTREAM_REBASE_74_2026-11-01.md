@@ -73,7 +73,21 @@ bash tools/build-t733-recovery.sh TAG --system --payload-only \
 | `system-gpu-upstream-74` | 配置解析成功；主机沙箱拒绝 `sysctl`，XNU installhdrs 失败。 |
 | `system-gpu-upstream-74a` | 使用相同源码并允许主机构建权限；完成 XNU 编译记录和 GPU 之前的依赖归档，GPU 编译因 OS17 缺少 `task_get_gpu_role` 及优先级常量声明而退出。 |
 | `system-gpu-upstream-74b` | 改用 OS17 任务策略接口；其内部 C 头文件中的 `template` 参数名被 C++ 编译器拒绝。74c 将读取操作移入独立 C 文件，配方使用 XNU 的 C 编译记录。 |
+| `system-gpu-upstream-74c` | 内核、预链接、菜单与 Turnip 编译成功；OS 镜像未挂载，Metal 预热列表生成停止。 |
+| `system-gpu-upstream-74d` | 只读恢复已有 OS 镜像后使用相同源码，九阶段全部返回 0；166 个 Metal 库路径嵌入插件，完整 FAT 写入及 sync 成功。 |
 
 每轮固定 tag 为 `build/TAG-source-1`，原 tag 保留。工作区
-`logs/gpu-upstream-74-source-revisions.json` 与 `logs/gpu-upstream-74a-source-revisions.json`
-记录输入；设备 `build/releases/TAG/logs/` 保存阶段日志。本轮尚未生成可部署系统包。
+`logs/gpu-upstream-74d-source-revisions.json` 与交付目录 `source-revisions.json`
+记录成功包的输入；设备 `build/releases/TAG/logs/` 保存各轮阶段日志。
+
+## 74d 交付
+
+- 源码：device `039f160`、core `799255e`、SM7325 `5d9714c`、GPU `65cfc8e`、
+  Metal `ac86d45`、SMMU `b49b0ea`。
+- 固定 tag：`build/system-gpu-upstream-74d-source-1`，六个仓库均已发布。
+- 产物：`build/releases/system-gpu-upstream-74d/payload.img`，536870912 字节。
+- 部署：2026-11-01 13:59，重新枚举 MSC 后写入固定启动 FAT，完整写入及 sync 返回成功。
+  日志为工作区 `logs/msc-20261101-135901-system-gpu-upstream-74d/`。
+- 被动 USB：工作区 `logs/t733-usb-live/`，采集进程 25918 已启动。
+
+设备启动和 GPU 运行结果仍待本次启动日志。构建与刷入结果分别以上述记录为准。

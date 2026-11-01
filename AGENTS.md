@@ -12,7 +12,8 @@ tag is build/system-gpu-upstream-74e-source-1. Core 7961ae2 registers lazy
 transient image ranges after BO allocation, fixing the all-buffer dependency
 that stopped 74d at the Apple logo. Implementation, source revisions, earlier
 failures and deployment evidence are in docs/GPU_UPSTREAM_REBASE_74_2026-11-01.md.
-Passive USB capture is running for the first 74e boot.
+The first 74e boot completed 150 GPU submissions with zero faults/timeouts and
+zero resource fallback; all 367 recorded display completions succeeded.
 
 The deployed 63b package failed Metal device creation because its userspace
 tunnel rejected the 2080-byte asynchronous wait request. Both core branches

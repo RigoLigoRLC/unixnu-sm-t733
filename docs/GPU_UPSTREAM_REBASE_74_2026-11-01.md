@@ -121,3 +121,13 @@ core `7961ae25c296ec6048d350a9741cf7dc4ce220f5` 修正 Turnip 的三个登记入
 `logs/msc-20261101-141207-system-gpu-upstream-74e/`，源码清单为
 `logs/gpu-upstream-74e-source-revisions.json` 和交付目录 `source-revisions.json`。
 被动 USB 采集继续运行，已通知用户完整重启固件并选择 Boot UniXNU。
+
+首次启动恢复桌面渲染。原来阻塞的 completion 5 已派发到 hardware fence 9，
+返回 status 0。GPU 已发出 150 个任务并全部完成，faults/timeouts/poisoned 均为 0；
+150 条资源记录的 fallback 全为 0。367 条显示完成记录均为 status 0，
+DPU frame 推进到 5314。元数据查询有 4 条 `e00002d6`，对应显示完成仍为 0；
+最后一帧元数据查询和显示完成均成功。
+
+本次 raw 为 `logs/t733-usb-live/t733-20261101T061427.910351Z.raw`。
+首次启动和 gpu 查询快照保存在 `logs/gpu-upstream-74e-boot/`，
+其中 `frame-summary.json` 分别记录显示完成和元数据查询状态。

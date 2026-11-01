@@ -15,6 +15,11 @@ failures and deployment evidence are in docs/GPU_UPSTREAM_REBASE_74_2026-11-01.m
 The first 74e boot completed 150 GPU submissions with zero faults/timeouts and
 zero resource fallback; all 367 recorded display completions succeeded.
 
+The user reports broader red/blue channel errors in the 74e wallpaper and icons,
+with little improvement in stutter. Core 12729b7 preserves A6xx linear-image
+swaps during GMEM transfers and is pinned for system-gpu-color-75. Details are
+in docs/GPU_COLOR_75_2026-11-01.md.
+
 The deployed 63b package failed Metal device creation because its userspace
 tunnel rejected the 2080-byte asynchronous wait request. Both core branches
 contain the fix. `system-gpu-opt-63c2` completed all nine build stages and was

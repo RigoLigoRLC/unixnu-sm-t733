@@ -49,8 +49,8 @@ Turnip 继续使用固定 Mesa `85fda3b36405bcaea8bffc64aa4f2651dc90770d`，补�
 
 ## 实施与交付状态
 
-源码提交：core `799255e`、Adreno6xx `00c6558`、ArmSmmu4K `b49b0ea`、
-Metal `ac86d45`、SM7325 `8e4b57f`。core 与 GPU 模块已发布到
+源码提交：core `799255e`、Adreno6xx `ed7039b`、ArmSmmu4K `b49b0ea`、
+Metal `ac86d45`、SM7325 `8cad98b`。core 与 GPU 模块已发布到
 `rebase/unixnu-sm-t733-20261101`，SoC 保持 `unixnu-sm-t733`。
 
 Adreno6xx 将每连接 VM、ASID、动态页表、A642L 四参数 CP 页表切换、跨 VM 物理页关联

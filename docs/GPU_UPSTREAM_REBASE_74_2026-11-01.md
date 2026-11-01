@@ -49,8 +49,8 @@ Turnip 继续使用固定 Mesa `85fda3b36405bcaea8bffc64aa4f2651dc90770d`，补�
 
 ## 实施与交付状态
 
-源码提交：core `799255e`、Adreno6xx `757704d`、ArmSmmu4K `b49b0ea`、
-Metal `ac86d45`、SM7325 `157b453`。core 与 GPU 模块已发布到
+源码提交：core `799255e`、Adreno6xx `65cfc8e`、ArmSmmu4K `b49b0ea`、
+Metal `ac86d45`、SM7325 `5d9714c`。core 与 GPU 模块已发布到
 `rebase/unixnu-sm-t733-20261101`，SoC 保持 `unixnu-sm-t733`。
 
 Adreno6xx 将每连接 VM、ASID、动态页表、A642L 四参数 CP 页表切换、跨 VM 物理页关联
@@ -72,6 +72,7 @@ bash tools/build-t733-recovery.sh TAG --system --payload-only \
 | --- | --- |
 | `system-gpu-upstream-74` | 配置解析成功；主机沙箱拒绝 `sysctl`，XNU installhdrs 失败。 |
 | `system-gpu-upstream-74a` | 使用相同源码并允许主机构建权限；完成 XNU 编译记录和 GPU 之前的依赖归档，GPU 编译因 OS17 缺少 `task_get_gpu_role` 及优先级常量声明而退出。 |
+| `system-gpu-upstream-74b` | 改用 OS17 任务策略接口；其内部 C 头文件中的 `template` 参数名被 C++ 编译器拒绝。74c 将读取操作移入独立 C 文件，配方使用 XNU 的 C 编译记录。 |
 
 每轮固定 tag 为 `build/TAG-source-1`，原 tag 保留。工作区
 `logs/gpu-upstream-74-source-revisions.json` 与 `logs/gpu-upstream-74a-source-revisions.json`

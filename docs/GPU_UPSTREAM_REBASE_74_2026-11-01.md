@@ -49,8 +49,8 @@ Turnip 继续使用固定 Mesa `85fda3b36405bcaea8bffc64aa4f2651dc90770d`，补�
 
 ## 实施与交付状态
 
-源码提交：core `799255e`、Adreno6xx `ed7039b`、ArmSmmu4K `b49b0ea`、
-Metal `ac86d45`、SM7325 `8cad98b`。core 与 GPU 模块已发布到
+源码提交：core `799255e`、Adreno6xx `757704d`、ArmSmmu4K `b49b0ea`、
+Metal `ac86d45`、SM7325 `157b453`。core 与 GPU 模块已发布到
 `rebase/unixnu-sm-t733-20261101`，SoC 保持 `unixnu-sm-t733`。
 
 Adreno6xx 将每连接 VM、ASID、动态页表、A642L 四参数 CP 页表切换、跨 VM 物理页关联
@@ -58,5 +58,21 @@ Adreno6xx 将每连接 VM、ASID、动态页表、A642L 四参数 CP 页表切�
 A740 双 ring 抢占依赖 A7xx restore/SMMU 记录，SM7325 当前启动未提供这些记录，
 因此本轮未启用。新增方法为 SetPriority 43 与 Note 44，保留原有 1 到 42 的请求编号。
 
-统一构建使用 `system-gpu-upstream-74`，固定 tag 为
-`build/system-gpu-upstream-74-source-1`。当前没有本轮构建、刷入或运行结果。
+## 构建记录
+
+构建命令使用工作区统一入口：
+
+```sh
+source tools/activate.sh
+bash tools/build-t733-recovery.sh TAG --system --payload-only \
+  --local-module soc:sm7325=/Users/rigoligo/expm/unixnu-sm-t733/sources/unixnu-sm7325-common
+```
+
+| TAG | 已保存结果 |
+| --- | --- |
+| `system-gpu-upstream-74` | 配置解析成功；主机沙箱拒绝 `sysctl`，XNU installhdrs 失败。 |
+| `system-gpu-upstream-74a` | 使用相同源码并允许主机构建权限；完成 XNU 编译记录和 GPU 之前的依赖归档，GPU 编译因 OS17 缺少 `task_get_gpu_role` 及优先级常量声明而退出。 |
+
+每轮固定 tag 为 `build/TAG-source-1`，原 tag 保留。工作区
+`logs/gpu-upstream-74-source-revisions.json` 与 `logs/gpu-upstream-74a-source-revisions.json`
+记录输入；设备 `build/releases/TAG/logs/` 保存阶段日志。本轮尚未生成可部署系统包。

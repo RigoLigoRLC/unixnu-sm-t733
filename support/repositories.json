@@ -24,7 +24,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "350ddc2a23dcaea7d74d8a469259c2efcec3e4a9",
       "description": "UniXNU core build and boot-menu adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "7433e8982117786cf934e3bc97fecaf6ff9fe585",
+      "adaptation_commit": "6a33f6eb5f4ea67a57a59b7bd631738f429a62a5",
       "device_changes_pushed": true
     },
     {
@@ -204,7 +204,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": null,
       "description": "Qualcomm SM7325 shared SoC configuration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
-      "adaptation_commit": "f2c029c16ea34fc234927d22ae6ec1cb188bb6ce",
+      "adaptation_commit": "14d3ee4d62783e036b7bc9d6c3bfe88278384d40",
       "device_changes_pushed": true
     },
     {
@@ -240,7 +240,7 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "243d63cf43305a85c8119b66b49cb7df4b30b019",
       "description": "Metal frontend, memory allocation and Turnip integration for UniXNU on Samsung Galaxy Tab S7 FE Wi-Fi SM-T733",
-      "adaptation_commit": "f81ce7ce97336f5fcadadbe9f0a74e2285aa32a2",
+      "adaptation_commit": "6b46ed460a1fdb0e1248cf656b4efa6e7a576300",
       "device_changes_pushed": true
     },
     {

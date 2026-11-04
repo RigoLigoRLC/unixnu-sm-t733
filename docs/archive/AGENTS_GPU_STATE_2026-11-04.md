@@ -1,0 +1,160 @@
+# Device instructions snapshot before GPU build 76
+
+This snapshot preserves the entry state before the November 4 migration.
+Plain file paths below are relative to the device repository root. Current
+instructions are in [AGENTS.md](../../AGENTS.md); build 76 is recorded in
+[the migration document](../GPU_UPSTREAM_REBASE_76_2026-11-04.md).
+
+The `unixnu-sm-t733` branch contains GPU submission and synchronization
+optimizations with the system BGRA8 sRGB format policy. The
+`unixnu-sm-t733-apple3` branch adds the Apple3 implementation. Device, core, SoC
+and AdrenoMetal use the same two branch names and pin matching component
+revisions. GPU and display driver revisions are shared.
+
+The current upstream GPU migration is system-gpu-upstream-74e. All nine build
+stages completed, followed by the full 512 MiB FAT write and sync. The source
+tag is build/system-gpu-upstream-74e-source-1. Core 7961ae2 registers lazy
+transient image ranges after BO allocation, fixing the all-buffer dependency
+that stopped 74d at the Apple logo. Implementation, source revisions, earlier
+failures and deployment evidence are in docs/GPU_UPSTREAM_REBASE_74_2026-11-01.md.
+The first 74e boot completed 150 GPU submissions with zero faults/timeouts and
+zero resource fallback; all 367 recorded display completions succeeded.
+
+The user reports broader red/blue channel errors in the 74e wallpaper and icons,
+with little improvement in stutter. Core 12729b7 preserves A6xx linear-image
+swaps during GMEM transfers and is pinned for system-gpu-color-75. Details are
+in docs/GPU_COLOR_75_2026-11-01.md. All nine 75 build stages passed, and its six
+source tags are published. The full 512 MiB FAT write and sync completed on
+2026-11-01 at 20:15. Passive USB capture is running; boot and visible color
+results await this run and the user's observation.
+
+The deployed 63b package failed Metal device creation because its userspace
+tunnel rejected the 2080-byte asynchronous wait request. Both core branches
+contain the fix. `system-gpu-opt-63c2` completed all nine build stages and was
+written through MSC with sync complete. Runtime GPU composition is restored:
+929 submissions completed without GPU faults or timeouts. Retained operation
+records still show long completion waits and pauses before submission.
+Evidence and revisions are in `docs/GPU_ASYNC_WAIT_63C_2026-10-28.md`.
+Branch boundaries are in `docs/GPU_BRANCHES_63_2026-10-28.md`.
+GPU DVFS uses the SM7325 315/450/550 MHz table with matched DDR7 votes and
+the Data A Live load policy. Implementation and capture format are in
+`docs/GPU_DVFS_71_2026-10-31.md`. Package 71 booted normally and completed a
+60-second capture: all three levels acknowledged with zero vote errors;
+hardware core cycles match the acknowledged average frequency. Matched GPU
+stages show 13.80% less large-copy time and 30.62%/33.77% less time in two
+full-screen render configurations. Producer losses exclude incomplete jobs.
+Full Apple4 tile/imageblock/ROG support remains deferred.
+
+The optimization branch uses metal2vulkan development 624bab39 with the upstream
+runtime patches and the SM7325 memory and synchronization policies. The user
+requested leaving Apple3 unchanged for this update. Source and build records
+are in `docs/GPU_UPSTREAM_M2V_65_2026-10-29.md`. The current 66e package passed all
+nine build stages and completed FAT deployment, boot and capture. Its 57 jobs
+and 56070 GPU stages have no invalid timestamps or unmatched endpoints, but
+event storage overflowed. Streaming and byte-budget fixes are implemented for
+67 in `docs/GPU_PERFETTO_STREAM_67_2026-10-30.md`; runtime validation is pending.
+Earlier data and revisions are in `docs/GPU_PERFETTO_66_2026-10-29.md`. Routine
+deployments skip backing up the previous FAT unless it represents a major improvement.
+
+The current GPU investigation measures hardware execution, shader activity,
+cache waits and GMEM traffic. CPU timing analysis is deferred. The bounded
+hardware capture package `system-gpu-hardware-64` passed all nine build stages
+and was written through MSC with sync complete. Its first capture was followed
+by a black-screen reset. CPU sampling now uses GMU AO timestamps and holds the
+performance OOB until captured jobs retire. The 64a package passed all nine
+build stages and was written through MSC with sync complete. Its 20-second
+capture completed with 886 valid samples and 276 GPU jobs, no missing records
+or reset. Mean CP-to-RB duration is 34.77 ms; longer jobs show increased
+texture activity and shader waits for texture. Do not
+restart capture on 64. Commands, failure evidence and fixed sources are in
+`docs/GPU_HARDWARE_CAPTURE_64_2026-10-29.md`.
+
+This directory is the source for UniXNU-SM-T733. The repository layout follows
+UniXNU-sheng; read README.md, docs/BUILDING.md and docs/REPOSITORY_LAYOUT.md.
+
+The published core fork is pinned by support/UniXNU.rev; its official baseline
+is recorded in support/UniXNU.upstream.rev. The UEFI fork is pinned by
+support/Mu-Silicium.rev. feeds.toml pins the public unixnu-sm7325-common profile.
+Read docs/BUILDING.md before changing patch selection or build inputs.
+The GitHub repository list is in docs/GITHUB_REPOSITORIES.md and
+support/repositories.json. All repository names and adaptation branches use
+the unixnu- prefix. The adaptation and default branch is unixnu-sm-t733;
+repository descriptions identify SM-T733 and the module purpose.
+The device adaptations are published. Thirteen driver and kit directories are
+Git submodules pinned to their published adaptation commits. Initialize them
+with git submodule update --init --recursive after cloning or updating.
+
+system-format2-48f completed seven build stages, full FAT deployment and boot.
+Its USB observations and exact log paths are in
+docs/archive/FORMAT2_2026-10-25.md; earlier memory and power observations retain
+their original build identities.
+
+- Drivers and kits in this repository override same-name upstream modules.
+  Edit these copies. Do not edit a second copy in the adjacent UniXNU checkout
+  and leave this repository unchanged.
+- XNU device patches belong in patches/t733-xnu. Keep the official patches/xnu
+  module in the assembled tree. Format 2 boards select ordered ARM64, SM7325,
+  OS and device series; the ARM64 series names the five device replacements
+  directly. The boards also explicitly select diagnostics.list while early
+  markers remain disabled. Every new patch must update its selected series
+  together with its selection manifest:
+  additions.list for functional patches, diagnostics.list or early-entry.list
+  for those optional groups. Directory presence selects no new patch. Agents
+  must name the manifest they changed. Before handing a build to deployment,
+  read that build's .cache/xnu-patch-selection.json or .cache/xnu-patches.list
+  to confirm that the build selected and applied each required patch. A missing
+  entry requires a corrected build before deployment. This is part of build
+  delivery and requires neither additional tests nor confirmation hashes.
+  Hardware drivers belong in independent public repositories referenced by
+  drivers/<Name> submodules, each carrying the unixnu topic. Board configuration
+  and component registration belong in package. Follow docs/UPSTREAMING.md for
+  the pending extraction of existing hardware code from package. Community
+  device drivers remain maintainer-owned; official-device and common-stack
+  changes may be contributed to UniXNU.
+  Shared UniXNU payload, build and menu changes are recorded in support/UniXNU.patch,
+  against support/UniXNU.upstream.rev. Bootstrap checks out the adapted core
+  commit directly; the patch is a source comparison record.
+- The system configuration is board.toml with gts7fewifi_defconfig. The platform
+  configuration uses board.platform.toml and gts7fewifi_platform_defconfig.
+  Both are complete format 2 boards. The pinned SM7325 profile owns shared DTSI,
+  configuration and kernel patches; dts/board.dts owns the device memory span.
+  components.toml retains community component sources and board archive recipes.
+  porting.toml separates the existing implementation from new build/runtime results.
+  scripts/build.py supplies the platform board through
+  an ignored device directory and the official -D option.
+  The resolved output is out/DEVICE/OS_PROFILE/CONFIG, read from status --json.
+  Public boards retain hexadecimal payload chip_id 733 for platform UUID input.
+  With personalization_from_ipsw enabled, chosen chip-id, board-id and
+  security-domain come from the selected OS identity. The original chip value
+  is carried in unixnu,platform-uuid-chip-id and consumed only by UUID generation.
+  local.toml keeps unique_chip_id private; build.py passes it through
+  UNIXNU_UNIQUE_CHIP_ID. Preserve this identity and the software keystore key.
+- Build and packaging have one owner: scripts/build.sh TAG. Driver development
+  may run in parallel; dependent compilation and packaging remain in that command.
+  Use official build kernel, build package and build payload. Prelinking belongs
+  to build kernel; do not duplicate FAT assembly in a device staging script.
+- Every build requires committed source. Commit each changed module, including
+  new files, then commit its parent gitlink and component revision together.
+  Pin the core and SoC commits before building from clean working trees. Record
+  all selected commits and the build command with an immutable build tag.
+  Private inputs and keys remain ignored. Never assign today's commits to an
+  older binary whose uncommitted source was not preserved.
+- Keep GPU optimizations on unixnu-sm-t733 and the complete Apple3 implementation
+  on unixnu-sm-t733-apple3. Use commits and build tags for individual builds.
+- Never calculate file hashes for confirmation. Keep UNIXNU_RECORD_HASHES=0.
+  Do not add or run tests unless the user requests them.
+- Kernel diagnostic output truncates near 255 bytes per call. Keep each fully
+  formatted record below 240 bytes including its newline, allowing maximum
+  field widths. Split larger records with sequence and part numbers; collectors
+  must join all parts before computing timings. This existing limit and the
+  55b repair are recorded in docs/GPU_BO_55_RUNTIME.md and
+  docs/GPU_BO_PROFILE_55.md.
+- Preserve the fixed Data seed, UUID and package/data-layout.toml during ordinary
+  FAT updates. Do not execute device writes as part of a build.
+- Keep firmware, IPSWs, extracted Apple code, images, signing keys, local identity,
+  captures and build products in ignored directories.
+- Keep each module's license. NativeUsbDebug/NOTICE and support/SOURCES.md record
+  the original authors' retained rights and absence of an explicit upstream
+  license grant; do not assign it another module's license.
+- Record actual hardware progress in docs/DRIVERS.md. Mark complete items with
+  checked boxes and strikethrough, including the date and relevant source.

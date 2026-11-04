@@ -6,63 +6,30 @@ optimizations with the system BGRA8 sRGB format policy. The
 and AdrenoMetal use the same two branch names and pin matching component
 revisions. GPU and display driver revisions are shared.
 
-The current upstream GPU migration is system-gpu-upstream-74e. All nine build
-stages completed, followed by the full 512 MiB FAT write and sync. The source
-tag is build/system-gpu-upstream-74e-source-1. Core 7961ae2 registers lazy
-transient image ranges after BO allocation, fixing the all-buffer dependency
-that stopped 74d at the Apple logo. Implementation, source revisions, earlier
-failures and deployment evidence are in docs/GPU_UPSTREAM_REBASE_74_2026-11-01.md.
-The first 74e boot completed 150 GPU submissions with zero faults/timeouts and
-zero resource fallback; all 367 recorded display completions succeeded.
+The current package is `system-gpu-upstream-76b`. All nine build stages passed,
+and the full 512 MiB FAT write and sync completed on 2026-11-04 at 23:26.
+Seven repositories publish `build/system-gpu-upstream-76b-source-1`.
+Core, Metal and GPU changes use `rebase/unixnu-sm-t733-20261104`; old histories
+and build tags remain available. Passive USB capture is running. Current
+revisions, changes, build failures and deployment evidence are in
+[the 76 migration record](docs/GPU_UPSTREAM_REBASE_76_2026-11-04.md).
 
-The user reports broader red/blue channel errors in the 74e wallpaper and icons,
-with little improvement in stutter. Core 12729b7 preserves A6xx linear-image
-swaps during GMEM transfers and is pinned for system-gpu-color-75. Details are
-in docs/GPU_COLOR_75_2026-11-01.md. All nine 75 build stages passed, and its six
-source tags are published. The full 512 MiB FAT write and sync completed on
-2026-11-01 at 20:15. Passive USB capture is running; boot and visible color
-results await this run and the user's observation.
+The update preserves A642L WB coherence, lazy resource registration, DPU
+scanout and the system BGRA8 sRGB format policy. Turnip has 32 patch layers;
+metal2vulkan 624bab39 has 39 runtime layers. The user previously reported
+stutter and red/blue errors in wallpaper and icons. The first 76b boot has
+1247 completed display reports with zero failures/errors and active DPU flips;
+visible color and interaction results await the user's observation.
+Apple3 and CPU performance analysis remain deferred.
 
-The deployed 63b package failed Metal device creation because its userspace
-tunnel rejected the 2080-byte asynchronous wait request. Both core branches
-contain the fix. `system-gpu-opt-63c2` completed all nine build stages and was
-written through MSC with sync complete. Runtime GPU composition is restored:
-929 submissions completed without GPU faults or timeouts. Retained operation
-records still show long completion waits and pauses before submission.
-Evidence and revisions are in `docs/GPU_ASYNC_WAIT_63C_2026-10-28.md`.
-Branch boundaries are in `docs/GPU_BRANCHES_63_2026-10-28.md`.
-GPU DVFS uses the SM7325 315/450/550 MHz table with matched DDR7 votes and
-the Data A Live load policy. Implementation and capture format are in
-`docs/GPU_DVFS_71_2026-10-31.md`. Package 71 booted normally and completed a
-60-second capture: all three levels acknowledged with zero vote errors;
-hardware core cycles match the acknowledged average frequency. Matched GPU
-stages show 13.80% less large-copy time and 30.62%/33.77% less time in two
-full-screen render configurations. Producer losses exclude incomplete jobs.
-Full Apple4 tile/imageblock/ROG support remains deferred.
-
-The optimization branch uses metal2vulkan development 624bab39 with the upstream
-runtime patches and the SM7325 memory and synchronization policies. The user
-requested leaving Apple3 unchanged for this update. Source and build records
-are in `docs/GPU_UPSTREAM_M2V_65_2026-10-29.md`. The current 66e package passed all
-nine build stages and completed FAT deployment, boot and capture. Its 57 jobs
-and 56070 GPU stages have no invalid timestamps or unmatched endpoints, but
-event storage overflowed. Streaming and byte-budget fixes are implemented for
-67 in `docs/GPU_PERFETTO_STREAM_67_2026-10-30.md`; runtime validation is pending.
-Earlier data and revisions are in `docs/GPU_PERFETTO_66_2026-10-29.md`. Routine
-deployments skip backing up the previous FAT unless it represents a major improvement.
-
-The current GPU investigation measures hardware execution, shader activity,
-cache waits and GMEM traffic. CPU timing analysis is deferred. The bounded
-hardware capture package `system-gpu-hardware-64` passed all nine build stages
-and was written through MSC with sync complete. Its first capture was followed
-by a black-screen reset. CPU sampling now uses GMU AO timestamps and holds the
-performance OOB until captured jobs retire. The 64a package passed all nine
-build stages and was written through MSC with sync complete. Its 20-second
-capture completed with 886 valid samples and 276 GPU jobs, no missing records
-or reset. Mean CP-to-RB duration is 34.77 ms; longer jobs show increased
-texture activity and shader waits for texture. Do not
-restart capture on 64. Commands, failure evidence and fixed sources are in
-`docs/GPU_HARDWARE_CAPTURE_64_2026-10-29.md`.
+GPU hardware sampling uses GMU AO timestamps and holds the performance OOB
+until captured jobs retire. Do not sample with package 64. Details are in
+[the 64/64a record](docs/GPU_HARDWARE_CAPTURE_64_2026-10-29.md).
+DVFS uses 315/450/550 MHz with matched DDR7 votes; see
+[the 71 record](docs/GPU_DVFS_71_2026-10-31.md).
+Routine deployment skips the previous FAT backup unless it is a major improvement.
+Earlier entry states and their evidence paths are preserved in
+[the dated archive](docs/archive/AGENTS_GPU_STATE_2026-11-04.md).
 
 This directory is the source for UniXNU-SM-T733. The repository layout follows
 UniXNU-sheng; read README.md, docs/BUILDING.md and docs/REPOSITORY_LAYOUT.md.
@@ -78,11 +45,6 @@ repository descriptions identify SM-T733 and the module purpose.
 The device adaptations are published. Thirteen driver and kit directories are
 Git submodules pinned to their published adaptation commits. Initialize them
 with git submodule update --init --recursive after cloning or updating.
-
-system-format2-48f completed seven build stages, full FAT deployment and boot.
-Its USB observations and exact log paths are in
-docs/archive/FORMAT2_2026-10-25.md; earlier memory and power observations retain
-their original build identities.
 
 - Drivers and kits in this repository override same-name upstream modules.
   Edit these copies. Do not edit a second copy in the adjacent UniXNU checkout

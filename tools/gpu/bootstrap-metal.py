@@ -121,6 +121,7 @@ def main():
     run([sys.executable, core / "scripts/build-adreno-metal-plugin.py",
          "--gpu-abi-dir", args.abi_directory.resolve(),
          "--scanout-copy", "off", "--quartzcore-display-state", "off",
+         "--single-sample", "off",
          "--turnip-replay", "off", "--turnip-debug", "", "--turnip-smoke-debug", "",
          "--shader-compiler", cache / "mesa-tools/bin/glslangValidator",
          "--skip-shader-validation"], environment, core)

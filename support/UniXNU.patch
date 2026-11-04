@@ -1,5 +1,5 @@
 diff --git a/.gitmodules b/.gitmodules
-index dff2ced..d0904e9 100644
+index 4ae1ae6..3c9308a 100644
 --- a/.gitmodules
 +++ b/.gitmodules
 @@ -24,7 +24,7 @@
@@ -21,7 +21,7 @@ index dff2ced..d0904e9 100644
  	path = kits/XnuPrelink
  	url = https://github.com/UniXNU/XnuPrelink.git
 diff --git a/components.toml b/components.toml
-index 2bbfd70..834588b 100644
+index 50bd076..bb500c7 100644
 --- a/components.toml
 +++ b/components.toml
 @@ -100,19 +100,19 @@ legacy_outputs = { "build/native-adreno/libNativeAdreno.a" = "build/adreno740/li
@@ -34,9 +34,9 @@ index 2bbfd70..834588b 100644
  function = "Metal frontend through metal2vulkan and Turnip"
  scope = "graphics"
 -repository = "https://github.com/UniXNU/AdrenoMetal.git"
--revision = "a0f0287be80a5d8aef5c6b97a6cab62129e152bd"
+-revision = "243d63cf43305a85c8119b66b49cb7df4b30b019"
 +repository = "https://github.com/RigoLigoRLC/unixnu-adrenometal.git"
-+revision = "ac86d45f1d1d1d412f28ba3a68c31d33ba4e4021"
++revision = "f81ce7ce97336f5fcadadbe9f0a74e2285aa32a2"
  path = "drivers/AdrenoMetal"
  hardware = ["Turnip Darwin backend", "kernel GPU user-client ABI"]
  os_abi = ["ipados-17.7.11-21H461"]
@@ -135,12 +135,12 @@ index 0000000..4e0718c
 +intervals represent completed render-backend timestamps; subtraction between
 +neighboring stages alone does not identify a pure wait interval.
 diff --git a/docs/drivers/adreno-metal.md b/docs/drivers/adreno-metal.md
-index 2a7e415..134717c 100644
+index 733140f..2413f8b 100644
 --- a/docs/drivers/adreno-metal.md
 +++ b/docs/drivers/adreno-metal.md
-@@ -29,6 +29,50 @@ A render pass that cannot be encoded still returns an encoder, and its command
- buffer is refused: RenderBox caches encoder methods and cannot take nil. The first problem of each process is written to the driver's
- per-process text line from the thread that hit it.
+@@ -31,6 +31,50 @@ Logical Metal queues share one Vulkan queue and kernel queue per process. The fr
+ 
+ From the resolved iOS 27 target tree:
  
 +The selected board supplies the same `NativeAdrenoABI.h` to Turnip and the plugin.
 +Turnip reads the reported ABI version and sends 16 indirect buffers in a 416-byte
@@ -187,10 +187,10 @@ index 2a7e415..134717c 100644
 +each print at most 32 entries per process.
 +
  ```sh
- python3 scripts/build-turnip-darwin.py --target ios
- python3 scripts/build-adreno-metal-plugin.py
+ python3 scripts/build-turnip-darwin.py --target ios27
+ python3 scripts/build-adreno-metal-plugin.py --target ios27
 diff --git a/docs/drivers/arm-smmu4k.md b/docs/drivers/arm-smmu4k.md
-index ccc4cde..f900306 100644
+index 45bf04f..0a25601 100644
 --- a/docs/drivers/arm-smmu4k.md
 +++ b/docs/drivers/arm-smmu4k.md
 @@ -12,6 +12,11 @@ ARM SMMUv2 native 4 KiB table kit. Builds and programs stage-1/stage-2 context t
@@ -206,12 +206,12 @@ index ccc4cde..f900306 100644
  
  ## Build
 diff --git a/docs/zh/drivers/adreno-metal.md b/docs/zh/drivers/adreno-metal.md
-index f9d7446..8998205 100644
+index beba429..3e5ca2e 100644
 --- a/docs/zh/drivers/adreno-metal.md
 +++ b/docs/zh/drivers/adreno-metal.md
-@@ -27,6 +27,42 @@ render server 的沙盒访问不到 cryptex 路径。120 Hz 下空闲桌面每 2
- encoder 的方法，不能接受 nil。每个进程的第一个问题由出错
- 的线程写入驱动的进程文本行。
+@@ -31,6 +31,42 @@ AdrenoMetal 通过 `MTLAddDevice` 发布 Metal 设备。metal2vulkan 将 AIR 翻
+ 
+ 在解析后的 iOS 27 目标构建树中执行：
  
 +板级构建向 Turnip 和插件提供同一份 `NativeAdrenoABI.h`。Turnip 按查询到的
 +ABI 版本选择提交记录：版本 1 为 16 个 IB、416 字节，版本 2 为 128 个 IB、
@@ -250,10 +250,10 @@ index f9d7446..8998205 100644
 +释放错误各自最多输出 32 条。
 +
  ```sh
- python3 scripts/build-turnip-darwin.py --target ios
- python3 scripts/build-adreno-metal-plugin.py
+ python3 scripts/build-turnip-darwin.py --target ios27
+ python3 scripts/build-adreno-metal-plugin.py --target ios27
 diff --git a/docs/zh/drivers/arm-smmu4k.md b/docs/zh/drivers/arm-smmu4k.md
-index 2186ed1..c756fb5 100644
+index a4a1875..e9ba19d 100644
 --- a/docs/zh/drivers/arm-smmu4k.md
 +++ b/docs/zh/drivers/arm-smmu4k.md
 @@ -12,6 +12,10 @@ ARM SMMUv2 原生 4 KiB 表 kit。构建并编程 stage-1/stage-2 context 表。
@@ -268,12 +268,12 @@ index 2186ed1..c756fb5 100644
  
  ## 构建
 diff --git a/drivers/AdrenoMetal b/drivers/AdrenoMetal
-index a0f0287..ac86d45 160000
+index 243d63c..f81ce7c 160000
 --- a/drivers/AdrenoMetal
 +++ b/drivers/AdrenoMetal
 @@ -1 +1 @@
--Subproject commit a0f0287be80a5d8aef5c6b97a6cab62129e152bd
-+Subproject commit ac86d45f1d1d1d412f28ba3a68c31d33ba4e4021
+-Subproject commit 243d63cf43305a85c8119b66b49cb7df4b30b019
++Subproject commit f81ce7ce97336f5fcadadbe9f0a74e2285aa32a2
 diff --git a/drivers/AppleKeyStoreState b/drivers/AppleKeyStoreState
 index 42ff83e..635b8f9 160000
 --- a/drivers/AppleKeyStoreState
@@ -854,6 +854,128 @@ index 0000000..4ac6bb3
 + 
 + begin_end_tp('copy_image_to_buffer',
 +     toggle_name='clear_blit',
+diff --git a/patches/mesa/turnip-current-queue-priorities.patch b/patches/mesa/turnip-current-queue-priorities.patch
+index 427a6f8..477a0dd 100644
+--- a/patches/mesa/turnip-current-queue-priorities.patch
++++ b/patches/mesa/turnip-current-queue-priorities.patch
+@@ -1,79 +1,49 @@
+ diff --git a/src/freedreno/vulkan/tu_knl_darwin.cc b/src/freedreno/vulkan/tu_knl_darwin.cc
++index 0551a29..dea7d3d 100644
+ --- a/src/freedreno/vulkan/tu_knl_darwin.cc
+ +++ b/src/freedreno/vulkan/tu_knl_darwin.cc
+-@@ -218,9 +218,7 @@
+-    dw.inflight_count = 0;
+-    dw.last_fence = 0;
++@@ -266,13 +266,18 @@ dw_call(struct tu_device *dev, uint32_t method, const void *in, size_t in_size,
++    return dw_call(darwin_connection_for(dev), method, in, in_size, out, out_size);
++ }
+  
+--   /* The GPU priority this process's Metal queues asked for, to the driver (NativeAdrenoMethodSetPriority): the plugin sets
+--    * METAL2VULKAN_QUEUE_PRIORITY=high when the render server opens its device (Metal's MTLGPUPriorityHigh, its foreground queue),
+--    * and the driver serves that process's work on the high ring. A process that sets nothing keeps the middle of the range. */
+-+   /* Normal until Metal queues publish their current requests. An explicit environment override is also accepted. */
+-    {
+-       const char *want = getenv("METAL2VULKAN_QUEUE_PRIORITY");
+-       NativeAdrenoAbiPriority priority = {.foreground = 1, .background = 3};
+-@@ -246,23 +244,22 @@
++-/* The frontend raises the priority of every device connection owned by this
++- * process. The device-list mutex keeps connections alive through each call. */
+++/* The frontend publishes the current priority of its live queues to every
+++ * device connection. The device-list mutex keeps connections alive through
+++ * each call, including calls that release a queue's earlier priority boost. */
++ extern "C" __attribute__((visibility("default"))) bool tu_darwin_set_priority(uint32_t foreground, uint32_t background);
+  extern "C" __attribute__((visibility("default"))) bool
+  tu_darwin_set_priority(uint32_t foreground, uint32_t background)
+  {
+--   if (!dw_priority_known)
+-+   if ((foreground != UINT32_MAX && (foreground > 5 || foreground == 3)) ||
+-+       (background != UINT32_MAX && background > 5))
+-       return false;
+--   /* A process's queues share one hardware queue here, so the most urgent request of any of its queues stands: a queue asking for less
+--    * than another queue of the same process (the render server's raised queue, the runtime's default) must not lower it. Urgency, least
+--    * to most: 3 disabled, 2 low, 1 normal, 0 high, 4 normal-high, 5 real-time. */
+ -   static const uint8_t urgency[6] = {3, 2, 1, 0, 4, 5};
+--   NativeAdrenoAbiPriority priority = dw_priority;
+--   if (foreground != 0xffffffffu && foreground <= 5 && urgency[foreground] >= urgency[priority.foreground])
+--      priority.foreground = foreground;
+--   if (background != 0xffffffffu && background <= 5 && urgency[background] >= urgency[priority.background])
+--      priority.background = background;
+--   if (priority.foreground == dw_priority.foreground && priority.background == dw_priority.background)
+--      return true;   /* nothing more urgent than what the driver already has */
+--   if (dw_call(NativeAdrenoMethodSetPriority, &priority, sizeof(priority), NULL, 0) != KERN_SUCCESS)
+--      return false;
+--   dw_priority = priority;
+--   return true;
+-+   pthread_mutex_lock(&dw.lock);
+-+   bool accepted = false;
+-+   if (dw_priority_known && dw.open) {
+-+      NativeAdrenoAbiPriority priority = dw_priority;
+-+      if (foreground != UINT32_MAX) priority.foreground = foreground;
+-+      if (background != UINT32_MAX) priority.background = background;
+-+      /* The frontend aggregates current live queues; lowering releases an old boost. */
+-+      accepted = (priority.foreground == dw_priority.foreground && priority.background == dw_priority.background) ||
+-+         dw_call(NativeAdrenoMethodSetPriority, &priority, sizeof(priority), NULL, 0) == KERN_SUCCESS;
+-+      if (accepted) dw_priority = priority;
+++   if ((foreground != UINT32_MAX && (foreground > 5 || foreground == 3)) ||
+++       (background != UINT32_MAX && background > 5)) {
+++      return false;
+ +   }
+-+   pthread_mutex_unlock(&dw.lock);
+-+   return accepted;
+- }
+++
++    pthread_mutex_lock(&profile_device_lock);
++    if (!darwin_process_priority_known) {
++       pthread_mutex_unlock(&profile_device_lock);
++@@ -280,18 +285,20 @@ tu_darwin_set_priority(uint32_t foreground, uint32_t background)
++    }
+  
+- /* A note for the kernel's log (NativeAdrenoMethodNote), from the host frontend: kind 1 a render pass, 2 a pipeline made or refused. The
+-@@ -346,7 +343,8 @@
+- static int
+- darwin_submitqueue_new(struct tu_device *dev, struct tu_queue *queue)
+- {
+--   /* The kernel client has queue 0 from open(); every submission rides the one shared ring. */
+-+   /* All Vulkan queues in this client use kernel queue 0. The kernel preserves its FIFO
+-+    * across ring/priority changes, so already-submitted sync dependencies remain ordered. */
+-    queue->msm_queue_id = 0;
+-    return 0;
+- }
+-@@ -1451,11 +1449,10 @@
+-    struct tu_darwin_queue_submit *submit = (struct tu_darwin_queue_submit *)_submit;
+-    struct tu_device *dev = queue->device;
++    NativeAdrenoAbiPriority priority = darwin_process_priority;
++-   if (foreground <= 5 && urgency[foreground] >= urgency[priority.foreground]) {
+++   if (foreground != UINT32_MAX) {
++       priority.foreground = foreground;
++    }
++-   if (background <= 5 && urgency[background] >= urgency[priority.background]) {
+++   if (background != UINT32_MAX) {
++       priority.background = background;
++    }
+  
+--   /* Every client submits to the kernel's one ring, which runs jobs in order, and each job's prologue flushes and invalidates the GPU
+--    * caches and waits for idle (NativeAdrenoRing::emitPrologue) before its buffers run. A wait on a sync already resolved to a ring
+--    * fence is therefore met by the ring itself, as msm_gem_submit() skips fences of the submitting ring's own context: the CPU does
+--    * not wait for that work to complete. A sync not yet resolved (wait-before-signal) is waited for until it is submitted, never for
+--    * its completion. */
+-+   /* Syncs belong to this client, whose Vulkan queues all use kernel queue 0.
+-+    * That queue stays on one ring until its outstanding prefix completes, including
+-+    * when its priority changes. A resolved fence therefore precedes this submission.
+-+    * Wait-before-signal still waits until the producer has submitted. */
+-    struct tu_darwin_submit_rec rec = {};
+-    rec.ns = tu_trace_clock_ns();
+-    for (uint32_t i = 0; i < wait_count; i++) {
++    bool accepted = true;
++    for (struct darwin_retire_state *retire = darwin_stats_devices;
++         retire; retire = retire->stats_next) {
+++      pthread_mutex_lock(&retire->connection.lock);
++       accepted &= dw_call(&retire->connection, NativeAdrenoMethodSetPriority,
++                            &priority, sizeof(priority), NULL, 0) == KERN_SUCCESS;
+++      pthread_mutex_unlock(&retire->connection.lock);
++    }
++    if (accepted) {
++       darwin_process_priority = priority;
 diff --git a/patches/mesa/turnip-darwin-async-submit.patch b/patches/mesa/turnip-darwin-async-submit.patch
 new file mode 100644
 index 0000000..9ff4e2f
@@ -9704,6 +9826,505 @@ index 0000000..163db5c
 +    device->has_sparse = false;
 +    device->has_sparse_prr = false;
 +    device->has_raytracing = false;
+diff --git a/patches/mesa/turnip-frame-diagnostics.patch b/patches/mesa/turnip-frame-diagnostics.patch
+index c2dd1fa..e2af190 100644
+--- a/patches/mesa/turnip-frame-diagnostics.patch
++++ b/patches/mesa/turnip-frame-diagnostics.patch
+@@ -1,24 +1,183 @@
++diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_clear_blit.cc
++index c5f4e35..edab989 100644
++--- a/src/freedreno/vulkan/tu_clear_blit.cc
+++++ b/src/freedreno/vulkan/tu_clear_blit.cc
++@@ -1,3 +1,4 @@
+++#include "tu_frame_diagnostic.h"
++ /*
++  * Copyright 2019-2020 Valve Corporation
++  * SPDX-License-Identifier: MIT
++@@ -213,8 +214,9 @@ format_to_ifmt(enum pipe_format format)
++ static uint64_t tu_gmem_side_counts[4][4];
++ 
++ void
++-tu_note_gmem_side(unsigned site, bool linear, bool mutableen, unsigned swap)
+++tu_note_gmem_side(struct tu_cmd_buffer *cmd, const struct tu_image_view *iview, unsigned site, bool linear, bool mutableen, unsigned swap)
++ {
+++   tu_frame_event(37,(uintptr_t)cmd,site,(uintptr_t)iview,(uintptr_t)iview->image,iview->vk.format,linear,mutableen,swap,iview->view.color_swap,iview->view.is_mutable);
++    p_atomic_inc(&tu_gmem_side_counts[site][0]);
++    if (swap != WZYX)
++       p_atomic_inc(&tu_gmem_side_counts[site][1]);
++@@ -1680,7 +1682,7 @@ r3d_src_gmem_load(struct tu_cmd_buffer *cmd,
++                   const struct tu_image_view *iview,
++                   uint32_t layer)
++ {
++-   tu_note_gmem_side(1, iview->image->layout[0].tile_mode == TILE6_LINEAR, false, WZYX);
+++   tu_note_gmem_side(cmd, iview, 1, iview->image->layout[0].tile_mode == TILE6_LINEAR, false, WZYX);
++    r3d_src_load<CHIP>(cmd, cs, iview, layer, VK_FILTER_NEAREST, true);
++ }
++ 
++@@ -1718,7 +1720,7 @@ r3d_src_gmem(struct tu_cmd_buffer *cmd,
++ 
++    if (!iview->view.is_mutable)
++       tu_desc_set_swap<CHIP>(desc, WZYX);
++-   tu_note_gmem_side(0, iview->image->layout[0].tile_mode == TILE6_LINEAR, false,
+++   tu_note_gmem_side(cmd, iview, 0, iview->image->layout[0].tile_mode == TILE6_LINEAR, false,
++                      iview->view.is_mutable ? iview->view.color_swap : WZYX);
++ 
++    /* If FDM offset is used, the last row and column extend beyond the
++@@ -6268,7 +6270,7 @@ store_cp_blit(struct tu_cmd_buffer *cmd,
++       src_height += tiling->tile0.height;
++    }
++ 
++-   tu_note_gmem_side(2, dst_iview->image->layout[0].tile_mode == TILE6_LINEAR, src_iview->view.is_mutable, fmt.swap);
+++   tu_note_gmem_side(cmd, dst_iview, 2, dst_iview->image->layout[0].tile_mode == TILE6_LINEAR, src_iview->view.is_mutable, fmt.swap);
++ 
++    uint64_t va = gmem_offset;
++    if (CHIP < A8XX) {
++diff --git a/src/freedreno/vulkan/tu_clear_blit.h b/src/freedreno/vulkan/tu_clear_blit.h
++index 7d59dc3..ed20f18 100644
++--- a/src/freedreno/vulkan/tu_clear_blit.h
+++++ b/src/freedreno/vulkan/tu_clear_blit.h
++@@ -107,7 +107,7 @@ tu_attachment_unpadded(struct tu_cmd_buffer *cmd, const struct tu_image_view *iv
++  * 2 a 2D store's source, 3 an input attachment read from tile memory.
++  */
++ void
++-tu_note_gmem_side(unsigned site, bool linear, bool mutableen, unsigned swap);
+++tu_note_gmem_side(struct tu_cmd_buffer *cmd, const struct tu_image_view *iview, unsigned site, bool linear, bool mutableen, unsigned swap);
++ 
++ void
++ tu_cmd_fill_buffer_addr(VkCommandBuffer commandBuffer,
++diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd_buffer.cc
++index d31937d..197c99b 100644
++--- a/src/freedreno/vulkan/tu_cmd_buffer.cc
+++++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
++@@ -1,3 +1,4 @@
+++#include "tu_frame_diagnostic.h"
++ /*
++  * Copyright © 2016 Red Hat.
++  * Copyright © 2016 Bas Nieuwenhuizen
++@@ -3102,7 +3103,7 @@ tu_emit_input_attachments(struct tu_cmd_buffer *cmd,
++ 
++       if (!iview->view.is_mutable)
++          tu_desc_set_swap<CHIP>(dst, WZYX);
++-      tu_note_gmem_side(3, iview->image->layout[0].tile_mode == TILE6_LINEAR, false,
+++      tu_note_gmem_side(cmd, iview, 3, iview->image->layout[0].tile_mode == TILE6_LINEAR, false,
++                         iview->view.is_mutable ? iview->view.color_swap : WZYX);
++ 
++       /* If FDM offset is used, the last row and column extend beyond the
++@@ -4439,6 +4440,11 @@ tu_note_pass(struct tu_cmd_buffer *cmd, bool sysmem, unsigned slot, uint64_t kpx
++    const uint32_t seq = p_atomic_inc_return(&tu_pass_seq);
++    rec.seq = seq;
++    tu_pass_ring[seq % 512] = rec;
+++   tu_frame_event(36,(uintptr_t)cmd,seq,rec.mode,rec.width,rec.height,rec.colors,rec.samples,rec.flags,rec.format,rec.swap,rec.draws,rec.ns);
+++   for(uint32_t a=0;a<cmd->state.pass->attachment_count;++a)if(cmd->state.attachments[a]) {
+++      const auto *iv=cmd->state.attachments[a];const auto *att=&cmd->state.pass->attachments[a];
+++      tu_frame_event(44,(uintptr_t)cmd,seq,a,(uintptr_t)iv,(uintptr_t)iv->image,iv->vk.format,iv->view.color_swap,iv->view.is_mutable,iv->image->layout[0].tile_mode,att->load,att->store,att->samples);
+++   }
++    return seq;
++ }
++ 
++@@ -4846,6 +4852,7 @@ VkResult
++ tu_cmd_buffer_begin(struct tu_cmd_buffer *cmd_buffer,
++                     const VkCommandBufferBeginInfo *pBeginInfo)
++ {
+++   tu_frame_event(50,(uintptr_t)cmd_buffer);
++    vk_command_buffer_begin(&cmd_buffer->vk, pBeginInfo);
++ 
++    memset(&cmd_buffer->state, 0, sizeof(cmd_buffer->state));
+ diff --git a/src/freedreno/vulkan/tu_frame_diagnostic.h b/src/freedreno/vulkan/tu_frame_diagnostic.h
++new file mode 100644
++index 0000000..afff485
+ --- /dev/null
+ +++ b/src/freedreno/vulkan/tu_frame_diagnostic.h
+-@@ -0,0 +1,16 @@
++@@ -0,0 +1,74 @@
+ +/* SPDX-License-Identifier: MIT */
+ +#pragma once
+++
+ +#include <stdint.h>
+ +#include <stdlib.h>
+++#include <string.h>
+++
+ +#ifdef __APPLE__
+-+extern "C" bool tu_darwin_frame_diagnostic(uint32_t,const void *,uint32_t);
+-+static inline void tu_frame_event(uint32_t event,uint64_t a=0,uint64_t b=0,uint64_t c=0,uint64_t d=0,uint64_t e=0,uint64_t f=0,uint64_t g=0,uint64_t h=0,uint64_t i=0,uint64_t j=0,uint64_t k=0,uint64_t l=0) {
+-+   static const bool on=getenv("SHENG_GPU_TRACE")!=nullptr;
+-+   if(!on || event)return;
+-+   /* Pass and submission records stay in this process's rings (frames.trace); none reach the kernel ring. */
+-+   struct {uint64_t seq,us;uint32_t event,pid;uint64_t v[12];} rec={0,0,event,0,{a,b,c,d,e,f,g,h,i,j,k,l}};
+-+   (void)tu_darwin_frame_diagnostic(0x7102,&rec,sizeof(rec));
+++#include <sys/sysctl.h>
+++
+++extern "C" bool tu_darwin_frame_diagnostic(uint32_t, const void *, uint32_t);
+++
+++/* The render server sends bounded pass, attachment and GMEM transfer records
+++ * to the kernel trace when SHENG_GPU_TRACE is enabled. */
+++static inline bool
+++tu_swap_trace_on()
+++{
+++   static const bool on = getenv("SHENG_GPU_TRACE") != nullptr && !strcmp(getprogname(), "backboardd");
+++   return on;
+++}
+++
+++static inline void
+++tu_frame_event(uint32_t event, uint64_t a = 0, uint64_t b = 0, uint64_t c = 0,
+++               uint64_t d = 0, uint64_t e = 0, uint64_t f = 0, uint64_t g = 0,
+++               uint64_t h = 0, uint64_t i = 0, uint64_t j = 0, uint64_t k = 0,
+++               uint64_t l = 0)
+++{
+++   if (!tu_swap_trace_on() || (event != 36 && event != 37 && event != 44)) {
+++      return;
+++   }
+++
+++   struct {
+++      uint64_t seq, us;
+++      uint32_t event, pid;
+++      uint64_t values[12];
+++   } record = {0, 0, event, 0, {a, b, c, d, e, f, g, h, i, j, k, l}};
+++   (void)tu_darwin_frame_diagnostic(0x7102, &record, sizeof(record));
+++}
+++
+++/* The sheng-tum boot argument selects GMEM ('g') or strict system memory
+++ * ('s') for colour capture. Zero leaves the ordinary render-mode policy. */
+++static inline char
+++tu_sheng_render_mode()
+++{
+++   static const char mode = [] {
+++      char args[1100] = {};
+++      size_t size = sizeof(args) - 1;
+++      const char *at = sysctlbyname("kern.bootargs", args, &size, nullptr, 0) == 0 ?
+++         strstr(args, "sheng-tum=") : nullptr;
+++      return at && (at[10] == 'g' || at[10] == 's') ? at[10] : char(0);
+++   }();
+++   return mode;
+ +}
+ +#else
+-+static inline void tu_frame_event(uint32_t,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0) {}
+++static inline char
+++tu_sheng_render_mode()
+++{
+++   return 0;
+++}
+++
+++static inline bool
+++tu_swap_trace_on()
+++{
+++   return false;
+++}
+++
+++static inline void
+++tu_frame_event(uint32_t, uint64_t = 0, uint64_t = 0, uint64_t = 0,
+++               uint64_t = 0, uint64_t = 0, uint64_t = 0, uint64_t = 0,
+++               uint64_t = 0, uint64_t = 0, uint64_t = 0, uint64_t = 0,
+++               uint64_t = 0)
+++{
+++}
+ +#endif
+ diff --git a/src/freedreno/vulkan/tu_knl_darwin.cc b/src/freedreno/vulkan/tu_knl_darwin.cc
++index dea7d3d..104e022 100644
+ --- a/src/freedreno/vulkan/tu_knl_darwin.cc
+ +++ b/src/freedreno/vulkan/tu_knl_darwin.cc
+ @@ -1,3 +1,4 @@
+@@ -26,14 +185,14 @@ diff --git a/src/freedreno/vulkan/tu_knl_darwin.cc b/src/freedreno/vulkan/tu_knl
+  /*
+   * Native Darwin kernel backend for Turnip: talks to the NativeAdreno IOKit user client (NativeAdrenoABI.h, version 1).
+   * Modelled on tu_knl_kgsl.cc (no libdrm) and tu_knl_drm_msm.cc (the client chooses GPU addresses).
+-@@ -276,6 +277,23 @@
+-    note.count = count;
+-    memcpy(note.words, words, count * sizeof(uint32_t));
+-    return dw_call(NativeAdrenoMethodNote, &note, sizeof(note), NULL, 0) == KERN_SUCCESS;
+-+}
+-+
++@@ -331,6 +332,31 @@ tu_darwin_note(uint32_t kind, const uint32_t *words, uint32_t count)
++    return accepted;
++ }
++ 
+ +extern "C" __attribute__((visibility("default"))) const char *tu_darwin_frame_build_id(void);
+-+extern "C" __attribute__((visibility("default"))) const char *tu_darwin_frame_build_id(void) {
+++extern "C" __attribute__((visibility("default"))) const char *
+++tu_darwin_frame_build_id(void)
+++{
+ +#ifdef TU_BUILD_ID_OVERRIDE
+ +   return TU_BUILD_ID_OVERRIDE;
+ +#else
+@@ -42,39 +201,58 @@ diff --git a/src/freedreno/vulkan/tu_knl_darwin.cc b/src/freedreno/vulkan/tu_knl
+ +}
+ +
+ +extern "C" __attribute__((visibility("default"))) bool
+-+tu_darwin_frame_diagnostic(uint32_t method,const void *data,uint32_t bytes)
+++tu_darwin_frame_diagnostic(uint32_t method, const void *data, uint32_t bytes)
+ +{
+-+   if(!dw.open || !data || method!=0x7102 ||
+-+      bytes!=120)return false;
+-+   return dw_call(method,data,bytes,NULL,0)==KERN_SUCCESS;
+- }
+- 
+- static void
+-@@ -1458,6 +1476,7 @@
+++   if (!data || method != 0x7102 || bytes != 120) {
+++      return false;
+++   }
+++
+++   pthread_mutex_lock(&profile_device_lock);
+++   const bool accepted = darwin_stats_devices &&
+++      dw_call(&darwin_stats_devices->connection, method, data, bytes, NULL, 0) == KERN_SUCCESS;
+++   pthread_mutex_unlock(&profile_device_lock);
+++   return accepted;
+++}
+++
++ int
++ tu_darwin_trace_call(struct tu_device *device, uint32_t method,
++                      const void *input, size_t input_size,
++@@ -3403,6 +3429,8 @@ darwin_queue_submit(struct tu_queue *queue, void *_submit,
++       pthread_mutex_lock(&dw.lock);
++       darwin_note_fence(&dw, completion);
++       pthread_mutex_unlock(&dw.lock);
+++      tu_frame_event(38, (uintptr_t)submit, completion, 0, total, trace.busy,
+++                     trace.space_wait_us, wait_count, signal_count);
++       if (u_trace_submission_data) {
++          u_trace_submission_data->gpu_ts_offset = 0;
++       }
++@@ -3413,6 +3441,7 @@ darwin_queue_submit(struct tu_queue *queue, void *_submit,
++    /* The kernel client has one ring and no GPU-side waits: wait on the CPU before submitting. */
+     for (uint32_t i = 0; i < wait_count; i++) {
+        struct vk_darwin_sync *s = container_of(waits[i].sync, struct vk_darwin_sync, vk);
+-       /* tu_queue_submit() holds submit_mutex here (tu_queue.cc), which the wait releases while it sleeps. */
+-+      tu_frame_event(43,(uintptr_t)submit,0,(uintptr_t)s,s->state,s->fence,waits[i].wait_value);
+-       while (s->state == DARWIN_SYNC_UNSIGNALED)
+-          pthread_cond_wait(&dev->timeline_cond, &dev->submit_mutex);
+-    }
+-@@ -1479,6 +1498,7 @@
+-          darwin_note_fence(chunk_fence);
+++      tu_frame_event(43, (uintptr_t)submit, 0, (uintptr_t)s, s->state, s->fence, waits[i].wait_value);
++       VkResult result = darwin_sync_wait(dev, s, UINT64_MAX);
++       if (result != VK_SUCCESS)
++          return vk_device_set_lost(&dev->vk, "wait before submit failed");
++@@ -3447,6 +3476,8 @@ darwin_queue_submit(struct tu_queue *queue, void *_submit,
++          darwin_note_fence(&dw, chunk_fence);
+           pthread_mutex_unlock(&dw.lock);
+           fence = chunk_fence;
+-+         tu_frame_event(38,(uintptr_t)submit,chunk_fence,at,count,rec.busy,rec.space_wait_us,wait_count,signal_count);
+++         tu_frame_event(38, (uintptr_t)submit, chunk_fence, at, count, trace.busy,
+++                        trace.space_wait_us, wait_count, signal_count);
+        }
++       tu_darwin_pm4_end(capture, VK_SUCCESS, fence);
+        p_atomic_set(&queue->fence, fence);
+-       rec.buffers = MIN2(total, 255u);
+-@@ -1496,6 +1516,7 @@
++@@ -3457,6 +3488,7 @@ darwin_queue_submit(struct tu_queue *queue, void *_submit,
+  
+     for (uint32_t i = 0; i < signal_count; i++) {
+        struct vk_darwin_sync *s = container_of(signals[i].sync, struct vk_darwin_sync, vk);
+-+      tu_frame_event(43,(uintptr_t)submit,1,(uintptr_t)s,s->state,fence,signals[i].signal_value);
+++      tu_frame_event(43, (uintptr_t)submit, 1, (uintptr_t)s, s->state, fence, signals[i].signal_value);
+        s->fence = fence;
+        s->state = fence ? DARWIN_SYNC_FENCE : DARWIN_SYNC_SIGNALED;
+     }
+ diff --git a/src/freedreno/vulkan/tu_queue.cc b/src/freedreno/vulkan/tu_queue.cc
++index f4b1dbe..029b856 100644
+ --- a/src/freedreno/vulkan/tu_queue.cc
+ +++ b/src/freedreno/vulkan/tu_queue.cc
+ @@ -1,3 +1,4 @@
+@@ -82,107 +260,11 @@ diff --git a/src/freedreno/vulkan/tu_queue.cc b/src/freedreno/vulkan/tu_queue.cc
+  /*
+   * Copyright © 2016 Red Hat.
+   * Copyright © 2016 Bas Nieuwenhuizen
+-@@ -476,6 +477,7 @@
++@@ -536,6 +537,7 @@ queue_submit(struct vk_queue *_queue, struct vk_queue_submit *vk_submit)
+  
+     for (uint32_t i = 0; i < cmdbuf_count; i++) {
+        struct tu_cmd_buffer *cmd_buffer = cmd_buffers[i];
+-+      tu_frame_event(42,(uintptr_t)submit,(uintptr_t)cmd_buffer,i,cmdbuf_count);
+++      tu_frame_event(42, (uintptr_t)submit, (uintptr_t)cmd_buffer, i, cmdbuf_count);
+        struct tu_cs *cs = &cmd_buffer->cs;
+  
+-       if (perf_pass_index != ~0) {
+-diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd_buffer.cc
+---- a/src/freedreno/vulkan/tu_cmd_buffer.cc
+-+++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
+-@@ -1,3 +1,4 @@
+-+#include "tu_frame_diagnostic.h"
+- /*
+-  * Copyright © 2016 Red Hat.
+-  * Copyright © 2016 Bas Nieuwenhuizen
+-@@ -2901,7 +2902,7 @@
+- 
+-       if (!iview->view.is_mutable)
+-          tu_desc_set_swap<CHIP>(dst, WZYX);
+--      tu_note_gmem_side(3, iview->image->layout[0].tile_mode == TILE6_LINEAR, false,
+-+      tu_note_gmem_side(cmd, iview, 3, iview->image->layout[0].tile_mode == TILE6_LINEAR, false,
+-                         iview->view.is_mutable ? iview->view.color_swap : WZYX);
+- 
+-       /* If FDM offset is used, the last row and column extend beyond the
+-@@ -4203,6 +4204,11 @@
+-    const uint32_t seq = p_atomic_inc_return(&tu_pass_seq);
+-    rec.seq = seq;
+-    tu_pass_ring[seq % 512] = rec;
+-+   tu_frame_event(36,(uintptr_t)cmd,seq,rec.mode,rec.width,rec.height,rec.colors,rec.samples,rec.flags,rec.format,rec.swap,rec.draws,rec.ns);
+-+   for(uint32_t a=0;a<cmd->state.pass->attachment_count;++a)if(cmd->state.attachments[a]) {
+-+      const auto *iv=cmd->state.attachments[a];const auto *att=&cmd->state.pass->attachments[a];
+-+      tu_frame_event(44,(uintptr_t)cmd,seq,a,(uintptr_t)iv,(uintptr_t)iv->image,iv->vk.format,iv->view.color_swap,iv->view.is_mutable,iv->image->layout[0].tile_mode,att->load,att->store,att->samples);
+-+   }
+-    return seq;
+- }
+- 
+-@@ -4581,6 +4587,7 @@
+- tu_cmd_buffer_begin(struct tu_cmd_buffer *cmd_buffer,
+-                     const VkCommandBufferBeginInfo *pBeginInfo)
+- {
+-+   tu_frame_event(50,(uintptr_t)cmd_buffer);
+-    vk_command_buffer_begin(&cmd_buffer->vk, pBeginInfo);
+- 
+-    memset(&cmd_buffer->state, 0, sizeof(cmd_buffer->state));
+-diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_clear_blit.cc
+---- a/src/freedreno/vulkan/tu_clear_blit.cc
+-+++ b/src/freedreno/vulkan/tu_clear_blit.cc
+-@@ -1,3 +1,4 @@
+-+#include "tu_frame_diagnostic.h"
+- /*
+-  * Copyright 2019-2020 Valve Corporation
+-  * SPDX-License-Identifier: MIT
+-@@ -213,8 +214,9 @@
+- static uint64_t tu_gmem_side_counts[4][4];
+- 
+- void
+--tu_note_gmem_side(unsigned site, bool linear, bool mutableen, unsigned swap)
+--{
+-+tu_note_gmem_side(struct tu_cmd_buffer *cmd, const struct tu_image_view *iview, unsigned site, bool linear, bool mutableen, unsigned swap)
+-+{
+-+   tu_frame_event(37,(uintptr_t)cmd,site,(uintptr_t)iview,(uintptr_t)iview->image,iview->vk.format,linear,mutableen,swap,iview->view.color_swap,iview->view.is_mutable);
+-    p_atomic_inc(&tu_gmem_side_counts[site][0]);
+-    if (swap != WZYX)
+-       p_atomic_inc(&tu_gmem_side_counts[site][1]);
+-@@ -1643,7 +1645,7 @@
+-                   const struct tu_image_view *iview,
+-                   uint32_t layer)
+- {
+--   tu_note_gmem_side(1, iview->image->layout[0].tile_mode == TILE6_LINEAR, false, WZYX);
+-+   tu_note_gmem_side(cmd, iview, 1, iview->image->layout[0].tile_mode == TILE6_LINEAR, false, WZYX);
+-    r3d_src_load<CHIP>(cmd, cs, iview, layer, VK_FILTER_NEAREST, true);
+- }
+- 
+-@@ -1681,7 +1683,7 @@
+- 
+-    if (!iview->view.is_mutable)
+-       tu_desc_set_swap<CHIP>(desc, WZYX);
+--   tu_note_gmem_side(0, iview->image->layout[0].tile_mode == TILE6_LINEAR, false,
+-+   tu_note_gmem_side(cmd, iview, 0, iview->image->layout[0].tile_mode == TILE6_LINEAR, false,
+-                      iview->view.is_mutable ? iview->view.color_swap : WZYX);
+- 
+-    /* If FDM offset is used, the last row and column extend beyond the
+-@@ -5968,7 +5970,7 @@
+-       src_height += tiling->tile0.height;
+-    }
+- 
+--   tu_note_gmem_side(2, dst_iview->image->layout[0].tile_mode == TILE6_LINEAR, src_iview->view.is_mutable, fmt.swap);
+-+   tu_note_gmem_side(cmd, dst_iview, 2, dst_iview->image->layout[0].tile_mode == TILE6_LINEAR, src_iview->view.is_mutable, fmt.swap);
+- 
+-    uint64_t va = gmem_offset;
+-    if (CHIP < A8XX) {
+-diff --git a/src/freedreno/vulkan/tu_clear_blit.h b/src/freedreno/vulkan/tu_clear_blit.h
+---- a/src/freedreno/vulkan/tu_clear_blit.h
+-+++ b/src/freedreno/vulkan/tu_clear_blit.h
+-@@ -107,7 +107,7 @@
+-  * 2 a 2D store's source, 3 an input attachment read from tile memory.
+-  */
+- void
+--tu_note_gmem_side(unsigned site, bool linear, bool mutableen, unsigned swap);
+-+tu_note_gmem_side(struct tu_cmd_buffer *cmd, const struct tu_image_view *iview, unsigned site, bool linear, bool mutableen, unsigned swap);
+- 
+- void
+- tu_cmd_fill_buffer_addr(VkCommandBuffer commandBuffer,
++       result = tu_cmd_record_result(cmd_buffer);
+diff --git a/patches/mesa/turnip-gmem-memory-side-swap.patch b/patches/mesa/turnip-gmem-memory-side-swap.patch
+index 79a89b3..3812486 100644
+--- a/patches/mesa/turnip-gmem-memory-side-swap.patch
++++ b/patches/mesa/turnip-gmem-memory-side-swap.patch
+@@ -1,15 +1,28 @@
+ diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_clear_blit.cc
++index 984d429..7d10271 100644
+ --- a/src/freedreno/vulkan/tu_clear_blit.cc
+ +++ b/src/freedreno/vulkan/tu_clear_blit.cc
+-@@ -628,6 +628,17 @@ tu_gmem_transfer_swap_fixup(uint32_t info, uint32_t swap_mask, uint32_t identity
++@@ -619,11 +619,8 @@ r2d_src_buffer_unaligned(struct tu_cmd_buffer *cmd,
++                    TPL1_A2D_SRC_TEXTURE_PITCH(CHIP, .pitch = pitch));
++ }
++ 
++-/* GMEM holds a colour in the byte order its render target writes it in: a linear image's MRT swap (WXYZ for BGRA) is already applied
++- * there, as system memory rendering writes it. A load or a store therefore moves the bytes as they are, with the identity swap on the
++- * memory side too; the image's own swap on top exchanged red and blue against what system memory rendering writes (a frame mixing
++- * both modes: the wallpaper of the lock screen 51 % exchanged in i-batch, centre redrawn in system memory correct). A mutable tiled
++- * image (MUTABLEEN) keeps its swap.
+++/* The tile side uses shader component order with identity swap. Mutable
+++ * tiled views keep their swap because MUTABLEEN changes that representation.
++  */
++ static inline uint32_t
++ tu_gmem_transfer_swap_fixup(uint32_t info, uint32_t swap_mask, uint32_t identity, bool mutable_view)
++@@ -631,6 +628,15 @@ tu_gmem_transfer_swap_fixup(uint32_t info, uint32_t swap_mask, uint32_t identity
+     return mutable_view ? info : ((info & ~swap_mask) | identity);
+  }
+  
+-+/* The memory side of a transfer between tile memory and a linear image keeps the image's own swap. Measured on the device (the plugin's
+-+ * NativeTurnipSwapTest.h, swaptest4, device and imported host memory alike): a draw leaves its colour in tile memory in shader order (it
+-+ * reads back right through an input attachment), so with the identity swap on the memory side a GMEM pass stored drawn BGRA8 colour with
+-+ * red and blue exchanged (cc6633 for 3366cc) and loaded memory into tile memory in memory order (an input attachment read the loaded
+-+ * blue as red). The tile side stays the identity (tu_gmem_transfer_swap_fixup in r3d_dst_gmem). */
+++/* The memory side keeps the image view's swap. A linear BGRA image uses
+++ * WXYZ to convert between shader component order in GMEM and BGRA bytes
+++ * in ordinary device memory or imported host memory. */
+ +static inline uint32_t
+ +tu_gmem_memory_side_info(uint32_t info)
+ +{
+@@ -19,7 +32,7 @@ diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_cle
+  template <chip CHIP>
+  static void
+  r2d_dst_impl(struct tu_cs *cs, const struct fdl6_view *iview, uint32_t layer,
+-@@ -635,8 +646,7 @@ r2d_dst_impl(struct tu_cs *cs, const struct fdl6_view *iview, uint32_t layer,
++@@ -638,8 +644,7 @@ r2d_dst_impl(struct tu_cs *cs, const struct fdl6_view *iview, uint32_t layer,
+  {
+     uint32_t dst_info = iview->RB_A2D_DEST_BUFFER_INFO;
+     if (gmem_transfer)
+@@ -29,17 +42,30 @@ diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_cle
+     enum a6xx_format fmt = (enum a6xx_format) pkt_field_get(
+        A6XX_RB_A2D_DEST_BUFFER_INFO_COLOR_FORMAT, dst_info);
+     enum pipe_format dst_format = iview->format;
+-@@ -1691,7 +1701,8 @@ r3d_src_gmem_load(struct tu_cmd_buffer *cmd,
++@@ -1709,9 +1714,9 @@ r3d_src_load(struct tu_cmd_buffer *cmd,
++       tu_desc_set_format<CHIP>(desc, tex_format);
++    }
++ 
++-   /* When loading/storing GMEM we always load the full image and don't do any
++-    * swizzling or swapping, that's done in the draw when reading/writing
++-    * GMEM, so we need to fixup the swizzle and swap.
+++   /* Loads read the full component vector. Mutable GMEM transfers use
+++    * identity sampling because their tile-side MRT applies the view's swap;
+++    * other loads keep the memory view's swap.
++     */
++    if (override_swap)
++       tu_desc_set_swap<CHIP>(desc, WZYX);
++@@ -1731,7 +1736,8 @@ r3d_src_gmem_load(struct tu_cmd_buffer *cmd,
+                    uint32_t layer)
+  {
+     tu_note_gmem_side(cmd, iview, 1, iview->image->layout[0].tile_mode == TILE6_LINEAR, false, WZYX);
+ -   r3d_src_load<CHIP>(cmd, cs, iview, layer, VK_FILTER_NEAREST, true);
+-+   /* The memory side keeps the image's own swap (tu_gmem_memory_side_info); a mutable view's stays as upstream. */
+++   /* Linear memory keeps its native swap; mutable tiled memory uses identity sampling. */
+ +   r3d_src_load<CHIP>(cmd, cs, iview, layer, VK_FILTER_NEAREST, iview->view.is_mutable);
+  }
+  
+  template <chip CHIP>
+-@@ -1776,8 +1787,7 @@ r3d_dst_impl(struct tu_cs *cs, const struct fdl6_view *iview, uint32_t layer,
++@@ -1816,8 +1822,7 @@ r3d_dst_impl(struct tu_cs *cs, const struct fdl6_view *iview, uint32_t layer,
+  {
+     uint32_t mrt_buf_info = iview->RB_MRT_BUF_INFO;
+     if (gmem_transfer)
+@@ -49,7 +75,7 @@ diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_cle
+  
+     enum a6xx_format fmt = (enum a6xx_format) pkt_field_get(
+        A6XX_RB_MRT_BUF_INFO_COLOR_FORMAT, mrt_buf_info);
+-@@ -2470,12 +2480,8 @@ event_blit_run(struct tu_cmd_buffer *cmd,
++@@ -2512,12 +2517,8 @@ event_blit_run(struct tu_cmd_buffer *cmd,
+           tu_cs_emit(cs, A6XX_RB_RESOLVE_SYSTEM_BUFFER_PITCH(blt_view->stencil_pitch).value);
+        }
+     } else {
 diff --git a/patches/mesa/turnip-gmem-mutable-swap.patch b/patches/mesa/turnip-gmem-mutable-swap.patch
 index fb1087e..5dc4338 100644
 --- a/patches/mesa/turnip-gmem-mutable-swap.patch
@@ -10586,6 +11207,176 @@ index fb1087e..5dc4338 100644
  --- a/src/freedreno/vulkan/tu_pipeline.h
  +++ b/src/freedreno/vulkan/tu_pipeline.h
  @@ -17,6 +17,19 @@
+diff --git a/patches/mesa/turnip-gmem-swap-trace.patch b/patches/mesa/turnip-gmem-swap-trace.patch
+index ee68c58..8ecce04 100644
+--- a/patches/mesa/turnip-gmem-swap-trace.patch
++++ b/patches/mesa/turnip-gmem-swap-trace.patch
+@@ -1,4 +1,5 @@
+ diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_clear_blit.cc
++index edab989..984d429 100644
+ --- a/src/freedreno/vulkan/tu_clear_blit.cc
+ +++ b/src/freedreno/vulkan/tu_clear_blit.cc
+ @@ -14,6 +14,7 @@
+@@ -9,7 +10,7 @@ diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_cle
+  
+  #include "common/freedreno_gpu_event.h"
+  #include "common/freedreno_lrz.h"
+-@@ -211,14 +212,58 @@ format_to_ifmt(enum pipe_format format)
++@@ -211,14 +212,61 @@ format_to_ifmt(enum pipe_format format)
+   * it with the identity swap. Per site (tu_gmem_side_stats): [0] transfers, [1] of them with a swap other than WZYX on the tile
+   * side, [2] with MUTABLEEN, [3] of a linear image in memory. [1] is the counter that must stay zero for linear images.
+   */
+@@ -20,7 +21,10 @@ diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_cle
+ + * swap, the view's swap and mutability, and the memory side's own registers: RB_MRT_BUF_INFO for a 3D transfer,
+ + * RB_A2D_DEST_BUFFER_INFO for a 2D one, RB_RESOLVE_SYSTEM_BUFFER_INFO for a blit event), sent again at each power of two of its
+ + * count, so a frame's thousands of transfers fit the kernel's ring. */
+-+struct tu_swap_trace_slot {uint64_t key[3];uint64_t count;};
+++struct tu_swap_trace_slot {
+++   uint64_t key[3];
+++   uint64_t count;
+++};
+ +static struct tu_swap_trace_slot tu_swap_trace_slots[256];
+ +static simple_mtx_t tu_swap_trace_lock = SIMPLE_MTX_INITIALIZER;
+ +
+@@ -71,7 +75,7 @@ diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_cle
+        p_atomic_inc(&tu_gmem_side_counts[site][1]);
+     if (mutableen)
+        p_atomic_inc(&tu_gmem_side_counts[site][2]);
+-@@ -5572,6 +5617,8 @@ tu_emit_blit(struct tu_cmd_buffer *cmd,
++@@ -5868,6 +5916,8 @@ tu_emit_blit(struct tu_cmd_buffer *cmd,
+  {
+     assert(blit_event_type != BLIT_EVENT_CLEAR);
+     uint32_t clear_mask = 0;
+@@ -81,6 +85,7 @@ diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_cle
+     /* BLIT_EVENT_STORE_AND_CLEAR would presumably swallow the
+      * BLIT_EVENT_CLEAR at the start of a renderpass, and be more efficient.
+ diff --git a/src/freedreno/vulkan/tu_clear_blit.h b/src/freedreno/vulkan/tu_clear_blit.h
++index ed20f18..37942c3 100644
+ --- a/src/freedreno/vulkan/tu_clear_blit.h
+ +++ b/src/freedreno/vulkan/tu_clear_blit.h
+ @@ -104,7 +104,8 @@ bool
+@@ -94,40 +99,41 @@ diff --git a/src/freedreno/vulkan/tu_clear_blit.h b/src/freedreno/vulkan/tu_clea
+  void
+  tu_note_gmem_side(struct tu_cmd_buffer *cmd, const struct tu_image_view *iview, unsigned site, bool linear, bool mutableen, unsigned swap);
+ diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd_buffer.cc
++index 1b43712..1ac9c8b 100644
+ --- a/src/freedreno/vulkan/tu_cmd_buffer.cc
+ +++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
+-@@ -1391,7 +1391,8 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
+-    /* TU_DEBUG(SYSMEM) still lets a pass with a transient attachment (below) render in GMEM: in system memory such a pass wrote and
+-     * read every transient attachment in DRAM (a 3048x2032 pass with RGBA16F and R32F transients took 9-12 ms of GPU time) and
+-     * backed it for good. */
+--   const bool forced_sysmem = TU_DEBUG(SYSMEM);
+-+   const char sheng_mode = tu_sheng_render_mode();
++@@ -1561,9 +1561,10 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
++                      tu_autotune::rp_key_opt rp_key)
++ {
++    const uint32_t capture_mode = tu_darwin_trace_render_mode(cmd);
+++   const char sheng_mode = capture_mode == 2 ? 's' : capture_mode == 1 ? 'g' : tu_sheng_render_mode();
++    /* TU_DEBUG(SYSMEM) permits unbacked transient attachments to stay in GMEM.
++     * An explicit capture selection still uses system memory for comparison. */
++-   const bool forced_sysmem = TU_DEBUG(SYSMEM) || capture_mode == 2;
+ +   const bool forced_sysmem = sheng_mode == 'g' ? false : sheng_mode == 's' ? true : TU_DEBUG(SYSMEM);
+  
+     /* can't fit attachments into gmem */
+     if (!cmd->state.tiling->possible) {
+-@@ -1444,7 +1445,7 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
++@@ -1616,7 +1617,7 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
+        return true;
+     }
+  
+--   if (TU_DEBUG(GMEM) && !forced_sysmem) {
++-   if ((TU_DEBUG(GMEM) || capture_mode == 1) && !forced_sysmem) {
+ +   if ((TU_DEBUG(GMEM) || sheng_mode == 'g') && !forced_sysmem) {
+-       cmd->state.rp.gmem_disable_reason = "TU_DEBUG(GMEM)";
++       cmd->state.rp.gmem_disable_reason = capture_mode == 1 ? "Capture selected gmem" : "TU_DEBUG(GMEM)";
+        return false;
+     }
+-@@ -1459,7 +1460,10 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
+-     * GMEM rendering, where it lives in tile memory alone, while SYSMEM rendering makes its memory for good
+-     * (tu_allocate_transient_attachments). The autotuner's choice, SYSMEM by default for passes of few draws, is a matter of bandwidth,
+-     * which does not weigh the memory: a 3048x2032 RGBA16F attachment is 48 MiB. */
+--   for (unsigned i = 0; i < cmd->state.pass->attachment_count; i++) {
+-+   /* sheng-tum=s (tu_sheng_render_mode) renders even those passes in system memory, backing their transient attachments at the
+-+    * pass: the colour reference for the GMEM swap trace. */
++@@ -1629,7 +1630,8 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
++ 
++    /* An unbacked memoryless attachment stays in GMEM when this pass can use
++     * tile memory. Choosing SYSMEM here would allocate its full backing BO. */
++-   for (unsigned i = 0; capture_mode != 2 && i < cmd->state.pass->attachment_count; ++i) {
+ +   const bool strict_sysmem = sheng_mode == 's';
+-+   for (unsigned i = 0; !(forced_sysmem && strict_sysmem) && i < cmd->state.pass->attachment_count; i++) {
+++   for (unsigned i = 0; !strict_sysmem && i < cmd->state.pass->attachment_count; ++i) {
+        const struct tu_image_view *iview = cmd->state.attachments[i];
+-       if (iview && !(iview->image->vk.create_flags & VK_IMAGE_CREATE_SPARSE_BINDING_BIT) && iview->image->mem &&
+-           iview->image->mem->lazy && !iview->image->mem->bo)
+-@@ -4209,10 +4213,24 @@ tu_note_pass(struct tu_cmd_buffer *cmd, bool sysmem, unsigned slot, uint64_t kpx
++       if (iview && !(iview->image->vk.create_flags & VK_IMAGE_CREATE_SPARSE_BINDING_BIT) &&
++           iview->image->mem && iview->image->mem->lazy && !iview->image->mem->bo) {
++@@ -4444,10 +4446,28 @@ tu_note_pass(struct tu_cmd_buffer *cmd, bool sysmem, unsigned slot, uint64_t kpx
+     const uint32_t seq = p_atomic_inc_return(&tu_pass_seq);
+     rec.seq = seq;
+     tu_pass_ring[seq % 512] = rec;
+@@ -144,7 +150,11 @@ diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd
+ +      const bool due = p_atomic_inc_return(&traced_passes) <= 3000 || (wide && p_atomic_inc_return(&traced_wide) <= 1000);
+ +      if (due) {
+ +         tu_frame_event(36,(uintptr_t)cmd,seq,rec.mode,rec.width,rec.height,rec.colors,rec.samples,rec.flags,rec.format,rec.swap,rec.draws,rec.ns);
+-+         for (uint32_t a = 0; a < cmd->state.pass->attachment_count; ++a) if (cmd->state.attachments[a]) {
+++         for (uint32_t a = 0; a < cmd->state.pass->attachment_count; ++a) {
+++            if (!cmd->state.attachments[a]) {
+++               continue;
+++            }
+++
+ +            const auto *iv = cmd->state.attachments[a];
+ +            const auto *att = &cmd->state.pass->attachments[a];
+ +            tu_frame_event(44,seq,a,rec.mode,(uintptr_t)iv->image,iv->vk.format,iv->view.color_swap,iv->view.is_mutable,
+@@ -156,46 +166,3 @@ diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd
+     }
+     return seq;
+  }
+-diff --git a/src/freedreno/vulkan/tu_frame_diagnostic.h b/src/freedreno/vulkan/tu_frame_diagnostic.h
+---- a/src/freedreno/vulkan/tu_frame_diagnostic.h
+-+++ b/src/freedreno/vulkan/tu_frame_diagnostic.h
+-@@ -2,15 +2,36 @@
+- #pragma once
+- #include <stdint.h>
+- #include <stdlib.h>
+-+#include <string.h>
+- #ifdef __APPLE__
+- extern "C" bool tu_darwin_frame_diagnostic(uint32_t,const void *,uint32_t);
+-+/* The GMEM swap trace (SHENG_GPU_TRACE, in the render server only): render passes (36), their attachments (44) and the transfers
+-+ * between tile memory and memory (37) reach the kernel's GPU trace. Every other Turnip event stays off. */
+-+static inline bool tu_swap_trace_on() {
+-+   static const bool on=getenv("SHENG_GPU_TRACE")!=nullptr && !strcmp(getprogname(),"backboardd");
+-+   return on;
+-+}
+- static inline void tu_frame_event(uint32_t event,uint64_t a=0,uint64_t b=0,uint64_t c=0,uint64_t d=0,uint64_t e=0,uint64_t f=0,uint64_t g=0,uint64_t h=0,uint64_t i=0,uint64_t j=0,uint64_t k=0,uint64_t l=0) {
+--   static const bool on=getenv("SHENG_GPU_TRACE")!=nullptr;
+--   if(!on || event)return;
+--   /* Pass and submission records stay in this process's rings (frames.trace); none reach the kernel ring. */
+-+   if(!tu_swap_trace_on() || (event!=36 && event!=37 && event!=44))return;
+-+   /* Other pass and submission records stay in this process's rings (frames.trace). */
+-    struct {uint64_t seq,us;uint32_t event,pid;uint64_t v[12];} rec={0,0,event,0,{a,b,c,d,e,f,g,h,i,j,k,l}};
+-    (void)tu_darwin_frame_diagnostic(0x7102,&rec,sizeof(rec));
+- }
+-+/* Boot-arg sheng-tum=g renders every pass that can in GMEM, sheng-tum=s every pass in system memory (transient attachments too):
+-+ * the colour runs of the GMEM swap check, set by the boot so their command lines stay short. 0 when absent. */
+-+#include <sys/sysctl.h>
+-+static inline char tu_sheng_render_mode() {
+-+   static char mode = 1;
+-+   if (mode == 1) {
+-+      char args[1100] = {};
+-+      size_t size = sizeof args - 1;
+-+      const char *at = sysctlbyname("kern.bootargs", args, &size, nullptr, 0) == 0 ? strstr(args, "sheng-tum=") : nullptr;
+-+      mode = at && (at[10] == 'g' || at[10] == 's') ? at[10] : 0;
+-+   }
+-+   return mode;
+-+}
+- #else
+-+static inline char tu_sheng_render_mode() {return 0;}
+-+static inline bool tu_swap_trace_on() {return false;}
+- static inline void tu_frame_event(uint32_t,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0,uint64_t=0) {}
+- #endif
 diff --git a/patches/mesa/turnip-render-mode-for-attachment-memory.patch b/patches/mesa/turnip-render-mode-for-attachment-memory.patch
 index 461ae5d..97b3035 100644
 --- a/patches/mesa/turnip-render-mode-for-attachment-memory.patch
@@ -10789,10 +11580,10 @@ index 461ae5d..97b3035 100644
 + static void tu_reset_render_pass(struct tu_cmd_buffer *cmd_buffer)
 diff --git a/patches/mesa/turnip-resource-submit-v2.patch b/patches/mesa/turnip-resource-submit-v2.patch
 new file mode 100644
-index 0000000..2b76dcc
+index 0000000..b27d546
 --- /dev/null
 +++ b/patches/mesa/turnip-resource-submit-v2.patch
-@@ -0,0 +1,3852 @@
+@@ -0,0 +1,3883 @@
 +diff --git a/src/freedreno/vulkan/tu_autotune.cc b/src/freedreno/vulkan/tu_autotune.cc
 +index d748039..fae6ea3 100644
 +--- a/src/freedreno/vulkan/tu_autotune.cc
@@ -10979,7 +11770,7 @@ index 0000000..2b76dcc
 +index bcb7724..43fb96e 100644
 +--- a/src/freedreno/vulkan/tu_cmd_buffer.cc
 ++++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
-+@@ -33,6 +33,127 @@ enum tu_cmd_buffer_status {
++@@ -33,6 +33,134 @@ enum tu_cmd_buffer_status {
 +    TU_CMD_BUFFER_STATUS_ACTIVE = 1,
 + };
 + 
@@ -11051,6 +11842,13 @@ index 0000000..2b76dcc
 ++
 ++   if (image->vk.create_flags & VK_IMAGE_CREATE_SPARSE_BINDING_BIT) {
 ++      cmd->resource_fallback_reasons |= TU_RESOURCE_FALLBACK_SPARSE;
+++      return;
+++   }
+++
+++   /* GMEM-only attachments reserve an address without allocating storage.
+++    * The render path records their range after allocating a backing BO.
+++    */
+++   if (image->mem && image->mem->lazy && !image->mem->bo) {
 ++      return;
 ++   }
 ++
@@ -11247,6 +12045,22 @@ index 0000000..2b76dcc
 +    struct tu_cb_control_point enable_cb_patch = {
 +       .type = TU_CB_CONTROL_TYPE_PATCHPOINT,
 +       .patchpoint = cb_state.nop_header,
++@@ -3805,8 +3975,15 @@ tu_allocate_transient_attachments(struct tu_cmd_buffer *cmd, bool sysmem)
++          VkResult result = tu_allocate_lazy_memory(cmd->device,
++                                                    iview->image->mem);
++          if (result != VK_SUCCESS)
++             return result;
++       }
+++
+++      /* A lazy attachment can acquire storage after render-pass recording
+++       * begins. Register it after the GMEM/SYSMEM allocation decision.
+++       */
+++      if (iview && iview->image->mem && iview->image->mem->lazy) {
+++         tu_cmd_use_image(cmd, iview->image, TU_RESOURCE_READ | TU_RESOURCE_WRITE);
+++      }
++    }
++ 
++    return VK_SUCCESS;
 +@@ -4177,6 +4340,9 @@ tu_cmd_buffer_destroy(struct vk_command_buffer *vk_cmd_buffer)
 +    struct tu_cmd_buffer *cmd_buffer =
 +       container_of(vk_cmd_buffer, struct tu_cmd_buffer, vk);
@@ -12497,7 +13311,7 @@ index 0000000..2b76dcc
 +    }
 +    return VK_SUCCESS;
 + }
-+@@ -1347,6 +1379,78 @@ tu_GetDescriptorEXT(
++@@ -1347,6 +1379,86 @@ tu_GetDescriptorEXT(
 + }
 + TU_GENX(tu_GetDescriptorEXT);
 + 
@@ -12555,6 +13369,14 @@ index 0000000..2b76dcc
 ++   if (image) {
 ++      if (image->vk.create_flags & VK_IMAGE_CREATE_SPARSE_BINDING_BIT)
 ++         *unknown = true;
+++
+++      /* Lazy input attachments are covered by the render pass when it
+++       * allocates their storage; a GMEM-only input has no backing BO.
+++       */
+++      if (image->mem && image->mem->lazy && !image->mem->bo) {
+++         return {};
+++      }
+++
 ++      return {image->iova, image->total_size, access};
 ++   }
 ++   return {};
@@ -14645,6 +15467,48 @@ index 0000000..2b76dcc
 +    union {
 +       struct {
 +          unsigned patch_type;
+diff --git a/patches/mesa/turnip-thread-render-mode.patch b/patches/mesa/turnip-thread-render-mode.patch
+index bd1a9bb..a379965 100644
+--- a/patches/mesa/turnip-thread-render-mode.patch
++++ b/patches/mesa/turnip-thread-render-mode.patch
+@@ -1,12 +1,13 @@
+ diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd_buffer.cc
++index 1ac9c8b..2cfbc83 100644
+ --- a/src/freedreno/vulkan/tu_cmd_buffer.cc
+ +++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
+-@@ -1383,6 +1383,16 @@ use_hw_binning(struct tu_cmd_buffer *cmd)
++@@ -1555,13 +1555,24 @@ use_hw_binning(struct tu_cmd_buffer *cmd)
+     return vsc->binning_possible && vsc->binning_useful;
+  }
+  
+-+/* The render mode of the calling thread's passes, for the GMEM colour order test (the plugin's NativeTurnipSwapTest.h): 's' system memory,
+-+ * 'g' GMEM where the pass can, 0 the process's mode (tu_sheng_render_mode). */
+++/* The calling thread can select GMEM ('g') or system memory ('s') for a
+++ * colour capture. Zero uses the command capture and process settings. */
+ +static thread_local char tu_thread_render_mode;
+ +extern "C" __attribute__((visibility("default"))) void tu_sheng_set_thread_render_mode(char mode);
+ +extern "C" __attribute__((visibility("default"))) void
+@@ -18,12 +19,12 @@ diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd
+  static bool
+  use_sysmem_rendering(struct tu_cmd_buffer *cmd,
+                       tu_autotune::rp_ctx_t *rp_ctx,
+-@@ -1391,7 +1401,7 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
+-    /* TU_DEBUG(SYSMEM) still lets a pass with a transient attachment (below) render in GMEM: in system memory such a pass wrote and
+-     * read every transient attachment in DRAM (a 3048x2032 pass with RGBA16F and R32F transients took 9-12 ms of GPU time) and
+-     * backed it for good. */
+--   const char sheng_mode = tu_sheng_render_mode();
+-+   const char sheng_mode = tu_thread_render_mode ? tu_thread_render_mode : tu_sheng_render_mode();
++                      tu_autotune::rp_key_opt rp_key)
++ {
++    const uint32_t capture_mode = tu_darwin_trace_render_mode(cmd);
++-   const char sheng_mode = capture_mode == 2 ? 's' : capture_mode == 1 ? 'g' : tu_sheng_render_mode();
+++   const char sheng_mode = tu_thread_render_mode ? tu_thread_render_mode :
+++      capture_mode == 2 ? 's' : capture_mode == 1 ? 'g' : tu_sheng_render_mode();
++    /* TU_DEBUG(SYSMEM) permits unbacked transient attachments to stay in GMEM.
++     * An explicit capture selection still uses system memory for comparison. */
+     const bool forced_sysmem = sheng_mode == 'g' ? false : sheng_mode == 's' ? true : TU_DEBUG(SYSMEM);
+- 
+-    /* can't fit attachments into gmem */
 diff --git a/patches/mesa/turnip-tile-store-allocation-error.patch b/patches/mesa/turnip-tile-store-allocation-error.patch
 new file mode 100644
 index 0000000..d97a374
@@ -14793,6 +15657,95 @@ index 0000000..d97a374
 + 
 +    bool has_trace_points = false;
 +    static_assert(offsetof(struct tu_cmd_buffer, vk) == 0,
+diff --git a/patches/mesa/turnip-transient-attachments-in-gmem.patch b/patches/mesa/turnip-transient-attachments-in-gmem.patch
+index 5959047..7ad97c3 100644
+--- a/patches/mesa/turnip-transient-attachments-in-gmem.patch
++++ b/patches/mesa/turnip-transient-attachments-in-gmem.patch
+@@ -1,60 +1,48 @@
+ diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd_buffer.cc
++index 197c99b..1b43712 100644
+ --- a/src/freedreno/vulkan/tu_cmd_buffer.cc
+ +++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
+-@@ -1388,10 +1388,10 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
+-                      tu_autotune::rp_ctx_t *rp_ctx,
++@@ -1561,10 +1561,9 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
+                       tu_autotune::rp_key_opt rp_key)
+  {
+--   if (TU_DEBUG(SYSMEM)) {
+--      cmd->state.rp.gmem_disable_reason = "TU_DEBUG(SYSMEM)";
++    const uint32_t capture_mode = tu_darwin_trace_render_mode(cmd);
++-   if (TU_DEBUG(SYSMEM) || capture_mode == 2) {
++-      cmd->state.rp.gmem_disable_reason = capture_mode == 2 ? "Capture selected sysmem" : "TU_DEBUG(SYSMEM)";
+ -      return true;
+ -   }
+-+   /* TU_DEBUG(SYSMEM) still lets a pass with a transient attachment (below) render in GMEM: in system memory such a pass wrote and
+-+    * read every transient attachment in DRAM (a 3048x2032 pass with RGBA16F and R32F transients took 9-12 ms of GPU time) and
+-+    * backed it for good. */
+-+   const bool forced_sysmem = TU_DEBUG(SYSMEM);
+++   /* TU_DEBUG(SYSMEM) permits unbacked transient attachments to stay in GMEM.
+++    * An explicit capture selection still uses system memory for comparison. */
+++   const bool forced_sysmem = TU_DEBUG(SYSMEM) || capture_mode == 2;
+  
+     /* can't fit attachments into gmem */
+     if (!cmd->state.tiling->possible) {
+-@@ -1444,7 +1444,7 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
++@@ -1617,7 +1616,7 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
+        return true;
+     }
+  
+--   if (TU_DEBUG(GMEM)) {
+-+   if (TU_DEBUG(GMEM) && !forced_sysmem) {
+-       cmd->state.rp.gmem_disable_reason = "TU_DEBUG(GMEM)";
++-   if (TU_DEBUG(GMEM) || capture_mode == 1) {
+++   if ((TU_DEBUG(GMEM) || capture_mode == 1) && !forced_sysmem) {
++       cmd->state.rp.gmem_disable_reason = capture_mode == 1 ? "Capture selected gmem" : "TU_DEBUG(GMEM)";
+        return false;
+     }
+-@@ -1466,6 +1466,11 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
+-          return false;
++@@ -1630,7 +1629,7 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
++ 
++    /* An unbacked memoryless attachment stays in GMEM when this pass can use
++     * tile memory. Choosing SYSMEM here would allocate its full backing BO. */
++-   for (unsigned i = 0; i < cmd->state.pass->attachment_count; ++i) {
+++   for (unsigned i = 0; capture_mode != 2 && i < cmd->state.pass->attachment_count; ++i) {
++       const struct tu_image_view *iview = cmd->state.attachments[i];
++       if (iview && !(iview->image->vk.create_flags & VK_IMAGE_CREATE_SPARSE_BINDING_BIT) &&
++           iview->image->mem && iview->image->mem->lazy && !iview->image->mem->bo) {
++@@ -1638,6 +1637,11 @@ use_sysmem_rendering(struct tu_cmd_buffer *cmd,
++       }
+     }
+  
+ +   if (forced_sysmem) {
+-+      cmd->state.rp.gmem_disable_reason = "TU_DEBUG(SYSMEM)";
+++      cmd->state.rp.gmem_disable_reason = capture_mode == 2 ? "Capture selected sysmem" : "TU_DEBUG(SYSMEM)";
+ +      return true;
+ +   }
+ +
+     tu_autotune::render_mode optimal_mode =
+        cmd->device->autotune->get_optimal_mode(cmd, rp_ctx, rp_key);
+     bool use_sysmem = optimal_mode == tu_autotune::render_mode::SYSMEM;
+-diff --git a/src/freedreno/vulkan/tu_knl_darwin.cc b/src/freedreno/vulkan/tu_knl_darwin.cc
+---- a/src/freedreno/vulkan/tu_knl_darwin.cc
+-+++ b/src/freedreno/vulkan/tu_knl_darwin.cc
+-@@ -1725,11 +1725,12 @@ tu_knl_darwin_load(struct tu_instance *instance)
+-    device->has_set_iova = !!(info->flags & NativeAdrenoDeviceClientIova);
+-    device->va_start = info->va_start;
+-    device->va_size = info->va_size;
+--   /* Lazily allocated memory only where passes may keep attachments in tile memory (darwin_sparse_vma_init). With every pass in system
+--    * memory (TU_DEBUG=sysmem) a lazy BO is backed in full at the first pass, on the render thread: 40-112 MiB wired inside
+--    * vkCmdEndRenderPass, up to 340 ms each (untagged-3f2bd680), and freed again with the memory. Without the type a memoryless
+--    * attachment is ordinary device memory, which the runtime places and keeps spare for the next one. */
+--   device->has_lazy_bos = !TU_DEBUG(SYSMEM);
+-+   /* Lazily allocated memory (darwin_sparse_vma_init) with TU_DEBUG=sysmem too: a pass with a transient attachment that has no memory
+-+    * yet renders in GMEM (use_sysmem_rendering), so Metal's memoryless textures take none. As ordinary device memory they were new
+-+    * 32-112 MiB image allocations whenever the render server held more of them than before, wired page by page (up to 309 ms in
+-+    * untagged-7718d8c9). A pass that cannot render in GMEM still backs its attachment in full at the pass
+-+    * (tu_allocate_transient_attachments). */
+-+   device->has_lazy_bos = true;
+-    device->has_sparse = false;
+-    device->has_sparse_prr = false;
+-    device->has_raytracing = false;
 diff --git a/patches/mesa/turnip-unaligned-buffer-image-batch.patch b/patches/mesa/turnip-unaligned-buffer-image-batch.patch
 new file mode 100644
 index 0000000..c23b63e
@@ -15132,7 +16085,7 @@ index 85c2cef..02c5239 100644
   			    && gIOUCFilterCallbacks->io_filter_resolver) {
   				io_filter_policy_t filterPolicy;
 diff --git a/scripts/build-adreno-metal-bridge.py b/scripts/build-adreno-metal-bridge.py
-index c5ad36d..ca4d93b 100644
+index c89881a..aecd54c 100644
 --- a/scripts/build-adreno-metal-bridge.py
 +++ b/scripts/build-adreno-metal-bridge.py
 @@ -1,7 +1,7 @@
@@ -15144,16 +16097,16 @@ index c5ad36d..ca4d93b 100644
  (runtime_examples.ll) and its function-constant fixture are assembled to AIR with llvm-as and embedded for the self-tests. Only generated build files hold local paths; nothing here
  is committed. Output: build/adreno-metal-bridge/<target>/libadreno_metal_bridge.a"""
  import argparse
-@@ -12,6 +12,8 @@ from pathlib import Path
- import shutil
+@@ -13,6 +13,8 @@ import shutil
  import subprocess
+ import tempfile
  
 +from mesa_patch_identity import validate_recorded_patches
 +
  ROOT = Path(__file__).resolve().parents[1]
  PIN = json.loads((ROOT / 'scripts/data/gpu-metal-vulkan-inputs.json').read_text())['translator']['commit']
  SOURCE = ROOT / '.cache/gpu-reference/metal2vulkan'
-@@ -22,73 +24,20 @@ parser.add_argument('--manifest-only', action='store_true',
+@@ -23,91 +25,32 @@ parser.add_argument('--manifest-only', action='store_true',
  args = parser.parse_args()
  if subprocess.check_output(['git', '-C', str(SOURCE), 'rev-parse', 'HEAD'], text=True).strip() != PIN:
      raise SystemExit('Translator revision differs from the qualified source pin')
@@ -15200,7 +16153,16 @@ index c5ad36d..ca4d93b 100644
 -    '0023-quality-of-service-on-ios.patch',
 -    # The host's diagnostics switch (SHENG_DIAG, from the boot argument sheng-diag=1): without it the stage ring and the allocation sites
 -    # keep nothing. The stage ring also marks the steps inside a batch's submission (SubmitStep: placed, gathered, vkQueueSubmit, changes).
--    '0024-diagnostics-switch-and-submit-steps.patch']]
+-    '0024-diagnostics-switch-and-submit-steps.patch',
+-    # Preserve specialized link names and source definitions; share large indexed constants and expose Vulkan allocation sizes.
+-    '0025-specialized-links-shared-constants-and-allocation-size.patch',
+-    '0026-frame-diagnostic-links.patch',
+-    '0027-bounded-image-reuse-and-retired-release.patch',
+-    '0028-guard-memory-release-test-worker.patch',
+-    '0029-latency-stage-selection.patch',
+-    # Spare image blocks have no byte limit (they age, go when a block cannot be made and on memory pressure), and the room keeper takes
+-    # a spare block before it makes a new one: the limit freed spares the render server made again within seconds, each a fresh wiring.
+-    '0030-spare-image-blocks-give-room.patch']]
 -
 -
 -def git_tree(*steps):
@@ -15240,15 +16202,39 @@ index c5ad36d..ca4d93b 100644
  out = ROOT / 'build/adreno-metal-bridge'
  out.mkdir(parents=True, exist_ok=True)
  llvm_as = next((p for p in ['/opt/homebrew/opt/llvm/bin/llvm-as', shutil.which('llvm-as') or ''] if p and Path(p).exists()), None)
-@@ -98,7 +47,6 @@ air = out / 'runtime_examples.air'
- subprocess.run([llvm_as, '-o', air, SOURCE / 'crates/metal2vulkan-validation/fixtures/public/examples/runtime_examples.ll'], check=True)
+ if not llvm_as:
+     raise SystemExit('llvm-as (LLVM 21 or newer) is required to assemble the fixture')
+-def assemble_fixture(source, target):
+-    # Preserve an unchanged include_bytes input so a frontend relink keeps its Rust archive.
++
++
++def assemble_air(source, target):
++    # Unchanged embedded AIR keeps the existing Rust archive reusable.
+     with tempfile.NamedTemporaryFile(dir=target.parent, suffix='.air', delete=False) as stream:
+         temporary = Path(stream.name)
++
+     try:
+         subprocess.run([llvm_as, '-o', temporary, source], check=True)
+         if not target.is_file() or temporary.read_bytes() != target.read_bytes():
+@@ -115,13 +58,13 @@ def assemble_fixture(source, target):
+     finally:
+         temporary.unlink(missing_ok=True)
+ 
++
+ air = out / 'runtime_examples.air'
+-assemble_fixture(SOURCE / 'crates/metal2vulkan-validation/fixtures/public/examples/runtime_examples.ll', air)
++assemble_air(SOURCE / 'crates/metal2vulkan-validation/fixtures/public/examples/runtime_examples.ll', air)
  fc_air = out / 'function_constant.air'
- subprocess.run([llvm_as, '-o', fc_air, SOURCE / 'crates/metal2vulkan-validation/fixtures/public/kernel_function_constant_gate_fold.ll'], check=True)
+-assemble_fixture(SOURCE / 'crates/metal2vulkan-validation/fixtures/public/kernel_function_constant_gate_fold.ll', fc_air)
 -# The GPU scanout's half-float conversion kernel (GpuScanoutPresenter.h), hand-written AIR.
++assemble_air(SOURCE / 'crates/metal2vulkan-validation/fixtures/public/kernel_function_constant_gate_fold.ll', fc_air)
  scanout_air = out / 'scanout_convert.air'
- subprocess.run([llvm_as, '-o', scanout_air, ROOT / 'drivers/AdrenoMetal/shaders/scanout_convert.ll'], check=True)
+-assemble_fixture(ROOT / 'drivers/AdrenoMetal/shaders/scanout_convert.ll', scanout_air)
++assemble_air(ROOT / 'drivers/AdrenoMetal/shaders/scanout_convert.ll', scanout_air)
  manifest = out / 'Cargo.toml'
-@@ -108,24 +56,27 @@ manifest.write_text('\n'.join([
+ manifest.write_text('\n'.join([
+     '[package]', 'name = "adreno-metal-bridge"', 'version = "0.1.0"', 'edition = "2024"', 'rust-version = "1.98"', '[workspace]',
+@@ -129,24 +72,27 @@ manifest.write_text('\n'.join([
      '[dependencies]',
      'metal2vulkan = { path = ' + json.dumps(str(SOURCE / 'crates/metal2vulkan')) + ', features = ["ash"] }',
      'metal2vulkan-runtime = { path = ' + json.dumps(str(SOURCE / 'crates/metal2vulkan-runtime')) + ' }',
@@ -15284,15 +16270,14 @@ index c5ad36d..ca4d93b 100644
      env['RUSTC_BOOTSTRAP'] = '1'
  target_dir = ROOT / 'build/m2v-target'
 diff --git a/scripts/build-adreno-metal-plugin.py b/scripts/build-adreno-metal-plugin.py
-index 07b64e2..7605b8c 100644
+index a593449..85348b7 100644
 --- a/scripts/build-adreno-metal-plugin.py
 +++ b/scripts/build-adreno-metal-plugin.py
-@@ -5,17 +5,47 @@ and the launchd probe daemon with its job plist (NativeAdrenoProbeDaemon.cpp).
- Output (ignored, never committed): build/adreno-metal-plugin/NativeAdrenoMetal.bundle with a 4 KiB-page ad-hoc signature, and
- trust.json with its CDHash. The bundle is staged into the Data seed by add-gpu-plugin-data.py and trusted through an extra
- owner trust module (make-owner-trust-bundle.py); neither changes the original trust modules, AMFI or any Apple signature."""
-+import argparse
+@@ -8,19 +8,53 @@ owner trust module (make-owner-trust-bundle.py); neither changes the original tr
+ import argparse
+ import hashlib
  import json
++import os
  import plistlib
  import re
  import shutil
@@ -15302,8 +16287,9 @@ index 07b64e2..7605b8c 100644
  
  ROOT = Path(__file__).resolve().parents[1]
 -# --target ios27: the arm64e build for iPadOS 27 (24A446), whose render server is an arm64e process.
--IOS27 = sys.argv[1:] == ['--target', 'ios27']
-+parser = argparse.ArgumentParser(description=__doc__)
+ parser = argparse.ArgumentParser(description=__doc__)
+-parser.add_argument('--target', choices=('ios', 'ios27'), default='ios')
+-parser.add_argument('--no-replay', action='store_true', help='omit the optional host simulation capture used by diagnostic probes')
 +parser.add_argument('--target', choices=['ios', 'ios27'], default='ios')
 +parser.add_argument('--gpu-abi-dir', type=Path, default=Path('drivers/Adreno740'),
 +                    help='directory containing the selected kernel GPU NativeAdrenoABI.h, relative to the build tree')
@@ -15313,6 +16299,10 @@ index 07b64e2..7605b8c 100644
 +                    help='read and modify display state at the addresses selected for the A740 OS image')
 +parser.add_argument('--turnip-replay', choices=['a740', 'off'], default='a740',
 +                    help='include the recorded A740 command stream in the unpublished diagnostic path')
++parser.add_argument('--no-replay', action='store_true',
++                    help='omit the host simulation command stream from diagnostic probes')
++parser.add_argument('--single-sample', choices=['on', 'off'], default='on',
++                    help='replace requested multisampling with one sample when enabled')
 +parser.add_argument('--turnip-debug', default='sysmem,nocb',
 +                    help='default TU_DEBUG for published Metal devices; an empty value leaves it unset')
 +parser.add_argument('--turnip-smoke-debug', default='nocb',
@@ -15321,7 +16311,10 @@ index 07b64e2..7605b8c 100644
 +                    help='glslc or glslangValidator executable used to compile the bundled Vulkan shaders')
 +parser.add_argument('--skip-shader-validation', action='store_true',
 +                    help='compile the bundled Vulkan shaders without invoking spirv-val')
-+args = parser.parse_args()
+ args = parser.parse_args()
++if args.no_replay:
++    args.turnip_replay = 'off'
++
 +gpu_abi_dir = (ROOT / args.gpu_abi_dir).resolve()
 +if not (gpu_abi_dir / 'NativeAdrenoABI.h').is_file():
 +    raise SystemExit('The selected GPU ABI directory must contain NativeAdrenoABI.h')
@@ -15331,29 +16324,56 @@ index 07b64e2..7605b8c 100644
 +    '-DNATIVE_ADRENO_SCANOUT_COPY=' + str(int(args.scanout_copy == 'on')),
 +    '-DNATIVE_ADRENO_QUARTZCORE_DISPLAY_STATE=' + str(int(args.quartzcore_display_state == 'on')),
 +    '-DNATIVE_ADRENO_A740_REPLAY=' + str(int(args.turnip_replay == 'a740')),
++    '-DNATIVE_ADRENO_SINGLE_SAMPLE_DEFAULT=' + str(int(args.single_sample == 'on')),
 +    '-DNATIVE_ADRENO_TURNIP_DEBUG=' + json.dumps(args.turnip_debug),
 +    '-DNATIVE_ADRENO_TURNIP_SMOKE_DEBUG=' + json.dumps(args.turnip_smoke_debug),
 +]
-+IOS27 = args.target == 'ios27'
+ IOS27 = args.target == 'ios27'
  OUT = ROOT / ('build/adreno-metal-plugin27' if IOS27 else 'build/adreno-metal-plugin')
  bundle = OUT / 'NativeAdrenoMetal.bundle'
- if OUT.exists():
-@@ -27,26 +57,34 @@ base = ['xcrun', 'clang', '-target', 'arm64e-apple-ios27.0' if IOS27 else 'arm64
+@@ -30,45 +64,59 @@ bundle.mkdir(parents=True)
+ sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True).strip()
+ base = ['xcrun', 'clang', '-target', 'arm64e-apple-ios27.0' if IOS27 else 'arm64-apple-ios17.0', '-isysroot', sdk, '-O2', '-g', '-Wall', '-Wextra', '-Werror',
+         '-fstack-protector-strong']
+-source_hash = hashlib.sha256()
+-for path in sorted((ROOT / 'drivers/AdrenoMetal').rglob('*')):
+-    if path.is_file() and '.git' not in path.parts and path.suffix in ('.h','.mm','.cpp','.rs','.patch'):
+-        source_hash.update(str(path.relative_to(ROOT / 'drivers/AdrenoMetal')).encode())
+-        source_hash.update(path.read_bytes())
+-metal_build_id = source_hash.hexdigest()
++if os.environ.get('UNIXNU_RECORD_HASHES', '1') == '0':
++    metal_build_id = subprocess.check_output(
++        ['git', '-C', str(ROOT / 'drivers/AdrenoMetal'), 'rev-parse', 'HEAD'], text=True).strip()
++    build_manifest = {'metal_source_revision': metal_build_id, 'target': args.target}
++else:
++    source_hash = hashlib.sha256()
++    for path in sorted((ROOT / 'drivers/AdrenoMetal').rglob('*')):
++        if path.is_file() and '.git' not in path.parts and path.suffix in ('.h', '.mm', '.cpp', '.rs', '.patch'):
++            source_hash.update(str(path.relative_to(ROOT / 'drivers/AdrenoMetal')).encode())
++            source_hash.update(path.read_bytes())
++
++    metal_build_id = source_hash.hexdigest()
++    build_manifest = {'metal_source_sha256': metal_build_id, 'target': args.target}
++
+ base += ['-DNATIVE_METAL_BUILD_ID="' + metal_build_id + '"']
+-(bundle / 'gpu-build.json').write_text(json.dumps({'metal_source_sha256': metal_build_id, 'target': args.target}, indent=2)+'\n')
  VULKAN_INCLUDE = ROOT / '.cache/mesa-work/include'
  TURNIP = ROOT / ('build/mesa-tu-ios27' if IOS27 else 'build/mesa-tu-ios') / 'src/freedreno/vulkan/libvulkan_freedreno.dylib'
+ turnip_profile = TURNIP.parents[3] / 'builtin-build-profile.json'
+ if turnip_profile.is_file():
+-    manifest = json.loads((bundle / 'gpu-build.json').read_text())
+-    manifest['turnip'] = json.loads(turnip_profile.read_text())
+-    (bundle / 'gpu-build.json').write_text(json.dumps(manifest, indent=2)+'\n')
++    build_manifest['turnip'] = json.loads(turnip_profile.read_text())
++
++(bundle / 'gpu-build.json').write_text(json.dumps(build_manifest, indent=2) + '\n')
  if not TURNIP.is_file():
 -    raise SystemExit('Build Turnip first: python3 scripts/build-turnip-darwin.py --target ' + ('ios27' if IOS27 else 'ios'))
 -subprocess.run(['python3', ROOT / 'scripts/gen-turnip-smoke-shaders.py'], check=True)
 -# Turnip's first submission, recorded on the host, for the plugin's prefix replay (build/turnip-smoke/TurnipReplay.h).
--subprocess.run(['python3', ROOT / 'scripts/gen-turnip-replay.py'], check=True)
--BRIDGE_TARGET = 'ios27' if IOS27 else 'ios'
--subprocess.run(['python3', ROOT / 'scripts/build-adreno-metal-bridge.py', '--target', BRIDGE_TARGET], check=True)
--BRIDGE = ROOT / 'build/adreno-metal-bridge' / BRIDGE_TARGET / 'libadreno_metal_bridge.a'
--# arm64e: the Rust objects' imports that take a callback go through the signing wrappers of RustPacBoundary.c, and their indirect branches
--# are routed through its stripping trampolines after the link (scripts/rust-pac-rewrite.py).
--link_extra, PAC_RENAMES = [], {'_pthread_create': '_nmb_pac_pthread_create', '__tlv_atexit': '_nmb_pac_tlv_atexit',
--                               '_atexit': '_nmb_pac_atexit', '__dyld_register_func_for_add_image': '_nmb_pac_dyld_register_func_for_add_image',
--                               '__Unwind_Backtrace': '_nmb_pac_Unwind_Backtrace', '_dlsym': '_nmb_pac_dlsym'}
+-if args.no_replay:
+-    (ROOT / 'build/turnip-smoke/TurnipReplay.h').unlink(missing_ok=True)
+-else:
 +    raise SystemExit('Build Turnip first: python3 scripts/build-turnip-darwin.py --target ' + args.target)
 +shader_command = ['python3', ROOT / 'scripts/gen-turnip-smoke-shaders.py']
 +if args.shader_compiler:
@@ -15363,7 +16383,17 @@ index 07b64e2..7605b8c 100644
 +subprocess.run(shader_command, check=True)
 +# The command stream recorded by the host simulator targets A740.
 +if args.turnip_replay == 'a740':
-+    subprocess.run(['python3', ROOT / 'scripts/gen-turnip-replay.py'], check=True)
+     subprocess.run(['python3', ROOT / 'scripts/gen-turnip-replay.py'], check=True)
+-BRIDGE_TARGET = 'ios27' if IOS27 else 'ios'
+-subprocess.run(['python3', ROOT / 'scripts/build-adreno-metal-bridge.py', '--target', BRIDGE_TARGET], check=True)
+-BRIDGE = ROOT / 'build/adreno-metal-bridge' / BRIDGE_TARGET / 'libadreno_metal_bridge.a'
+-# arm64e: the Rust objects' imports that take a callback go through the signing wrappers of RustPacBoundary.c, and their indirect branches
+-# are routed through its stripping trampolines after the link (scripts/rust-pac-rewrite.py).
+-link_extra, PAC_RENAMES = [], {'_pthread_create': '_nmb_pac_pthread_create', '__tlv_atexit': '_nmb_pac_tlv_atexit',
+-                               '_atexit': '_nmb_pac_atexit', '__dyld_register_func_for_add_image': '_nmb_pac_dyld_register_func_for_add_image',
+-                               '__Unwind_Backtrace': '_nmb_pac_Unwind_Backtrace', '_dlsym': '_nmb_pac_dlsym'}
++else:
++    (ROOT / 'build/turnip-smoke/TurnipReplay.h').unlink(missing_ok=True)
 +subprocess.run(['python3', ROOT / 'scripts/build-adreno-metal-bridge.py', '--target', args.target], check=True)
 +BRIDGE = ROOT / 'build/adreno-metal-bridge' / args.target / 'libadreno_metal_bridge.a'
 +link_extra = []
@@ -15388,7 +16418,7 @@ index 07b64e2..7605b8c 100644
      link_extra = [boundary, '-Wl,-map,' + str(OUT / 'NativeAdrenoMetal.map')]
  pm4 = OUT / 'AdrenoPM4.o'
  subprocess.run([*base, '-std=c11', '-c', ROOT / 'kits/AdrenoPM4/AdrenoPM4.c', '-o', pm4], check=True)
-@@ -56,14 +94,13 @@ exe = bundle / 'NativeAdrenoMetal'
+@@ -78,14 +126,13 @@ exe = bundle / 'NativeAdrenoMetal'
  PRIME_LIST = ROOT / 'build/prime-list.txt'
  prime_section = [f'-Wl,-sectcreate,__DATA,__primelist,{PRIME_LIST}'] if PRIME_LIST.is_file() else []
  subprocess.run([*(['xcrun', 'clang++'] + base[2:]), '-std=c++17', '-fobjc-arc', '-Wno-deprecated-declarations', '-bundle',
@@ -15405,7 +16435,7 @@ index 07b64e2..7605b8c 100644
  subprocess.run(['strip', '-x', exe], check=True)
  # The linker writes the debug symbols of the Rust bridge next to the executable; keep them beside the bundle, not in the image.
  symbols = OUT / 'NativeAdrenoMetal.dSYM'
-@@ -91,7 +128,7 @@ cdhash = re.search(r'^CDHash=([a-f0-9]{40})$', detail, re.M)[1]
+@@ -113,7 +160,7 @@ cdhash = re.search(r'^CDHash=([a-f0-9]{40})$', detail, re.M)[1]
  assert re.search(r'^Page size=4096$', detail, re.M), 'the signature must use 4 KiB pages'
  header = exe.read_bytes()[:16]
  magic, cputype, subtype = int.from_bytes(header[0:4], 'little'), int.from_bytes(header[4:8], 'little'), int.from_bytes(header[8:12], 'little')
@@ -15414,7 +16444,7 @@ index 07b64e2..7605b8c 100644
  # The probe daemon (launchd starts it as an owner job). The original platform sandbox policy refuses IOServiceOpen for any user-client class
  # a process has not been granted (the same refusal an unentitled consumer got in the offline owner tests), so it carries exactly the grant that
  # worked there: com.apple.security.iokit-user-client-class naming the one class it opens, plus no-container.
-@@ -102,7 +139,7 @@ entitlements.write_bytes(plistlib.dumps({'com.apple.private.security.no-containe
+@@ -124,7 +171,7 @@ entitlements.write_bytes(plistlib.dumps({'com.apple.private.security.no-containe
                                           'com.apple.private.logging.admin': True, 'com.apple.private.logging.diagnostic': True,
                                           'com.apple.private.logging.stream': True}))
  daemon = OUT / 'adrenoprobed'
@@ -15424,7 +16454,7 @@ index 07b64e2..7605b8c 100644
                  ROOT / 'drivers/AdrenoMetal/NativeAdrenoProbeDaemon.cpp', '-x', 'objective-c++', '-fobjc-arc',
                  ROOT / 'drivers/AdrenoMetal/NativeOsLogExport.mm', '-x', 'none', pm4, '-framework', 'Foundation', '-lz', '-o', daemon], check=True)
 diff --git a/scripts/build-turnip-darwin.py b/scripts/build-turnip-darwin.py
-index e3eca9c..a788fac 100644
+index f477b37..e82f300 100644
 --- a/scripts/build-turnip-darwin.py
 +++ b/scripts/build-turnip-darwin.py
 @@ -19,6 +19,8 @@ parser = argparse.ArgumentParser(description=__doc__)
@@ -15452,7 +16482,7 @@ index e3eca9c..a788fac 100644
 -           '-Dtu-darwin-abi-dir=' + str(ROOT / 'drivers/Adreno740'), '-Dplatforms=macos', '-Dglx=disabled',
 +           '-Dtu-darwin-abi-dir=' + str(args.abi_directory.resolve()), '-Dplatforms=macos', '-Dglx=disabled',
             '-Degl=disabled', '-Dgbm=disabled', '-Dopengl=false', '-Dgles1=disabled', '-Dgles2=disabled',
-            '-Dllvm=disabled', '-Dshared-glapi=disabled', '-Dxmlconfig=disabled', '-Dshader-cache=disabled',
+            '-Dllvm=disabled', '-Dshared-glapi=disabled', '-Dxmlconfig=disabled', '-Dshader-cache=enabled',
             '-Dtools=', '-Dbuild-tests=false', '-Dvideo-codecs=', '-Dvulkan-layers=']
 @@ -71,16 +73,22 @@ else:
  # source addition, compiler, target and build option. The generated embedded
@@ -15502,7 +16532,7 @@ index e3eca9c..a788fac 100644
  log = LOGS / ('mesa-tu-%s-configure.log' % args.target)
  with log.open('w') as stream:
 diff --git a/scripts/data/adreno-compiler-inputs.json b/scripts/data/adreno-compiler-inputs.json
-index 4314406..1eb4176 100644
+index 7720acd..89af1a0 100644
 --- a/scripts/data/adreno-compiler-inputs.json
 +++ b/scripts/data/adreno-compiler-inputs.json
 @@ -54,8 +54,23 @@
@@ -15515,7 +16545,6 @@ index 4314406..1eb4176 100644
 +    "patches/mesa/turnip-darwin-cached-coherent-memory.patch",
 +    "patches/mesa/turnip-darwin-async-submit.patch",
      "patches/mesa/turnip-render-mode-for-attachment-memory.patch",
--    "patches/mesa/turnip-gmem-mutable-swap.patch"
 +    "patches/mesa/turnip-darwin-metal-cache-stats.patch",
 +    "patches/mesa/turnip-darwin-perfetto-capture.patch",
 +    "patches/mesa/turnip-darwin-copy-metadata.patch",
@@ -15525,11 +16554,11 @@ index 4314406..1eb4176 100644
 +    "patches/mesa/turnip-darwin-submitted-pass-profile.patch",
 +    "patches/mesa/turnip-darwin-shader-capture.patch",
 +    "patches/mesa/turnip-darwin-pm4-capture.patch",
-+    "patches/mesa/turnip-gmem-mutable-swap.patch",
-+    "patches/mesa/turnip-darwin-upstream-memory.patch"
-   ],
-   "integer_fma_reference": {
-     "repository": "https://github.com/ucb-bar/berkeley-softfloat-3",
+     "patches/mesa/turnip-gmem-mutable-swap.patch",
++    "patches/mesa/turnip-darwin-upstream-memory.patch",
+     "patches/mesa/turnip-current-queue-priorities.patch",
+     "patches/mesa/turnip-frame-diagnostics.patch",
+     "patches/mesa/turnip-transient-attachments-in-gmem.patch",
 diff --git a/scripts/data/gpu-metal-vulkan-inputs.json b/scripts/data/gpu-metal-vulkan-inputs.json
 index 895ca16..4fe86fe 100644
 --- a/scripts/data/gpu-metal-vulkan-inputs.json
@@ -15917,7 +16946,7 @@ index a20e9fe..1737b07 100644
      # 7: git sources
      for (kind, name), entry in sources.items():
 diff --git a/scripts/unixnu/ipsw.py b/scripts/unixnu/ipsw.py
-index ab7e2f9..b1bd734 100644
+index 527cd55..44defe3 100644
 --- a/scripts/unixnu/ipsw.py
 +++ b/scripts/unixnu/ipsw.py
 @@ -10,6 +10,7 @@ chip_id, board_id, and the components the steps use.
@@ -15981,7 +17010,27 @@ index ab7e2f9..b1bd734 100644
          return destination
  
      def read(self, component):
-@@ -241,10 +248,11 @@ def im4p_payload(data):
+@@ -172,6 +179,7 @@ class Ipsw:
+ 
+     def disk_image(self, component):
+         """A component as a plain disk image: extracted, then decrypted when the IPSW ships it as AEA."""
++        record_hashes = os.environ.get('UNIXNU_RECORD_HASHES', '1') != '0'
+         # AEA inputs may have been removed after decryption. Validate the plain
+         # image and both recorded identities before downloading the archive again.
+         name = self.member(component)
+@@ -185,9 +193,9 @@ class Ipsw:
+                 pin = self.config.get('sha256', {}).get(archive.name)
+                 if source.get('member') == name and data.get('member') == name \
+                         and data.get('aea_sha256') == source.get('sha256') \
+-                        and (pin is None or pin == source.get('sha256')) \
++                        and (not record_hashes or pin is None or pin == source.get('sha256')) \
+                         and data.get('size') == plain.stat().st_size \
+-                        and sha256_file(plain) == data.get('sha256'):
++                        and (not record_hashes or sha256_file(plain) == data.get('sha256')):
+                     return plain
+         path = self.extract(component)
+         if path.suffix != '.aea':
+@@ -258,10 +266,11 @@ def im4p_payload(data):
  
  def kernelcache(ctx, source):
      """The decompressed arm64 kernelcache Mach-O of the IPSW, in out/ipsw (checked against the board pin)."""
@@ -15994,7 +17043,7 @@ index ab7e2f9..b1bd734 100644
          return out
      if platform.system() == 'Linux':
          decode = [lzfse(), '-decode']
-@@ -272,7 +280,7 @@ def kernelcache(ctx, source):
+@@ -289,7 +298,7 @@ def kernelcache(ctx, source):
      if fat[:4] != b'\xcf\xfa\xed\xfe':
          raise Error('the decompressed kernelcache is not a 64-bit Mach-O')
      out.write_bytes(fat)
@@ -16004,7 +17053,7 @@ index ab7e2f9..b1bd734 100644
          raise Error(f'the kernelcache of this IPSW does not match the pin of board.toml (sha256 {pin})')
      return out
 diff --git a/scripts/unixnu/kernel.py b/scripts/unixnu/kernel.py
-index f9a45e5..4d030a0 100644
+index ac2723c..983b0f8 100644
 --- a/scripts/unixnu/kernel.py
 +++ b/scripts/unixnu/kernel.py
 @@ -190,20 +190,31 @@ def build(ctx, modules):
@@ -16053,7 +17102,7 @@ index f9a45e5..4d030a0 100644
      if (ctx.tree / 'refer/IOStorageFamily').is_dir():
          log('kernel: prepare storage headers')
          run(['python3', ctx.tree / 'scripts/prepare-storage-headers.py'], cwd=ctx.tree, env=env,
-@@ -255,7 +266,8 @@ def prelink(ctx):
+@@ -270,7 +281,8 @@ def prelink(ctx):
      if not cache.is_file():
          raise Error(f'kernelcache not found: {cache}')
      wanted = spec.get('kernelcache_sha256')
@@ -16063,7 +17112,7 @@ index f9a45e5..4d030a0 100644
          raise Error(f'{cache} does not match the kernelcache this board was qualified against (sha256 {wanted})')
      output.parent.mkdir(parents=True, exist_ok=True)
      command = ['python3', ctx.tree / spec['tool'], '--kernel', kernel, '--prelinked', cache,
-@@ -293,5 +305,8 @@ def prelink(ctx):
+@@ -313,5 +325,8 @@ def prelink(ctx):
                  if not success:
                      log(f'kernel: prelink failed; diagnostic record {destination}')
          os.replace(candidate, output)
@@ -16139,11 +17188,11 @@ index 823ec4b..a19f6c0 100644
 +    (cache / 'xnu-patches.list').write_text(patch_list.read_text())
      return patch_list
 diff --git a/scripts/unixnu/payload.py b/scripts/unixnu/payload.py
-index d7a9867..31c8331 100644
+index 0774c8e..aaa027d 100644
 --- a/scripts/unixnu/payload.py
 +++ b/scripts/unixnu/payload.py
-@@ -38,12 +38,60 @@ def check_args(arguments):
-     return line
+@@ -53,12 +53,60 @@ def check_data_input(ctx, data):
+                     'persistent Data still needs its original seed to publish the volume')
  
  
 -def check_native_root(kernel, arguments, vmm_present=False):
@@ -16206,7 +17255,7 @@ index d7a9867..31c8331 100644
      values = {}
      for argument in arguments:
          key, separator, value = argument.partition('=')
-@@ -70,24 +118,44 @@ def write_volume(stage, image, label, size_mib):
+@@ -85,24 +133,44 @@ def write_volume(stage, image, label, size_mib):
  
  
  def skip_setup_seed(ctx, base, tool_path, tool_args=()):
@@ -16254,7 +17303,7 @@ index d7a9867..31c8331 100644
      spec = ctx.board.get('payload')
      if not spec:
          raise Error('board.toml has no [payload]')
-@@ -97,8 +165,7 @@ def build(ctx, kernel=None):
+@@ -112,8 +180,7 @@ def build(ctx, kernel=None):
          raise Error(f'kernel not found: {kernel}; run "unixnu build kernel" or pass --kernel FILE')
      extra = list(getattr(args, 'kernel_arg', None) or [])
      # An extra NAME=VALUE replaces the board's argument of the same name.
@@ -16264,7 +17313,7 @@ index d7a9867..31c8331 100644
      line = check_args(arguments)
      log(f'kernel args: {line}')
      check_native_root(kernel, arguments, bool(ctx.board.get('adt', {}).get('defaults', {}).get('u32', {}).get('vmm-present')))
-@@ -108,7 +175,7 @@ def build(ctx, kernel=None):
+@@ -123,7 +190,7 @@ def build(ctx, kernel=None):
          allowed = spec.get('trust_cache_sha256')
          if not trust.is_file():
              raise Error(f'trust cache not found: {trust}')
@@ -16272,8 +17321,8 @@ index d7a9867..31c8331 100644
 +        if record_hashes and allowed and not owner_trust and sha256_file(trust) not in allowed:
              raise Error(f'{trust} is not one of the trust caches this board accepts (board.toml [payload] trust_cache_sha256)')
      data = expand(args.data_ramdisk) if getattr(args, 'data_ramdisk', None) else None
-     if data and not data.is_file():
-@@ -207,6 +274,7 @@ def build(ctx, kernel=None):
+     check_data_input(ctx, data)
+@@ -223,6 +290,7 @@ def build(ctx, kernel=None):
      config = (f'version = 1\n[boot]\ntimeout = {spec.get("timeout", 3)}\ndefault = "xnu"\n[kits]\nautoload = false\n{loader}'
                f'[[entry]]\nid = "xnu"\ntitle = "{spec.get("title", "UniXNU")}"\ntype = "xnu"\npath = "Payloads/kernel.macho"\n{initrd}'
                f'args = "{line}"\n')
@@ -16281,7 +17330,7 @@ index d7a9867..31c8331 100644
      install = spec.get('install')
      if install:
          if not data:
-@@ -225,6 +293,7 @@ def build(ctx, kernel=None):
+@@ -241,6 +309,7 @@ def build(ctx, kernel=None):
      if spec.get('tools'):
          config += ('[[entry]]\nid = "tools"\ntitle = "Tools"\ntype = "action"\naction = "tools"\n')
      (stage / 'EFI/UniXNU/unixnu.toml').write_text(config)
@@ -16289,7 +17338,7 @@ index d7a9867..31c8331 100644
      for path in [stage, *stage.rglob('*')]:
          os.utime(path, (EPOCH, EPOCH))
      size = int(spec.get('size_mib', 192))
-@@ -232,11 +301,17 @@ def build(ctx, kernel=None):
+@@ -248,11 +317,17 @@ def build(ctx, kernel=None):
      if content > size * 1024 * 1024 * 0.95:
          raise Error(f'the payload files take {content >> 20} MiB; raise size_mib (now {size}) in board.toml [payload]')
      write_volume(stage, image, spec.get('volume', 'UNIXNU')[:11], size)

@@ -5,8 +5,8 @@ Mac，系统输入固定为 iPad7,1 / j120ap / iPadOS 17.7.11 / 21H461，Samsung
 SM-T733 / CHN / T733ZCS9DYE1。76b 的实机构建和部署记录见
 [76 迁移记录](GPU_UPSTREAM_REBASE_76_2026-11-04.md)。
 
-发布状态（2026-11-08）：教程及恢复修改已在本地准备，两个加密模块的 fork 和新的
-`rebuild/76b-20261108` tag 等待发布授权。完成发布前保留旧工作区。
+恢复版本为 `rebuild/76b-20261108`，两个加密模块分别由
+`RigoLigoRLC/unixnu-softwareaes` 和 `RigoLigoRLC/unixnu-applekeystorestate` 提供。
 
 ## 1. 只保留不能重新生成的内容
 
@@ -240,7 +240,7 @@ bash scripts/build.sh system-firmware-rebuild-1 --firmware \
 
 ## 8. 本次整理的检查范围
 
-2026-11-08 核对设备、core、SoC、UEFI 及递归子模块共 74 个远端提交，72 个可访问；
-发现 SoftwareAES 和 AppleKeyStoreState 的本地适配提交没有发布，已准备对应 fork
-地址修正。教程逐项对应当前脚本，补齐重新提取厂商固件和复用签名私钥的入口。
+2026-11-08 核对设备、core、SoC、UEFI 及递归子模块共 74 个远端提交，发现其中
+SoftwareAES 和 AppleKeyStoreState 的本地适配提交没有发布，随后发布到自己的 fork，
+同步修正 core 子模块和设备组件地址。教程逐项对应当前脚本，补齐重新提取厂商固件和复用签名私钥的入口。
 本次未执行完整系统或固件重编译；76b 的九阶段成功和实机启动属于已有交付证据。

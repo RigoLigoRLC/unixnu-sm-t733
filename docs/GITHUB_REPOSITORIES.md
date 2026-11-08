@@ -1,6 +1,6 @@
 # GitHub 仓库与适配分支
 
-从新目录恢复 76b，请使用 [重建教程](REBUILDING.md)。2026-11-08 准备将本地
+从新目录恢复 76b，请使用 [重建教程](REBUILDING.md)。2026-11-08 已将本地
 SoftwareAES `5add7a8` 和 AppleKeyStoreState `635b8f9` 发布到
 `RigoLigoRLC/unixnu-softwareaes` 和 `RigoLigoRLC/unixnu-applekeystorestate`；
 core 的 `.gitmodules` 和设备 `components.toml` 一起修正地址。完整提交由

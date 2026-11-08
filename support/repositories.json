@@ -25,7 +25,7 @@
       "branch_base": "350ddc2a23dcaea7d74d8a469259c2efcec3e4a9",
       "description": "UniXNU core build and boot-menu adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
       "adaptation_commit": "c17e7eab4004b144b91b677e016912212464b8f6",
-      "device_changes_pushed": false
+      "device_changes_pushed": true
     },
     {
       "name": "unixnu-softwareaes",
@@ -36,7 +36,7 @@
       "default_branch": "unixnu-sm-t733",
       "description": "Software AES compatibility for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
       "adaptation_commit": "5add7a8708114d0b841b5c63d0a44e6eea9bdfed",
-      "device_changes_pushed": false
+      "device_changes_pushed": true
     },
     {
       "name": "unixnu-applekeystorestate",
@@ -47,7 +47,7 @@
       "default_branch": "unixnu-sm-t733",
       "description": "Software key wrapping and AppleKeyStore state for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
       "adaptation_commit": "635b8f9eee4cbc45589a4ac4578c4a386bc0d9cc",
-      "device_changes_pushed": false
+      "device_changes_pushed": true
     },
     {
       "name": "unixnu-mu-silicium",

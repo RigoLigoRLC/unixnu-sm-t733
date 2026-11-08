@@ -3,8 +3,8 @@
 Rebuilding after deleting the development workspace starts at docs/REBUILDING.md.
 Preserve only irreplaceable identity, keys, the fixed Data seed and device-specific
 original state. Download source and firmware again and regenerate derived inputs.
-The 2026-11-08 recovery publication is pending authorization; keep the old workspace
-until the missing crypto modules and recovery tag are published.
+The fixed recovery version is rebuild/76b-20261108. SoftwareAES and
+AppleKeyStoreState use the published RigoLigoRLC forks pinned by core and components.toml.
 
 The `unixnu-sm-t733` branch contains GPU submission and synchronization
 optimizations with the system BGRA8 sRGB format policy. The

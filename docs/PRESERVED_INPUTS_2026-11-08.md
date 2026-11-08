@@ -3,7 +3,8 @@
 2026-11-08，私有文件另存于 `/Users/rigoligo/expm/unixnu-sm-t733-preserved-20261108`。
 目录包含 28 个输入文件，总计 144370636 字节，约 137.68 MiB；下表及说明文字另计。
 只保留无法从公开源码和原厂固件重新生成的内容。未保存 Git 副本、系统下载包、
-构建产物、派生缓存或重复密钥副本。重建步骤见 [REBUILDING.md](REBUILDING.md)。
+构建产物、派生缓存或重复密钥副本。重建步骤见
+[固定版本教程](https://github.com/RigoLigoRLC/unixnu-sm-t733/blob/rebuild/76b-20261108/docs/REBUILDING.md)。
 
 | 路径 | 字节 | 作用 |
 | --- | ---: | --- |

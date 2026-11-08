@@ -2,13 +2,20 @@
 
 Samsung Galaxy Tab S7 FE Wi-Fi (`SM-T733`, `gts7fewifi`, Qualcomm SM7325) 的 UniXNU 设备仓库。
 
-GitHub 入口为 [RigoLigoRLC/unixnu-sm-t733](https://github.com/RigoLigoRLC/unixnu-sm-t733)。设备引用 13 个独立驱动和 kit 子模块；来源与固定提交见 [GitHub 仓库清单](docs/GITHUB_REPOSITORIES.md)。SM7325 共用配置在 [unixnu-sm7325-common](https://github.com/RigoLigoRLC/unixnu-sm7325-common)，由 `feeds.toml` 固定提交。
+**删除旧工作区后重新构建，从 [完整重建教程](docs/REBUILDING.md) 开始。**
+教程包含固定源码、主机环境、私有身份恢复、Apple/Samsung 输入重取、系统构建、MSC 更新和固件打包。
+只需另存不能重新生成的身份、密钥、固定 Data 种子和设备专有原始备份。
 
-当前采用官方 format 2 的 ARM64、SoC、OS、设备四层配置，官方基线为 UniXNU `fb5e8ba`。公共适配由 `support/UniXNU.rev` 固定，Samsung UEFI 单独由 `support/Mu-Silicium.rev` 固定。本地目录名可以是 `UniXNU-gts7fewifi`，公开仓库名为 `unixnu-sm-t733`。
+GitHub 入口为 [RigoLigoRLC/unixnu-sm-t733](https://github.com/RigoLigoRLC/unixnu-sm-t733)。设备引用 14 个独立驱动和 kit 子模块；来源与固定提交见 [GitHub 仓库清单](docs/GITHUB_REPOSITORIES.md)。SM7325 共用配置在 [unixnu-sm7325-common](https://github.com/RigoLigoRLC/unixnu-sm7325-common)，由 `feeds.toml` 固定提交。
+
+当前采用官方 format 2 的 ARM64、SoC、OS、设备四层配置，76b 的官方 core 基线为 `350ddc2`。公共适配由 `support/UniXNU.rev` 固定，Samsung UEFI 单独由 `support/Mu-Silicium.rev` 固定。本地目录名可以是 `UniXNU-gts7fewifi`，公开仓库名为 `unixnu-sm-t733`。
 
 ## 实机状态
 
-2026-10-25，`system-format2-48f` 已完成 configure、resolve、kernel、menu、wallpaper、debug-tools、payload 七阶段构建；MSC 已完整写入 536870912 字节 FAT 并完成 sync。实机 USB 日志确认本轮 TAG、八核 online=1/fail=0、UFS 完成 300788 次请求且失败及两种超时为 0、峰值并发 14，显示 ready=1/awake=1 并持续输出 CPU 帧和触点 DOWN/UP。BOOT/recovery 保持 `memory-input-display-46`，固定 96 GiB Data 保留。对应原始记录见 [48f 交付记录](docs/archive/FORMAT2_2026-10-25.md)。
+2026-11-04，`system-gpu-upstream-76b` 完成九阶段构建和完整 512 MiB FAT 写入、sync。
+首次启动发布了 Metal 加速器并运行 SpringBoard/backboardd，保存的日志记录 1247 次显示完成、
+failed/errors 为 0，DPU 持续翻转。颜色和交互体验尚待用户反馈。
+源码和实机证据见 [76 记录](docs/GPU_UPSTREAM_REBASE_76_2026-11-04.md)。
 
 47a 用户记录约 58 秒到 Apple logo，再约 12 秒到锁屏。既有 46b 内存实测为 4548722688 字节，约 4.236 GiB；48f 本轮没有另做原生内存采集。下表保留已取得的各项运行结果。
 
@@ -17,7 +24,7 @@ GitHub 入口为 [RigoLigoRLC/unixnu-sm-t733](https://github.com/RigoLigoRLC/uni
 | UEFI、UniXNU 菜单、XNU 启动 | 可用，菜单可滚动 |
 | 八核、GIC、架构定时器 | 八核已运行；三个 Edge 簇、perfcontrol 和 27 路 TSENS 的详细记录见既有 45f |
 | UFS 系统卷与持久 Data | 可启动桌面，96 GiB Data 跨重启保留 |
-| 显示 | CPU 软件渲染与帧复制可用，GPU 加速未接入 |
+| 显示 | Adreno Metal 合成，DPU 直接扫描 IOSurface；保留 CPU 调试回退 |
 | FT8203 触屏、物理按键 | 点击、滑动可用；电源及音量上/下完整 DOWN/UP 已取得 |
 | SM5714 电量计 | 电量、电压、充电状态可读，插拔中断即时更新 |
 | 背光与关机 | 46l 用户已确认正常调光、锁屏熄灯、唤醒和正常关机 |
@@ -30,16 +37,12 @@ GitHub 入口为 [RigoLigoRLC/unixnu-sm-t733](https://github.com/RigoLigoRLC/uni
 
 ## 构建
 
+首次在新目录恢复时执行 [完整重建教程](docs/REBUILDING.md)。已有匹配输入和工具后，
 在设备仓库目录执行：
 
 ```sh
-git clone --recurse-submodules --branch unixnu-sm-t733 https://github.com/RigoLigoRLC/unixnu-sm-t733.git
-cd unixnu-sm-t733
 export UNIXNU_RECORD_HASHES=0
-bash scripts/bootstrap-base.sh ../unixnu-core
-export UNIXNU_BASE="$(cd ../unixnu-core && pwd)"
-cp local.toml.example local.toml
-# 按 docs/BUILDING.md 准备本机固件、签名策略、trust cache 和固定 Data 种子。
+export UNIXNU_BASE="$(cd ../core && pwd)"
 bash scripts/build.sh system-local-1
 ```
 

@@ -1,5 +1,11 @@
 # GitHub 仓库与适配分支
 
+从新目录恢复 76b，请使用 [重建教程](REBUILDING.md)。2026-11-08 准备将本地
+SoftwareAES `5add7a8` 和 AppleKeyStoreState `635b8f9` 发布到
+`RigoLigoRLC/unixnu-softwareaes` 和 `RigoLigoRLC/unixnu-applekeystorestate`；
+core 的 `.gitmodules` 和设备 `components.toml` 一起修正地址。完整提交由
+`support/repositories.json` 记录。下文带日期的清单保留当时的发布事实。
+
 设备、core、SM7325 和 AdrenoMetal 已拆为 `unixnu-sm-t733` 与
 `unixnu-sm-t733-apple3`。前者保留驱动优化和 ARGB32/BGRA8 sRGB 选择，后者增加
 Apple3 功能。固定版本和 63b 构建结果见[分支记录](GPU_BRANCHES_63_2026-10-28.md)。

@@ -1,7 +1,7 @@
 {
   "owner": "RigoLigoRLC",
   "created_on": "2026-10-24",
-  "updated_on": "2026-11-04",
+  "updated_on": "2026-11-08",
   "visibility": "public",
   "repositories": [
     {
@@ -24,8 +24,30 @@
       "default_branch": "unixnu-sm-t733",
       "branch_base": "350ddc2a23dcaea7d74d8a469259c2efcec3e4a9",
       "description": "UniXNU core build and boot-menu adaptations for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733, SM7325).",
-      "adaptation_commit": "6a33f6eb5f4ea67a57a59b7bd631738f429a62a5",
-      "device_changes_pushed": true
+      "adaptation_commit": "c17e7eab4004b144b91b677e016912212464b8f6",
+      "device_changes_pushed": false
+    },
+    {
+      "name": "unixnu-softwareaes",
+      "url": "https://github.com/RigoLigoRLC/unixnu-softwareaes",
+      "kind": "fork",
+      "upstream": "UniXNU/SoftwareAES",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "description": "Software AES compatibility for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
+      "adaptation_commit": "5add7a8708114d0b841b5c63d0a44e6eea9bdfed",
+      "device_changes_pushed": false
+    },
+    {
+      "name": "unixnu-applekeystorestate",
+      "url": "https://github.com/RigoLigoRLC/unixnu-applekeystorestate",
+      "kind": "fork",
+      "upstream": "UniXNU/AppleKeyStoreState",
+      "branch": "unixnu-sm-t733",
+      "default_branch": "unixnu-sm-t733",
+      "description": "Software key wrapping and AppleKeyStore state for Samsung Galaxy Tab S7 FE Wi-Fi (SM-T733).",
+      "adaptation_commit": "635b8f9eee4cbc45589a4ac4578c4a386bc0d9cc",
+      "device_changes_pushed": false
     },
     {
       "name": "unixnu-mu-silicium",

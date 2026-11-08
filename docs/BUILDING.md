@@ -1,5 +1,9 @@
 # 构建与装配
 
+删除旧目录后从零恢复，请按 [完整重建教程](REBUILDING.md) 的顺序操作。
+该教程固定 76b 恢复版本，包含可直接执行的工具安装、输入重取、原密钥复用及部署命令。
+本文保留构建器、补丁选择和输出布局的详细说明。
+
 设备构建采用 format 2，按 ARM64、SM7325、iPadOS 21H461 和 SM-T733 四层解析。主机需要 macOS、完整 Xcode 与 iPhoneOS SDK、Python 3.11 或更高版本、Git、make、LLVM/LLD、mtools、dtc、openssl 和 unifdef。固件还需要配套 UEFI 的工具及原厂输入。
 
 `system-format2-48f` 于 2026-10-25 完成七阶段构建、完整 536870912 字节 FAT 写入和 sync。启动后 USB 已记录到八核上线、UFS 无失败或超时、持续显示帧和触点事件，具体数值与原始记录位置见 [48f 交付记录](archive/FORMAT2_2026-10-25.md)。迁移前的输入与迭代事实见 [构建归档](archive/BUILDING_2026-10-24.md)。

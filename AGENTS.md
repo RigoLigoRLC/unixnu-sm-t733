@@ -1,5 +1,11 @@
 # Device repository instructions
 
+Rebuilding after deleting the development workspace starts at docs/REBUILDING.md.
+Preserve only irreplaceable identity, keys, the fixed Data seed and device-specific
+original state. Download source and firmware again and regenerate derived inputs.
+The 2026-11-08 recovery publication is pending authorization; keep the old workspace
+until the missing crypto modules and recovery tag are published.
+
 The `unixnu-sm-t733` branch contains GPU submission and synchronization
 optimizations with the system BGRA8 sRGB format policy. The
 `unixnu-sm-t733-apple3` branch adds the Apple3 implementation. Device, core, SoC

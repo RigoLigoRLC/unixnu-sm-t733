@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -36,8 +37,14 @@ def main():
     parser.add_argument("--layout", type=Path, required=True)
     parser.add_argument("--volumes", type=Path, required=True)
     parser.add_argument("--manifest-tool", type=Path, required=True)
+    parser.add_argument("--private-key", type=Path,
+                        help="Existing owner signing key to retain the root-volume identity")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+
+    existing_key = args.private_key.expanduser().resolve() if args.private_key else None
+    if existing_key is not None and not existing_key.is_file():
+        parser.error("The supplied owner private key does not exist")
 
     layout = json.loads(args.layout.read_text())
     windows = {item["name"]: item for item in layout["windows"]}
@@ -58,7 +65,11 @@ def main():
     keys.mkdir(mode=0o700)
     private_key = keys / "owner.pem"
     public_key = keys / "owner-public.pem"
-    run(["openssl", "genrsa", "-out", str(private_key), "3072"], output / "key-generation.log")
+    if existing_key is None:
+        run(["openssl", "genrsa", "-out", str(private_key), "3072"], output / "key-generation.log")
+    else:
+        shutil.copyfile(existing_key, private_key)
+
     private_key.chmod(0o600)
     run(["openssl", "rsa", "-in", str(private_key), "-pubout", "-out", str(public_key)],
         output / "public-key.log")
